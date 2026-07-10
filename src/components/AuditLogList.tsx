@@ -1,22 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, ArrowRight, Trash2, Loader2 } from 'lucide-react';
+import { ShieldCheck, ArrowRight, Loader2 } from 'lucide-react';
 import { AuditLog, Task, User, TaskStatus } from '../types';
 import { Button } from './ui/Button';
-import { Modal } from './ui/Modal';
 import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
 import { STATUS_LABELS, ROLE_LABELS } from '../constants';
-import { cn } from '../lib/utils';
 import { db, collection, getDocs, query, orderBy, limit, startAfter } from '../firebase';
-import { triggerHaptic } from '../lib/haptics';
 
 interface AuditLogListProps {
   tasks: Task[];
   users: User[];
-  isAdmin?: boolean;
 }
 
-export const AuditLogList = ({ tasks, users, isAdmin }: AuditLogListProps) => {
+export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
   const [logsState, setLogsState] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);

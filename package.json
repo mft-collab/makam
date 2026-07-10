@@ -10,9 +10,12 @@
     "start": "node server.js",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
+    "eslint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "size": "size-limit",
+    "lighthouse": "lhci autorun"
   },
   "dependencies": {
     "@firebase/eslint-plugin-security-rules": "^0.0.2",
@@ -28,7 +31,7 @@
     "autoprefixer": "^10.4.21",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "eslint": "^10.2.1",
+    "eslint": "^9.39.4",
     "express": "^5.2.1",
     "firebase": "^12.11.0",
     "firebase-admin": "^13.9.0",
@@ -55,14 +58,21 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.61.0",
     "@resvg/resvg-js": "^2.6.2",
+    "@size-limit/file": "^12.1.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@vitest/coverage-v8": "^4.1.7",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "jsdom": "^29.1.1",
+    "size-limit": "^12.1.0",
+    "typescript-eslint": "^8.63.0",
     "vitest": "^4.1.7"
+  },
+  "overrides": {
+    "ws": "^8.21.0"
   }
 }

@@ -17,7 +17,7 @@ interface UseTasksProps {
 }
 
 
-export function useTasks({ user, users, tasks, onError, onSuccess }: UseTasksProps) {
+export function useTasks({ user, tasks, onError, onSuccess }: UseTasksProps) {
 
   const createTask = useCallback(async (taskData: Partial<Task>) => {
     if (!user) return;

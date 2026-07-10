@@ -5,7 +5,7 @@ import { cn } from '../lib/utils';
 import { STATUS_LABELS, PRIORITY_LABELS } from '../constants';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { Avatar } from './ui/Avatar';
 import { TaskCardSkeleton } from './ui/Skeleton';
 import { Badge } from './ui/Badge';
@@ -17,8 +17,6 @@ interface TaskBoardProps {
   currentUser: User | null;
   onAddTask: () => void;
   onViewTask: (task: Task) => void;
-  onEditTask: (task: Task) => void;
-  onDeleteTask: (taskId: string) => void;
   onUpdateTaskStatus?: (taskId: string, newStatus: TaskStatus) => void;
   /** Firestore'dan ilk veri yüklenene kadar true */
   isLoading?: boolean;
@@ -26,7 +24,7 @@ interface TaskBoardProps {
 
 export const TaskBoard = ({
   tasks, users, currentUser,
-  onAddTask, onViewTask, onEditTask, onDeleteTask, onUpdateTaskStatus,
+  onAddTask, onViewTask, onUpdateTaskStatus,
   isLoading = false,
 }: TaskBoardProps) => {
   const [search, setSearch] = useState('');

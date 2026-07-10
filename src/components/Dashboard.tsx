@@ -1,9 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { CheckCircle2, Clock, AlertTriangle, AlertCircle, TrendingUp, Activity, Target, ArrowRight, ShieldCheck, Zap, ListChecks, Gauge, Users as UsersIcon } from 'lucide-react';
+import { CheckCircle2, Clock, AlertTriangle, AlertCircle, TrendingUp, Activity, Target, ArrowRight, ShieldCheck, ListChecks, Gauge, Users as UsersIcon } from 'lucide-react';
 import { Task, User } from '../types';
 import { motion } from 'motion/react';
-import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
 import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';

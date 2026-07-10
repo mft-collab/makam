@@ -27,8 +27,8 @@ const firebaseConfig = {
   measurementId: (!isSuspiciousEnv && import.meta.env.VITE_FIREBASE_MEASUREMENT_ID) || firebaseConfigJson.measurementId
 };
 
-let rawDatabaseId = (!isSuspiciousEnv && import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID) || (firebaseConfigJson as any).firestoreDatabaseId || '(default)';
-let rawProjectId = firebaseConfig.projectId;
+const rawDatabaseId = (!isSuspiciousEnv && import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID) || (firebaseConfigJson as any).firestoreDatabaseId || '(default)';
+const rawProjectId = firebaseConfig.projectId;
 
 export const databaseId = rawDatabaseId;
 export const projectId = rawProjectId;
@@ -44,7 +44,7 @@ if (typeof window !== 'undefined' && import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
 }
 
 export const auth = getAuth(app);
-export let db = getFirestore(app, databaseId);
+export const db = getFirestore(app, databaseId);
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 

@@ -1,24 +1,23 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  Calendar, Clock, CheckCircle2, AlertTriangle, User, FileText, 
-  ChevronRight, Award, Zap, Activity, Info, ShieldCheck,
+import {
+  Calendar, CheckCircle2, AlertTriangle, FileText,
+  ChevronRight, Award, Zap, Activity, Info,
   Edit2, Trash2, ArrowRight, MessageSquare, History, ListChecks, Send, Plus,
   GitCommit, Loader2
 } from 'lucide-react';
 import { Task, User as UserType, TaskBlocker, AuditLog, TaskStatus } from '../types';
-import { STATUS_LABELS, ROLE_LABELS, PRIORITY_LABELS } from '../constants';
+import { STATUS_LABELS } from '../constants';
 import { format, formatDistanceToNow } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { cn } from '../lib/utils';
 import { Badge } from './ui/Badge';
-import { Logo } from './Logo';
 import { Avatar } from './ui/Avatar';
 import { db, collection, query, where, getDocs } from '../firebase';
 
 export const TaskDetails = ({ 
   task, tasks, users, currentUser, blockers, 
   onStatusChange, onAddBlocker, onResolveBlocker, 
-  onAddSubTask, onAddComment, onViewTask, onEdit, onDelete, onClose,
+  onAddSubTask, onAddComment, onViewTask, onEdit, onDelete,
   onClearCoordinator, onShowCertificate, onShowWarning,
   onUpdateTask
 }: { 
@@ -35,7 +34,6 @@ export const TaskDetails = ({
   onViewTask: (task: Task) => void;
   onEdit: () => void;
   onDelete: () => void;
-  onClose: () => void;
   onClearCoordinator?: () => void;
   onShowCertificate?: (task: Task) => void;
   onShowWarning?: (task: Task) => void;

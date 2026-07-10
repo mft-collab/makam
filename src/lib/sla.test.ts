@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { calculateDeadline, getRemainingTime, getSLAConfigForPriority, DEFAULT_SLA_CONFIG } from '../lib/sla';
 
 // Sabitleme: Pazartesi 09:00 sabahı (iş günü başı)

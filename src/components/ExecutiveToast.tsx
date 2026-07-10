@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Bell, X, Info, CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react';
+import { X, Info, CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion } from 'motion/react';
 
@@ -43,7 +43,7 @@ export const ExecutiveToast: React.FC<ExecutiveToastProps> = ({ toast, onClose, 
       
       oscillator.start();
       oscillator.stop(audioCtx.currentTime + 0.4);
-    } catch (e) {
+    } catch {
       console.warn('Audio feedback blocked');
     }
 

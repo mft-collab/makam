@@ -1,6 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw, Home, ShieldAlert } from 'lucide-react';
-import { Button } from './ui/Button';
+import { RefreshCw, Home, ShieldAlert } from 'lucide-react';
 import { Logo } from './Logo';
 import { logError } from '../services/errorLoggingService';
 
@@ -50,7 +49,7 @@ export class ErrorBoundary extends Component<Props, State> {
           errorMessage = `Veritabanı erişim protokolü ihlali: ${parsedError.operationType} işlemi sırasında yetki kısıtlaması tespit edildi.`;
           isFirebaseError = true;
         }
-      } catch (e) {
+      } catch {
         // Not a JSON error
       }
 

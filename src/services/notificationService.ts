@@ -200,7 +200,7 @@ export const notificationService = {
       try {
         const existingSnap = await getDocs(existingQ);
         if (!existingSnap.empty) continue;
-      } catch (e) {
+      } catch {
         // Ignore read errors here to prevent breaking the flow
       }
 

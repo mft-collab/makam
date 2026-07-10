@@ -68,7 +68,7 @@ export function useFirestoreData(user: User | null, onError: (err: any, type: st
     const unsubTasks = onSnapshot(
       tasksQuery,
       (s) => {
-        let list = s.docs.map(d => ({ id: d.id, ...d.data() } as Task));
+        const list = s.docs.map(d => ({ id: d.id, ...d.data() } as Task));
         list.sort((a, b) => b.updatedAt - a.updatedAt);
         setTasks(list);
         setIsLoading(false);

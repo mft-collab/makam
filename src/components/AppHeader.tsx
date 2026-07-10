@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, Sun, Moon, Monitor, Wifi, WifiOff, Building } from 'lucide-react';
+import { AlertCircle, Sun, Moon, Monitor, Building } from 'lucide-react';
 import { Logo } from './Logo';
 import { Avatar } from './ui/Avatar';
 import { LocalTime } from './LocalTime';

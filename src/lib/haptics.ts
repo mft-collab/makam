@@ -18,7 +18,7 @@ export const triggerHaptic = (type: 'light' | 'medium' | 'success' | 'error') =>
           navigator.vibrate([20, 50, 20]);
           break;
       }
-    } catch (e) {
+    } catch {
       // Ignore vibration errors if restricted by browser security policies
     }
   }

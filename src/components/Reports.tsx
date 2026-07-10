@@ -1,6 +1,6 @@
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { motion } from 'motion/react';
-import { AlertTriangle, Target, Zap, TrendingUp, BarChart3, Users, Clock, CheckCircle2, Loader2, Download, FileText, Calendar, ArrowRight } from 'lucide-react';
+import { AlertTriangle, Target, Zap, TrendingUp, BarChart3, Users, CheckCircle2, Loader2, Download, FileText, Calendar, ArrowRight } from 'lucide-react';
 import { Task, User, TaskBlocker } from '../types';
 import { cn } from '../lib/utils';
 import {

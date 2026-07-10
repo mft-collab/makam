@@ -37,7 +37,9 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
     return () => clearTimeout(t);
   }, [userId]);
 
-  const [errorReason, setErrorReason] = useState<'denied' | 'technical' | null>(null);
+  // Not: 'error' adımı bilinçli olarak tetiklenmiyor (graceful fallback tasarımı);
+  // errorReason yalnızca erişilemeyen hata ekranının metin varyantını belirler.
+  const [errorReason] = useState<'denied' | 'technical' | null>(null);
 
   const handleActivate = async () => {
     try {
@@ -55,7 +57,7 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
             if (result && typeof (result as any).then === 'function') {
               (result as any).then(resolve);
             }
-          } catch (e) {
+          } catch {
             resolve(typeof Notification !== 'undefined' ? Notification.permission : 'default');
           }
         });

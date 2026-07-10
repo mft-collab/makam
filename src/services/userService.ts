@@ -1,6 +1,5 @@
-import { 
-  collection, 
-  doc, 
+import {
+  doc,
   setDoc, 
   updateDoc, 
   deleteDoc,

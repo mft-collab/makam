@@ -1,8 +1,6 @@
 import React from 'react';
-import { Card } from './ui/Card';
-import { Button } from './ui/Button';
 import { Task, User } from '../types';
-import { Award, X, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { Award, X, ShieldCheck } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface CertificateModalProps {

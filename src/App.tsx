@@ -29,7 +29,6 @@ import { TaskDetails } from './components/TaskDetails';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { NotificationPrompt } from './components/NotificationPrompt';
 import { ExecutiveToast } from './components/ExecutiveToast';
-import { LocalTime } from './components/LocalTime';
 import { ReloadPrompt } from './components/ReloadPrompt';
 import { Logo } from './components/Logo';
 import { MobileDock } from './components/MobileDock';
@@ -193,7 +192,7 @@ export default function App() {
   // SLA konfigürasyon senkronizasyonu (Firestore → localStorage)
   useSLASync(user);
 
-  const { tasks: firestoreTasks, users, blockers: firestoreBlockers, auditLogs, isLoading: isDataLoading } = useFirestoreData(user, handleFirestoreError);
+  const { tasks: firestoreTasks, users, blockers: firestoreBlockers, isLoading: isDataLoading } = useFirestoreData(user, handleFirestoreError);
 
   // Derived tasks state — offline queue üzerine Firestore verisi
   const tasks = (() => {
@@ -404,7 +403,7 @@ export default function App() {
     updateTaskStatus, createTask, updateTask, deleteTask,
     addBlocker, resolveBlocker, addComment,
     addUser, updateUserRole, deleteUser,
-    updateBlocker, deleteBlocker, deleteAuditLog,
+    updateBlocker, deleteBlocker,
   } = useAppHandlers({ user, tasks, blockers, onError: handleFirestoreError });
 
   // ─── Auth Handlers ────────────────────────────────────────────────────────
@@ -510,8 +509,6 @@ export default function App() {
                         tasks={filteredTasksByFocus} users={filteredUsersByFocus} currentUser={user}
                         onAddTask={() => { setParentTaskId(undefined); setIsCreateModalOpen(true); }}
                         onViewTask={(t) => setSelectedTaskId(t.id)}
-                        onEditTask={(t) => { setSelectedTaskId(t.id); setIsEditModalOpen(true); }}
-                        onDeleteTask={deleteTask}
                         onUpdateTaskStatus={updateTaskStatus}
                         isLoading={isDataLoading}
                       />
@@ -539,11 +536,10 @@ export default function App() {
                     {Boolean(activeTab === 'audit') && (
                       <AuditLogList
                         tasks={filteredTasksByFocus} users={filteredUsersByFocus}
-                        isAdmin={user?.role === 'Admin'}
                       />
                     )}
                     {Boolean(activeTab === 'settings') && (
-                      <Settings tasks={tasks} users={users} blockers={blockers} auditLogs={auditLogs} triggerToast={triggerToast} currentUser={user} />
+                      <Settings tasks={tasks} users={users} blockers={blockers} triggerToast={triggerToast} currentUser={user} />
                     )}
                   </Suspense>
                 </motion.div>
@@ -594,7 +590,6 @@ export default function App() {
                   onViewTask={(t) => setSelectedTaskId(t.id)}
                   onEdit={() => setIsEditModalOpen(true)}
                   onDelete={() => selectedTask && deleteTask(selectedTask.id)}
-                  onClose={() => setSelectedTaskId(null)}
                   onClearCoordinator={() => selectedTask && updateTask(selectedTask.id, { coordinatorId: undefined })}
                   onShowCertificate={setActiveCertificateTask}
                   onShowWarning={setActiveWarningTask}

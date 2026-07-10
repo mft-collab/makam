@@ -11,6 +11,9 @@ interface CardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> 
 }
 
 export const Card = ({ title, description, footer, children, className, spotlight = true, ...props }: CardProps) => {
+  // HTML drag/animation event handler'ları motion.div'in kendi prop'larıyla çakıştığı için
+  // bilinçli olarak ayıklanıyor (restProps'a sızmamaları gerekiyor) — silme, davranışı bozar.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { onAnimationStart, onDrag, onDragStart, onDragEnd, ...restProps } = props as any;
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);

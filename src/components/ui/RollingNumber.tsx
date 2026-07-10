@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { motion, useSpring, useTransform } from 'motion/react';
+import { useSpring, useTransform } from 'motion/react';
 
 interface RollingNumberProps {
   value: number;

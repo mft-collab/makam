@@ -1,22 +1,34 @@
+import tseslint from 'typescript-eslint';
 import firebaseRulesPlugin from '@firebase/eslint-plugin-security-rules';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 
 export default [
   {
-    ignores: ['dist/**/*', 'node_modules/**/*', 'functions/**/*']
+    ignores: [
+      'dist/**/*',
+      'dev-dist/**/*',
+      'node_modules/**/*',
+      'functions/**/*',
+      'playwright-report/**/*',
+      'test-results/**/*',
+      'coverage/**/*',
+    ]
+  },
+  // ─── TypeScript / TSX Parsing ──────────────────────────────────────────────
+  ...tseslint.configs.recommended.map((config) => ({
+    ...config,
+    files: ['src/**/*.{ts,tsx}', '*.{ts,tsx}'],
+  })),
+  {
+    files: ['src/**/*.{ts,tsx}', '*.{ts,tsx}'],
+    rules: {
+      // TODO(Faz 1.3): CRUD sınırlarına Zod validasyonu eklendikçe 'error'a çekilecek.
+      '@typescript-eslint/no-explicit-any': 'warn',
+    },
   },
   // ─── Firebase Security Rules ──────────────────────────────────────────────
   {
-    files: ['**/*.rules'],
-    languageOptions: {
-      sourceType: 'script',
-    },
-    plugins: {
-      '@firebase/security-rules': firebaseRulesPlugin
-    },
-    rules: {
-      ...firebaseRulesPlugin.configs['flat/recommended'].rules
-    }
+    ...firebaseRulesPlugin.configs['flat/recommended'],
   },
   // ─── JSX Accessibility ────────────────────────────────────────────────────
   {

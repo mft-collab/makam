@@ -1,10 +1,9 @@
 import React from 'react';
-import { Calendar, AlertCircle, Clock, Target, XCircle, History, ShieldCheck, Zap, AlertTriangle as AlertTriangleIcon, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, Clock, Target, XCircle, History, ShieldCheck, Zap, AlertTriangle as AlertTriangleIcon, CheckCircle2 } from 'lucide-react';
 import { Task, User } from '../types';
-import { cn, formatTimeAgo } from '../lib/utils';
+import { cn } from '../lib/utils';
 import { getRemainingTime } from '../lib/sla';
 import { STATUS_LABELS, PRIORITY_LABELS, IDLE_THRESHOLD_MS } from '../constants';
-import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
 import { motion } from 'motion/react';
 
@@ -12,11 +11,7 @@ interface TaskCardProps {
   task: Task;
   assignee?: User;
   subTaskCount?: number;
-  onStatusChange?: (status: Task['status']) => void;
-  onAddBlocker?: () => void;
   onViewDetails?: () => void;
-  onEdit?: () => void;
-  onDelete?: () => void;
   onCancel?: () => void;
   canEdit?: boolean;
   index?: number;
@@ -24,11 +19,9 @@ interface TaskCardProps {
 
 export const TaskCard = ({
   task, assignee, subTaskCount,
-  onStatusChange, onAddBlocker, onViewDetails,
-  onEdit, onDelete, onCancel, canEdit, index = 0
+  onViewDetails, onCancel, canEdit, index = 0
 }: TaskCardProps) => {
   const isBlocked = task.status === 'BLOCKED';
-  const isOverdue = task.deadline < Date.now() && task.status !== 'COMPLETED';
   const isIdle = (Date.now() - task.updatedAt) > IDLE_THRESHOLD_MS && task.status !== 'COMPLETED';
   const isCrisis = task.status !== 'CANCELLED' && task.status !== 'COMPLETED' &&
     (task.deadline < Date.now() || (isIdle && (task.priority === 'High' || task.priority === 'Urgent' || isBlocked)));

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "timezone": "Europe/Istanbul",
+  "schedule": ["before 6am on monday"],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["patch", "minor"],
+      "matchCurrentVersion": "!/^0/",
+      "automerge": false,
+      "groupName": "patch ve minor güncellemeler"
+    },
+    {
+      "matchUpdateTypes": ["major"],
+      "matchPackageNames": ["react", "react-dom", "vite", "tailwindcss", "eslint", "firebase", "firebase-admin", "firebase-functions"],
+      "labels": ["dependencies", "major-upgrade-review-required"],
+      "groupName": null,
+      "prBodyNotes": [
+        "Bu majör sürüm güncellemesi build zincirini veya çalışma zamanı davranışını etkileyebilir — manuel test olmadan merge etmeyin."
+      ]
+    },
+    {
+      "matchDepTypes": ["devDependencies"],
+      "groupName": "devDependencies (minor/patch)",
+      "matchUpdateTypes": ["patch", "minor"]
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"]
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on the first day of the month"]
+  }
+}

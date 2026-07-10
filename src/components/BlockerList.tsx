@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, CheckCircle2, Clock, ArrowRight, Edit2, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, Edit2, Trash2 } from 'lucide-react';
 import { Task, TaskBlocker, User } from '../types';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';

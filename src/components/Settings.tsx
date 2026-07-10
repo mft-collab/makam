@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, AlertCircle, CheckCircle2, Database, RotateCcw, Trash2, Smartphone, Bell, Settings as SettingsIcon, Clock, Moon, Sun, Monitor } from 'lucide-react';
+import { Download, AlertCircle, CheckCircle2, Database, RotateCcw, Trash2, Smartphone, Bell, Settings as SettingsIcon, Clock } from 'lucide-react';
 import { Task, User } from '../types';
 import { cn } from '../lib/utils';
 import { db, doc, writeBatch, collection, getDocs, query, setDoc, getCountFromServer, addDoc } from '../firebase';
@@ -9,26 +9,23 @@ import { motion } from 'motion/react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { getSLAConfigForPriority } from '../lib/sla';
 import { SettingsCard, ActionButton, StatusBanner } from './settings/SharedUI';
-import { useUIStore } from '../store/uiStore';
 
 interface SettingsProps {
   tasks: Task[];
   users: User[];
   blockers: any[];
-  auditLogs: any[];
   triggerToast?: (title: string, body: string, type?: 'info' | 'success' | 'warning' | 'danger') => void;
   currentUser?: User | null;
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export const Settings = ({ tasks, users, blockers, auditLogs, triggerToast, currentUser }: SettingsProps) => {
+export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: SettingsProps) => {
   const [activeSubTab, setActiveSubTab] = useState<'general' | 'sla' | 'data'>('general');
   const [isOnline, setIsOnline] = useState(typeof window !== 'undefined' ? window.navigator.onLine : true);
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error' | 'loading'; message: string } | null>(null);
   const [isArchiving, setIsArchiving] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const { isInstallable, isInstalled, install } = usePWAInstall();
-  const { theme, setTheme } = useUIStore();
 
   const [localAuditLogsCount, setLocalAuditLogsCount] = useState<number>(0);
 
@@ -168,7 +165,7 @@ export const Settings = ({ tasks, users, blockers, auditLogs, triggerToast, curr
       osc2.start();
       osc1.stop(audioCtx.currentTime + 0.8);
       osc2.stop(audioCtx.currentTime + 0.6);
-    } catch (e) {
+    } catch {
       console.warn('Audio feedback blocked by browser autoplay policy');
     }
 

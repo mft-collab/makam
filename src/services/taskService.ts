@@ -4,9 +4,7 @@ import {
   addDoc, 
   updateDoc, 
   deleteDoc,
-  query, 
-  orderBy, 
-  onSnapshot,
+  query,
   getDocs,
   where,
   runTransaction,
@@ -16,7 +14,7 @@ import {
   increment,
   db 
 } from '../firebase';
-import { Task, TaskStatus, AuditLog } from '../types';
+import { Task, TaskStatus } from '../types';
 import { calculateDeadline, getSLAConfigForPriority } from '../lib/sla';
 import { cleanData } from '../lib/utils';
 import { runWithRetry } from '../lib/retry';

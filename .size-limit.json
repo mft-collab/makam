@@ -1,0 +1,38 @@
+[
+  {
+    "name": "Ana giriş paketi (index)",
+    "path": "dist/assets/index-*.js",
+    "gzip": true,
+    "limit": "185 KB"
+  },
+  {
+    "name": "Firebase vendor paketi",
+    "path": "dist/assets/vendor-firebase-*.js",
+    "gzip": true,
+    "limit": "140 KB"
+  },
+  {
+    "name": "Charts vendor paketi (recharts, lazy)",
+    "path": "dist/assets/vendor-charts-*.js",
+    "gzip": true,
+    "limit": "140 KB"
+  },
+  {
+    "name": "PDF vendor paketi (jspdf, lazy)",
+    "path": "dist/assets/vendor-pdf-*.js",
+    "gzip": true,
+    "limit": "160 KB"
+  },
+  {
+    "name": "Motion vendor paketi",
+    "path": "dist/assets/vendor-motion-*.js",
+    "gzip": true,
+    "limit": "40 KB"
+  },
+  {
+    "name": "CSS",
+    "path": "dist/assets/*.css",
+    "gzip": true,
+    "limit": "22 KB"
+  }
+]
