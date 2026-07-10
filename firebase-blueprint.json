@@ -1,0 +1,140 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user with role-based access",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["Admin", "Manager", "Staff"] },
+        "departmentId": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "fcmTokens": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["uid", "fullName", "email", "role"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Operational task or strategic goal with lifecycle management",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "parentId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "assigneeId": { "type": "string" },
+        "status": { "type": "string", "enum": ["ASSIGNED", "PENDING_DELEGATION", "IN_PROGRESS", "BLOCKED", "AWAITING_APPROVAL", "COMPLETED", "CRISIS", "CANCELLED"] },
+        "priority": { "type": "string", "enum": ["Low", "Medium", "High", "Urgent"] },
+        "deadline": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "pausedAt": { "type": "number" },
+        "totalPausedTime": { "type": "number" },
+        "evidence": { "type": "string" },
+        "evidenceType": { "type": "string", "enum": ["PDF", "Image", "Link"] },
+        "lockVersion": { "type": "number" },
+        "comments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "userId": { "type": "string" },
+              "text": { "type": "string" },
+              "timestamp": { "type": "number" }
+            },
+            "required": ["userId", "text", "timestamp"]
+          }
+        }
+      },
+      "required": ["title", "description", "creatorId", "assigneeId", "status", "priority", "deadline"]
+    },
+    "TaskBlocker": {
+      "title": "TaskBlocker",
+      "description": "A blocker preventing task progress",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "taskId": { "type": "string" },
+        "reason": { "type": "string" },
+        "isResolved": { "type": "boolean" },
+        "createdAt": { "type": "number" },
+        "resolvedAt": { "type": "number" }
+      },
+      "required": ["taskId", "reason", "isResolved", "createdAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Audit trail for system changes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "taskId": { "type": "string" },
+        "changedBy": { "type": "string" },
+        "oldValue": { "type": "object" },
+        "newValue": { "type": "object" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["taskId", "changedBy", "timestamp"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User notifications for crises and updates",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["Crisis", "Info", "Warning"] },
+        "taskId": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "isRead": { "type": "boolean" }
+      },
+      "required": ["userId", "title", "message", "type", "timestamp", "isRead"]
+    },
+    "SystemLog": {
+      "title": "SystemLog",
+      "description": "Logs for automated system events like audits",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "idleTaskCount": { "type": "number" }
+      },
+      "required": ["type", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Main task collection"
+    },
+    "/blockers/{blockerId}": {
+      "schema": "TaskBlocker",
+      "description": "Task blockers"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "System audit logs"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications"
+    },
+    "/system_logs/{logId}": {
+      "schema": "SystemLog",
+      "description": "Automated logs"
+    }
+  }
+}

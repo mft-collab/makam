@@ -1,0 +1,29 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+    }
+
+    match /evidence/{taskId}/{fileName} {
+      // Sadece giriş yapmış kullanıcılar okuyabilir
+      allow read: if isAuthenticated();
+      
+      // Sadece resim ve PDF dosyalarına izin ver, max 5MB
+      allow write: if isAuthenticated() &&
+                   (request.resource.contentType.matches('image/.*') || 
+                    request.resource.contentType == 'application/pdf') &&
+                   request.resource.size < 5 * 1024 * 1024;
+                   
+      // Silme yetkisi sadece Admin'de
+      allow delete: if isAdmin();
+    }
+  }
+}

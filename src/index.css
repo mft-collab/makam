@@ -1,0 +1,400 @@
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+@keyframes shrink {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+:root {
+  /* Premium Gündüz (Light) Modu - Warm Pearl & Quiet Luxury */
+  --bg-base: #FAF8F5; /* Warm pearl slightly adjusted for better card contrast */
+  --bg-surface: rgba(252, 251, 249, 0.65);
+  --bg-elevated: #FFFFFF;
+  --border-subtle: rgba(22, 21, 19, 0.04);
+  --text-heading: #161513;
+  --text-main: #2C2B29;
+  --text-muted: #7A7770;
+  --text-light: rgba(22, 21, 19, 0.15);
+  --glass-bg: rgba(252, 251, 249, 0.65);
+  --card-bg: rgba(255, 255, 255, 0.8);
+  --input-bg: rgba(255, 255, 255, 0.8);
+  --shadow-base: rgba(0, 0, 0, 0.04);
+  --btn-secondary-bg: rgba(255, 255, 255, 0.8);
+  --color-executive-blue-dynamic: #161513;
+  --btn-primary-text: #ffffff;
+  
+  --base-tracking: 0;
+  --heading-tracking: 0;
+  
+  /* Rich status colors for light mode contrast */
+  --status-success: #059669;
+  --status-warning: #D97706;
+  --status-danger: #DC2626;
+}
+
+.dark {
+  /* Premium Karanlık (Dark) Modu - Deep Obsidian & Quiet Luxury */
+  --bg-base: #0A0A09;
+  --bg-surface: rgba(20, 20, 18, 0.65);
+  --bg-elevated: #141412;
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --text-heading: rgba(245, 243, 239, 0.95);
+  --text-main: rgba(245, 243, 239, 0.85);
+  --text-muted: #96938A;
+  --text-light: rgba(255, 255, 255, 0.2);
+  --glass-bg: rgba(20, 20, 18, 0.65);
+  --card-bg: rgba(20, 20, 18, 0.65);
+  --input-bg: rgba(20, 20, 18, 0.75);
+  --shadow-base: rgba(0, 0, 0, 0.8);
+  --btn-secondary-bg: rgba(20, 20, 18, 0.8);
+  --color-executive-blue-dynamic: #F5F3EF;
+  --btn-primary-text: #161513;
+  
+  --base-tracking: 0;
+  --heading-tracking: 0;
+  
+  /* Pastel/Desaturated versions for retina-burn prevention */
+  --status-success: #34D399; /* emerald-400 */
+  --status-warning: #FCD34D; /* amber-300 */
+  --status-danger: #F87171; /* red-400 */
+}
+
+@theme {
+  --font-sans: "Inter", sans-serif;
+  --font-display: "Outfit", sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Global Theme Overrides - Mapping full spectrum to Executive Palette */
+  --color-blue-50: #F8FAFC;
+  --color-blue-100: #F1F5F9;
+  --color-blue-200: #E2E8F0;
+  --color-blue-300: #CBD5E1;
+  --color-blue-400: #94A3B8;
+  --color-blue-500: #64748B;
+  --color-blue-600: #161513; /* Obsidian Midnight Velvet */
+  --color-blue-700: #1E293B;
+  --color-blue-800: #161513;
+  --color-blue-900: #020617;
+  
+  --color-amber-50: #FCF8EE;
+  --color-amber-100: #FEF3C7;
+  --color-amber-200: #FDE68A;
+  --color-amber-300: #FCD34D;
+  --color-amber-400: #FBBF24;
+  --color-amber-500: #F59E0B;
+  --color-amber-600: #C5A059; /* Satin Gold */
+  --color-amber-700: #8E7037;
+  --color-amber-800: #78350F;
+  --color-amber-900: #451A03;
+
+  --color-slate-50: #F5F3EF;
+  --color-slate-900: #161513;
+
+  /* Midnight Slate & Satin Gold Palette (Quiet Luxury) */
+  --color-makam-bg: var(--bg-base);
+  --color-makam-surface: var(--bg-surface);
+  --color-makam-elevated: var(--bg-elevated);
+  --color-makam-border: var(--border-subtle);
+  --color-makam-text-primary: var(--text-main);
+  --color-makam-text-secondary: var(--text-muted);
+  --color-makam-text-tertiary: var(--text-light);
+  
+  /* Muted Luxury Accents */
+  --color-executive-gold: var(--color-amber-600);
+  --color-executive-gold-light: var(--color-amber-50);
+  --color-executive-gold-dark: var(--color-amber-700);
+  --color-executive-blue: var(--color-executive-blue-dynamic);
+  --color-brand-gold: var(--color-executive-gold);
+  --color-brand-obsidian: #0E0E0D;
+  --color-brand-cyan: #0EA5E9; /* Strategic Data Cyan */
+
+  --shadow-makam: 
+    0 2px 12px rgba(22, 21, 19, 0.01),
+    0 20px 50px -12px rgba(22, 21, 19, 0.03);
+  
+  /* Semantic Colors - Desaturated in Dark Mode */
+  --color-status-success: var(--status-success);
+  --color-status-warning: var(--status-warning);
+  --color-status-danger:  var(--status-danger);
+
+  /* Functional Mapping */
+  --color-surface-base: var(--color-makam-bg);
+  --color-surface-card: var(--color-makam-surface);
+  --color-surface-elevated: var(--color-makam-elevated);
+  --color-surface-border: var(--color-makam-border);
+  --color-surface-glass: rgba(22, 21, 19, 0.05);
+  
+  --color-makam-glass: var(--glass-bg);
+  --color-makam-card: var(--card-bg);
+
+  --color-text-heading: var(--text-heading);
+  --color-text-body: var(--text-main);
+  --color-text-muted: var(--text-muted);
+  --color-text-tertiary: var(--text-light);
+
+  --color-brand-500: var(--color-brand-cyan);
+
+  --animate-skeleton: skeleton-shimmer 2s infinite linear;
+}
+
+@layer base {
+  body {
+    @apply bg-surface-base text-text-body font-sans antialiased selection:bg-executive-gold/20 selection:text-executive-gold min-h-screen relative overflow-x-hidden;
+    font-weight: 400;
+    letter-spacing: var(--base-tracking);
+    line-height: 1.4;
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-text-heading font-display font-normal tracking-tight;
+    font-weight: 500; /* Slightly stronger contrast for headings */
+    letter-spacing: var(--heading-tracking);
+  }
+}
+
+@layer components {
+  .makam-glass {
+    @apply border border-surface-border backdrop-blur-[40px] backdrop-saturate-[180%] text-text-heading relative overflow-hidden;
+    background-color: var(--glass-bg);
+  }
+  
+  .makam-card {
+    @apply backdrop-blur-[48px] backdrop-saturate-[160%] border border-makam-border rounded-2xl p-6 transition-all duration-300 relative overflow-hidden;
+    background-color: var(--card-bg);
+    box-shadow: 0 4px 30px -10px var(--shadow-base), 0 0 1px var(--shadow-base);
+  }
+  
+  .dark .makam-card {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 4px 30px -10px var(--shadow-base);
+  }
+  
+  .makam-card-hover {
+    @apply hover:shadow-[0_40px_80px_-20px_rgba(22,21,19,0.05)] hover:bg-white/60 dark:hover:bg-white/5 hover:-translate-y-0.5;
+  }
+
+  .makam-button {
+    @apply px-6 py-2.5 rounded-full font-medium transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 uppercase tracking-[0.14em] text-[8.5px];
+  }
+
+  .makam-button-primary {
+    @apply bg-executive-gold rounded-full transition-all duration-200 hover:scale-[1.01] active:scale-[0.98] shadow-lg shadow-executive-gold/15 flex items-center justify-center gap-2 text-[12px] uppercase tracking-[0.14em] font-semibold px-8 py-3.5 relative overflow-hidden;
+    color: var(--btn-primary-text);
+    background-image: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 100%);
+  }
+  
+  .makam-button-secondary {
+    @apply backdrop-blur-xl border border-makam-border/5 text-text-heading rounded-full transition-all duration-200 hover:bg-makam-elevated hover:shadow-lg flex items-center justify-center gap-2 text-[12px] uppercase tracking-[0.14em] px-8 py-3.5;
+    background-color: var(--btn-secondary-bg);
+  }
+  
+  .makam-input {
+    @apply border border-surface-border rounded-[16px] px-4 py-3 focus:outline-none focus:ring-4 focus:ring-brand-500/5 focus:border-brand-500/30 transition-all duration-200 placeholder:text-text-muted/40 text-[12px] font-normal text-text-heading shadow-inner;
+    background-color: var(--input-bg);
+  }
+  .makam-badge {
+    @apply px-3 py-1 rounded-full border text-[9px] font-medium uppercase tracking-[0.2em] shadow-sm transition-all;
+  }
+
+  .makam-glow-blue {
+    @apply absolute -z-10 w-64 h-64 bg-executive-blue/[0.025] rounded-2xl blur-[72px] pointer-events-none;
+  }
+  
+  .makam-glow-gold {
+    @apply absolute -z-10 w-64 h-64 bg-executive-gold/[0.025] rounded-2xl blur-[72px] pointer-events-none;
+  }
+  
+  .makam-divider {
+    @apply h-[1px] w-full bg-gradient-to-r from-transparent via-makam-border/30 to-transparent;
+  }
+
+  /* Apple Spring Haptic Button Salınımı */
+  .makam-button:active, .makam-button-primary:active, .makam-button-secondary:active, .makam-card-hover:active {
+    transform: scale(0.97) translateY(0.5px) !important;
+    transition: transform 0.1s cubic-bezier(0.25, 1, 0.5, 1) !important;
+  }
+}
+
+::-webkit-scrollbar {
+  @apply w-1.5;
+}
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-black/10 dark:bg-white/10 rounded-full hover:bg-black/20 dark:hover:bg-white/20 transition-colors;
+}
+
+/* Flashing animation for blocked tasks */
+@keyframes makam-flash {
+  0%, 100% { opacity: 1; border-color: rgba(239, 68, 68, 0.2); }
+  50% { opacity: 0.8; border-color: rgba(239, 68, 68, 0.5); }
+}
+
+.animate-makam-flash {
+  animation: makam-flash 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Hide scrollbar for modals to preserve luxury UI */
+.custom-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.custom-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* ==========================================================================
+   PREMIUM PRINT STYLES (@media print)
+   ========================================================================== */
+@media print {
+  @page {
+    size: A4;
+    margin: 2.5cm 2cm; /* Wide margins, centered content */
+  }
+
+  body {
+    background: white !important;
+    color: #111827 !important; /* Dark charcoal for text */
+    font-family: "Inter", sans-serif !important;
+    font-size: 10pt !important;
+    line-height: 1.6 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide UI elements not meant for print */
+  nav, sidebar, .no-print, button, input, [role="button"], .makam-glass {
+    display: none !important;
+  }
+
+  /* Typography Contrast */
+  h1, h2, h3, h4, h5, h6, .print-heading {
+    font-family: "Outfit", "Inter", sans-serif !important;
+    color: #000000 !important;
+    page-break-after: avoid;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+  }
+
+  h1 { font-size: 24pt !important; border-bottom: 0.5pt solid #D1D1D1; padding-bottom: 0.25em; }
+  h2 { font-size: 18pt !important; }
+  h3 { font-size: 14pt !important; }
+
+  /* Hairlines & Tables */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 1.5em 0 !important;
+  }
+
+  th, td {
+    border: 0.5pt solid #D1D1D1 !important; /* Exact 0.5pt hairline */
+    padding: 0.75em 1em !important;
+    text-align: left;
+  }
+
+  th {
+    background-color: #F8FAFC !important; /* Tone-on-tone */
+    font-family: "Inter", sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 9pt !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #475569 !important;
+  }
+
+  td {
+    font-size: 9.5pt !important;
+    color: #1F2937 !important;
+  }
+
+  /* Cards to Print Blocks */
+  .makam-card, .card, [class*="bg-surface-card"] {
+    background: transparent !important;
+    border: 0.5pt solid #D1D1D1 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 1.5em !important;
+    margin-bottom: 1.5em !important;
+    page-break-inside: avoid;
+  }
+
+  /* Badges */
+  .makam-badge, [class*="bg-"][class*="/10"] {
+    background: transparent !important;
+    border: 0.5pt solid #D1D1D1 !important;
+    color: #475569 !important;
+    padding: 0.2em 0.5em !important;
+    border-radius: 2px !important;
+  }
+
+  /* Header / Footer filigran */
+  body::before {
+    content: "MAKAM - RESMİ BELGE";
+    position: fixed;
+    top: -1.5cm;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-family: "Inter", sans-serif;
+    font-size: 8pt;
+    letter-spacing: 0.2em;
+    color: #9CA3AF;
+    border-bottom: 0.5pt solid #D1D1D1;
+    padding-bottom: 0.5cm;
+  }
+
+  body::after {
+    content: "GİZLİDİR - SADECE YETKİLİ PERSONEL İÇİNDİR";
+    position: fixed;
+    bottom: -1.5cm;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-family: "Inter", sans-serif;
+    font-size: 8pt;
+    letter-spacing: 0.1em;
+    color: #9CA3AF;
+    border-top: 0.5pt solid #D1D1D1;
+    padding-top: 0.5cm;
+  }
+}
+
+/* ─── Skeleton Shimmer ────────────────────────────────────────────────── */
+.animate-skeleton {
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+  background-size: 200% 100%;
+}
+
+/* ─── Skip to Content (Klavye Erişilebilirliği) ─────────────────────── */
+.skip-to-content {
+  position: absolute;
+  top: -100%;
+  left: 1rem;
+  z-index: 9999;
+  padding: 0.75rem 1.5rem;
+  background: #161513;
+  color: #C5A059;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  border-radius: 0 0 1rem 1rem;
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+
+.skip-to-content:focus {
+  top: 0;
+  outline: 2px solid #C5A059;
+  outline-offset: 2px;
+}

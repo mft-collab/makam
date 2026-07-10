@@ -1,0 +1,345 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default deny ALL
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ===============================================================
+    // Global Helpers
+    // ===============================================================
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        // Custom claim tercih edilir (hardcoded e-postadan daha güvenli)
+        request.auth.token.get('admin', false) == true ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin')
+      );
+    }
+
+    function isManager() {
+      return isSignedIn() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Manager';
+    }
+
+    function isAdminOrManager() {
+      return isAdmin() || isManager();
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function getUserDepartment() {
+      let u = getUserData();
+      return 'departmentId' in u ? u.departmentId : '';
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_.@-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // ===============================================================
+    // State Machine — Geçerli Durum Geçişleri
+    // ===============================================================
+
+    function isValidTransition(oldStatus, newStatus) {
+      // Herhangi bir durumdan iptal edilebilir (Admin/Manager yetkisi kuralda kontrol edilir)
+      let cancelAllowed = newStatus == 'CANCELLED';
+
+      // ASSIGNED → IN_PROGRESS, BLOCKED, CANCELLED
+      let fromAssigned = oldStatus == 'ASSIGNED' && 
+        newStatus in ['IN_PROGRESS', 'BLOCKED', 'CANCELLED'];
+
+      // PENDING_DELEGATION → IN_PROGRESS, BLOCKED, CANCELLED
+      let fromPending = oldStatus == 'PENDING_DELEGATION' && 
+        newStatus in ['IN_PROGRESS', 'BLOCKED', 'CANCELLED'];
+
+      // IN_PROGRESS → BLOCKED, AWAITING_APPROVAL, COMPLETED, CANCELLED, CRISIS
+      let fromInProgress = oldStatus == 'IN_PROGRESS' && 
+        newStatus in ['BLOCKED', 'AWAITING_APPROVAL', 'COMPLETED', 'CANCELLED', 'CRISIS'];
+
+      // BLOCKED → IN_PROGRESS, CANCELLED
+      let fromBlocked = oldStatus == 'BLOCKED' && 
+        newStatus in ['IN_PROGRESS', 'CANCELLED'];
+
+      // AWAITING_APPROVAL → COMPLETED, IN_PROGRESS, CANCELLED
+      let fromAwaiting = oldStatus == 'AWAITING_APPROVAL' && 
+        newStatus in ['COMPLETED', 'IN_PROGRESS', 'CANCELLED'];
+
+      // CRISIS → IN_PROGRESS, CANCELLED, COMPLETED
+      let fromCrisis = oldStatus == 'CRISIS' && 
+        newStatus in ['IN_PROGRESS', 'CANCELLED', 'COMPLETED'];
+
+      // COMPLETED → Değiştirilemez (sadece Admin silebilir)
+      let fromCompleted = oldStatus == 'COMPLETED' && false;
+
+      // CANCELLED → Değiştirilemez
+      let fromCancelled = oldStatus == 'CANCELLED' && false;
+
+      // Aynı durum (güncelleme ama durum değişmedi)
+      let sameStatus = oldStatus == newStatus;
+
+      return sameStatus || cancelAllowed || fromAssigned || fromPending || 
+             fromInProgress || fromBlocked || fromAwaiting || fromCrisis ||
+             fromCompleted || fromCancelled;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      let allowedFields = ['uid', 'fullName', 'email', 'role', 'departmentId', 'photoURL', 'fcmTokens'];
+      return data.keys().hasAll(['uid', 'fullName', 'email', 'role']) &&
+             data.keys().hasOnly(allowedFields) &&
+             data.uid is string &&
+             data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 100 &&
+             data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             data.role in ['Admin', 'Manager', 'Staff'] &&
+             (!('fcmTokens' in data) || (data.fcmTokens is list && data.fcmTokens.size() <= 10));
+    }
+
+    function isValidTaskCreate(data) {
+      let requiredFields = ['title', 'description', 'creatorId', 'assigneeId', 'status', 'priority', 'deadline'];
+      let allowedFields = ['id', 'parentId', 'title', 'description', 'creatorId', 'assigneeId', 'coordinatorId', 
+                           'status', 'priority', 'deadline', 'createdAt', 'updatedAt', 'evidence', 'evidenceType', 
+                           'pausedAt', 'totalPausedTime', 'comments', 'lockVersion', 'departmentId',
+                           'completedAt', 'estimatedHours', 'tags', 'checklist'];
+      
+      return data.keys().hasAll(requiredFields) &&
+             data.keys().hasOnly(allowedFields) &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.description is string && data.description.size() >= 1 && data.description.size() <= 2000 &&
+             data.status == 'ASSIGNED' && // Yeni görev sadece ASSIGNED olarak başlayabilir
+             data.priority in ['Low', 'Medium', 'High', 'Urgent'] &&
+             data.deadline is number && data.deadline > 0 &&
+             data.creatorId is string &&
+             data.assigneeId is string &&
+             (!('parentId' in data) || data.parentId is string) &&
+             (!('coordinatorId' in data) || data.coordinatorId == null || data.coordinatorId is string) &&
+             (!('evidence' in data) || (data.evidence is string && data.evidence.size() <= 1000)) &&
+             (!('comments' in data) || (data.comments is list && data.comments.size() <= 200)) &&
+             (!('completedAt' in data) || data.completedAt is number) &&
+             (!('estimatedHours' in data) || (data.estimatedHours is number && data.estimatedHours >= 0)) &&
+             (!('tags' in data) || (data.tags is list && data.tags.size() <= 10)) &&
+             (!('checklist' in data) || (data.checklist is list && data.checklist.size() <= 100));
+    }
+
+    function isValidTaskUpdate(data) {
+      let allowedFields = ['id', 'parentId', 'title', 'description', 'creatorId', 'assigneeId', 'coordinatorId', 
+                           'status', 'priority', 'deadline', 'createdAt', 'updatedAt', 'evidence', 'evidenceType', 
+                           'pausedAt', 'totalPausedTime', 'comments', 'lockVersion', 'departmentId',
+                           'completedAt', 'estimatedHours', 'tags', 'checklist'];
+      
+      return data.keys().hasOnly(allowedFields) &&
+             (!('id' in data) || data.id is string) &&
+             (!('parentId' in data) || data.parentId is string) &&
+             (!('title' in data) || (data.title is string && data.title.size() >= 1 && data.title.size() <= 200)) &&
+             (!('description' in data) || (data.description is string && data.description.size() >= 1 && data.description.size() <= 2000)) &&
+             (!('creatorId' in data) || data.creatorId is string) &&
+             (!('assigneeId' in data) || data.assigneeId is string) &&
+             (!('coordinatorId' in data) || data.coordinatorId == null || data.coordinatorId is string) &&
+             (!('status' in data) || (data.status in ['ASSIGNED', 'PENDING_DELEGATION', 'IN_PROGRESS', 'BLOCKED', 'AWAITING_APPROVAL', 'COMPLETED', 'CANCELLED', 'CRISIS'])) &&
+             (!('priority' in data) || (data.priority in ['Low', 'Medium', 'High', 'Urgent'])) &&
+             (!('deadline' in data) || (data.deadline is number && data.deadline > 0)) &&
+             (!('createdAt' in data) || data.createdAt is number) &&
+             (!('updatedAt' in data) || data.updatedAt is number) &&
+             (!('evidence' in data) || (data.evidence is string && data.evidence.size() <= 1000)) &&
+             (!('evidenceType' in data) || (data.evidenceType is string && data.evidenceType.size() <= 100)) &&
+             (!('pausedAt' in data) || (data.pausedAt == null || data.pausedAt is number)) &&
+             (!('totalPausedTime' in data) || data.totalPausedTime is number) &&
+             (!('comments' in data) || (data.comments is list && data.comments.size() <= 200)) &&
+             (!('lockVersion' in data) || data.lockVersion is number) &&
+             (!('completedAt' in data) || data.completedAt is number) &&
+             (!('estimatedHours' in data) || (data.estimatedHours is number && data.estimatedHours >= 0)) &&
+             (!('tags' in data) || (data.tags is list && data.tags.size() <= 10)) &&
+             (!('checklist' in data) || (data.checklist is list && data.checklist.size() <= 100));
+    }
+
+    function isValidBlocker(data) {
+      return data.keys().hasAll(['taskId', 'reason', 'isResolved', 'createdAt']) &&
+             data.taskId is string &&
+             data.reason is string && data.reason.size() >= 1 && data.reason.size() <= 500 &&
+             data.isResolved is bool &&
+             data.createdAt is number;
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['taskId', 'changedBy', 'timestamp']) &&
+             data.taskId is string &&
+             data.changedBy is string &&
+             data.timestamp is number;
+    }
+
+    function isValidNotification(data) {
+      let requiredFields = ['userId', 'title', 'message', 'type', 'timestamp', 'isRead'];
+      return data.keys().hasAll(requiredFields) &&
+             data.userId is string &&
+             data.title is string && data.title.size() <= 100 &&
+             data.message is string && data.message.size() <= 600 &&
+             data.type in ['Crisis', 'Info', 'Warning', 'TaskAssigned'] &&
+             data.timestamp is number &&
+             data.isRead is bool;
+    }
+
+    function isValidSystemLog(data) {
+      let allowedFields = ['type', 'timestamp', 'idleTaskCount', 'details', 'userId'];
+      return data.keys().hasAll(['type', 'timestamp']) &&
+             data.keys().hasOnly(allowedFields) &&
+             data.type is string && data.type.size() >= 1 && data.type.size() <= 50 &&
+             data.timestamp is number;
+    }
+
+    function isValidTaskBusinessRules(data) {
+      let hasNoAdminCoordinator = !('coordinatorId' in data) || 
+                                  data.coordinatorId == null || 
+                                  data.coordinatorId == "" || 
+                                  !exists(/databases/$(database)/documents/users/$(data.coordinatorId)) ||
+                                  get(/databases/$(database)/documents/users/$(data.coordinatorId)).data.role != 'Admin';
+                                  
+      let hasValidSubtaskAssignee = !('parentId' in data) || 
+                                    data.parentId == null || 
+                                    data.parentId == "" || 
+                                    (exists(/databases/$(database)/documents/users/$(data.assigneeId)) &&
+                                     get(/databases/$(database)/documents/users/$(data.assigneeId)).data.role == 'Staff');
+      
+      return hasNoAdminCoordinator && hasValidSubtaskAssignee;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(userId) && (isAdmin() || isOwner(userId)) && isValidUser(incoming()) && (
+        isAdmin() || request.auth.token.email_verified == true
+      );
+      allow update: if isSignedIn() && isValidId(userId) && (
+        isAdmin() ||
+        (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'photoURL', 'fcmTokens', 'updatedAt']) && isValidUser(incoming()))
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        !('departmentId' in existing()) ||
+        existing().departmentId == null ||
+        existing().departmentId == "" ||
+        existing().departmentId == getUserDepartment() ||
+        existing().assigneeId == request.auth.uid ||
+        ('email' in request.auth.token && existing().assigneeId == request.auth.token.email)
+      );
+      allow create: if isSignedIn() && isValidId(taskId) && isValidTaskCreate(incoming()) && (
+        isAdmin() || 
+        (isManager() && (!('departmentId' in incoming()) || incoming().departmentId == null || incoming().departmentId == "" || incoming().departmentId == getUserDepartment()))
+      ) && isValidTaskBusinessRules(incoming());
+      allow update: if isSignedIn() && isValidId(taskId) && isValidTaskUpdate(incoming()) && (
+        isAdmin() ||
+        (isManager() && existing().departmentId == getUserDepartment() && (!('departmentId' in incoming()) || incoming().departmentId == getUserDepartment())) ||
+        (
+          (existing().assigneeId == request.auth.uid || ('email' in request.auth.token && existing().assigneeId == request.auth.token.email)) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'evidence', 'evidenceType', 'comments', 'updatedAt', 'pausedAt', 'totalPausedTime', 'lockVersion', 'completedAt', 'checklist'])
+        )
+      ) && (
+        // Durum değişiyorsa geçerli bir geçiş olmalı
+        !('status' in incoming()) ||
+        !('status' in existing()) ||
+        isValidTransition(existing().status, incoming().status) ||
+        // Admin her zaman override edebilir
+        isAdmin()
+      ) && isValidTaskBusinessRules(incoming());
+      allow delete: if isAdmin();
+    }
+
+    match /blockers/{blockerId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(blockerId) && isValidBlocker(incoming()) && (
+        isAdmin() ||
+        (
+          exists(/databases/$(database)/documents/tasks/$(incoming().taskId)) &&
+          (
+            get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data.creatorId == request.auth.uid ||
+            get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data.assigneeId == request.auth.uid ||
+            get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data.departmentId == getUserDepartment() ||
+            !('departmentId' in get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data) || 
+            get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data.departmentId == null || 
+            get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data.departmentId == ""
+          )
+        )
+      );
+      allow update: if isSignedIn() && isValidId(blockerId) && isValidBlocker(incoming()) && isAdminOrManager();
+      allow delete: if isAdmin();
+    }
+
+    match /audit_logs/{logId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(logId) && isValidAuditLog(incoming());
+      allow update, delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      // Kullanıcı sadece kendi bildirimlerini okuyabilir/güncelleyebilir
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        (resource != null && resource.data.userId == request.auth.uid)
+      );
+      allow create: if isSignedIn() && isValidNotification(incoming()) && (
+        // Sadece Admin ve sistem (Cloud Functions) bildirim oluşturabilir
+        isAdmin() ||
+        // Kendi kendine bildirim oluşturabilir (test için)
+        incoming().userId == request.auth.uid
+      );
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        // Sadece kendi bildirimini okundu olarak işaretleyebilir
+        (resource.data.userId == request.auth.uid && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['isRead']))
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /system_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn() && isValidId(logId) && isValidSystemLog(incoming());
+      allow update, delete: if false;
+    }
+
+    match /system/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Uygulama hata kayıtları — errorLoggingService tarafından yazılır
+    // Giriş yapmış herhangi bir kullanıcı hata logu oluşturabilir (istemci taraflı izleme)
+    // Sadece Admin okuyabilir / silebilir
+    match /error_logs/{logId} {
+      allow create: if isSignedIn();
+      allow read, delete: if isAdmin();
+      allow update: if false; // Loglar değiştirilemez
+    }
+  }
+}

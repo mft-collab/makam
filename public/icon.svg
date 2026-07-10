@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <!-- G2 Curvature Continuous Squircle Clip Path -->
+    <clipPath id="squircleClip">
+      <path d="M 50,0 C 88,0 100,12 100,50 C 100,88 88,100 50,100 C 12,100 0,88 0,50 C 0,12 12,0 50,0 Z" />
+    </clipPath>
+    
+    <!-- Obsidian stone background gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#191B26" />
+      <stop offset="40%" stop-color="#12131A" />
+      <stop offset="100%" stop-color="#090A0D" />
+    </linearGradient>
+
+    <!-- Chrome Metallic Gold Gradient -->
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFF3D1" />
+      <stop offset="30%" stop-color="#E5C16D" />
+      <stop offset="50%" stop-color="#C5A059" />
+      <stop offset="75%" stop-color="#9E7933" />
+      <stop offset="100%" stop-color="#70531C" />
+    </linearGradient>
+    
+    <!-- High-shine gold for bevel lines -->
+    <linearGradient id="goldLightGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="30%" stop-color="#FFEBB3" />
+      <stop offset="70%" stop-color="#E5C16D" />
+      <stop offset="100%" stop-color="#A8833C" />
+    </linearGradient>
+
+    <!-- Polished Platinum/Steel Gradient -->
+    <linearGradient id="platGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="35%" stop-color="#E2E2E6" />
+      <stop offset="70%" stop-color="#A5A6AB" />
+      <stop offset="100%" stop-color="#6E6F73" />
+    </linearGradient>
+
+    <!-- Platinum Highlight Gradient -->
+    <linearGradient id="platLightGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="50%" stop-color="#F1F1F5" />
+      <stop offset="100%" stop-color="#D2D2D6" />
+    </linearGradient>
+
+    <!-- Glass Backdrop Gradient -->
+    <linearGradient id="glassGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.18" />
+      <stop offset="100%" stop-color="#E2E2E6" stop-opacity="0.03" />
+    </linearGradient>
+    
+    <!-- Hairline ring gradient -->
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFEBB3" stop-opacity="0.35" />
+      <stop offset="50%" stop-color="#C5A059" stop-opacity="0.15" />
+      <stop offset="100%" stop-color="#70531C" stop-opacity="0.05" />
+    </linearGradient>
+  </defs>
+
+  <!-- Squircle Base Layer -->
+  <path d="M 50,0 C 88,0 100,12 100,50 C 100,88 88,100 50,100 C 12,100 0,88 0,50 C 0,12 12,0 50,0 Z" fill="url(#bgGrad)" />
+
+  <!-- Outer Hairline Gold Border -->
+  <path d="M 50,1 C 87.5,1 99,12.5 99,50 C 99,87.5 87.5,99 50,99 C 12.5,99 1,87.5 1,50 C 1,12.5 12.5,1 50,1 Z" fill="none" stroke="url(#ringGrad)" stroke-width="1" />
+
+  <!-- Chronometer / Luxury Watch Dial circles -->
+  <circle cx="50" cy="50" r="44" stroke="url(#ringGrad)" stroke-width="1.2" stroke-linecap="round" fill="none" />
+  <!-- Watch Dial Ticks (60 ticks representing time/precision) -->
+  <circle cx="50" cy="50" r="41.5" stroke="url(#ringGrad)" stroke-width="0.8" stroke-dasharray="0.6 3.75" fill="none" opacity="0.6" />
+
+  <!-- Glass Architectural Bases (Mihrap Pillars background shadow/depth) -->
+  <path d="M20 75 V23 C20 21.3 21.3 20 23 20 H34 V75 Z" fill="url(#glassGrad)" stroke="rgba(255,255,255,0.08)" stroke-width="0.5" />
+  <path d="M66 75 V20 H77 C78.7 20 80 21.3 80 23 V75 Z" fill="url(#glassGrad)" stroke="rgba(255,255,255,0.08)" stroke-width="0.5" />
+
+  <!-- Left Monolithic Pillar (3D Faceted) -->
+  <path d="M25 28 L28.5 25 L28.5 75 L25 75 Z" fill="url(#platLightGrad)" />
+  <path d="M28.5 25 L32 28 L32 75 L28.5 75 Z" fill="url(#platGrad)" />
+  <!-- Pillar edge highlight -->
+  <line x1="28.5" y1="25" x2="28.5" y2="75" stroke="#FFFFFF" stroke-width="0.5" opacity="0.8" />
+
+  <!-- Right Monolithic Pillar (3D Faceted) -->
+  <path d="M68 28 L71.5 25 L71.5 75 L68 75 Z" fill="url(#platLightGrad)" />
+  <path d="M71.5 25 L75 28 L75 75 L71.5 75 Z" fill="url(#platGrad)" />
+  <!-- Pillar edge highlight -->
+  <line x1="71.5" y1="25" x2="71.5" y2="75" stroke="#FFFFFF" stroke-width="0.5" opacity="0.8" />
+
+  <!-- Core Strategic V (Multi-stroke Chrome Gold) -->
+  <!-- V Shadow -->
+  <path d="M32 30 L50 65 L68 30" fill="none" stroke="rgba(0,0,0,0.45)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- V Base Gold -->
+  <path d="M32 30 L50 65 L68 30" fill="none" stroke="url(#goldGrad)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- V Bevel Center Highlight -->
+  <path d="M32 30 L50 65 L68 30" fill="none" stroke="url(#goldLightGrad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9" />
+
+  <!-- Focal Precision Indicator -->
+  <!-- Subtle gold core glow -->
+  <circle cx="50" cy="78" r="6" fill="url(#goldGrad)" opacity="0.3" />
+  <!-- Inner core point -->
+  <circle cx="50" cy="78" r="3.5" fill="url(#goldLightGrad)" />
+</svg>

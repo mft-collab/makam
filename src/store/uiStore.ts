@@ -1,0 +1,201 @@
+import { create } from 'zustand';
+import { subscribeWithSelector, persist } from 'zustand/middleware';
+import type { Task, TaskStatus } from '../types';
+
+interface TaskFilter {
+  status: TaskStatus | 'ALL';
+  priority: string;
+  search: string;
+}
+
+export interface ToastItem {
+  id: string;
+  title: string;
+  body: string;
+  type?: 'info' | 'danger' | 'success' | 'warning';
+  taskId?: string;
+}
+
+interface UIStore {
+  // Modal durumları
+  isTaskFormOpen: boolean;
+  isTaskDetailOpen: boolean;
+  isSettingsOpen: boolean;
+  editingTask: Task | null;
+  selectedTask: Task | null;
+
+  // Görev form modalı (App seviyesi)
+  isCreateModalOpen: boolean;
+  isEditModalOpen: boolean;
+  parentTaskId: string | undefined;
+  initialTitle: string | undefined;
+  selectedTaskId: string | null;
+
+  // Bildirim paneli
+  showNotifications: boolean;
+
+  // Tema
+  theme: 'light' | 'dark' | 'system';
+
+  // Tab durumu
+  activeTab: string;
+
+  // Filtreleme
+  filter: TaskFilter;
+
+  // Toast bildirimleri
+  toasts: ToastItem[];
+
+  // Offline durum
+  isOffline: boolean;
+  offlineQueueLength: number;
+
+  // Aksiyonlar — mevcut
+  setTheme: (theme: 'light' | 'dark' | 'system') => void;
+  openTaskForm: (task?: Task) => void;
+  closeTaskForm: () => void;
+  openTaskDetail: (task: Task) => void;
+  closeTaskDetail: () => void;
+  openSettings: () => void;
+  closeSettings: () => void;
+  setActiveTab: (tab: string) => void;
+  setFilter: (partial: Partial<TaskFilter>) => void;
+  resetFilter: () => void;
+  addToast: (toast: Omit<ToastItem, 'id'>) => void;
+  removeToast: (id: string) => void;
+  setOfflineStatus: (isOffline: boolean, queueLength?: number) => void;
+
+  // Aksiyonlar — yeni (App seviyesi modal yönetimi)
+  setIsCreateModalOpen: (open: boolean) => void;
+  setIsEditModalOpen: (open: boolean) => void;
+  setParentTaskId: (id: string | undefined) => void;
+  setInitialTitle: (title: string | undefined) => void;
+  setSelectedTaskId: (id: string | null) => void;
+  setShowNotifications: (show: boolean) => void;
+  closeAllModals: () => void;
+}
+
+const DEFAULT_FILTER: TaskFilter = {
+  status: 'ALL',
+  priority: 'ALL',
+  search: '',
+};
+
+export const useUIStore = create<UIStore>()(
+  persist(
+    subscribeWithSelector((set) => ({
+      // Modal durumları
+    isTaskFormOpen: false,
+    isTaskDetailOpen: false,
+    isSettingsOpen: false,
+    editingTask: null,
+    selectedTask: null,
+
+    // App seviyesi görev modalları
+    isCreateModalOpen: false,
+    isEditModalOpen: false,
+    parentTaskId: undefined,
+    initialTitle: undefined,
+    selectedTaskId: null,
+
+    // Bildirim paneli
+    showNotifications: false,
+
+    // Tab
+    activeTab: 'dashboard',
+
+    // Filtreleme
+    filter: DEFAULT_FILTER,
+
+    // Toastlar
+    toasts: [],
+
+    // Offline
+    isOffline: typeof window !== 'undefined' ? !window.navigator.onLine : false,
+    offlineQueueLength: 0,
+
+    // Tema
+    theme: 'system',
+
+    // ─── Mevcut Modal Aksiyonları ────────────────────────────────────────────
+
+    setTheme: (theme) => set({ theme }),
+
+    openTaskForm: (task) => set({
+      isTaskFormOpen: true,
+      editingTask: task ?? null,
+    }),
+
+    closeTaskForm: () => set({
+      isTaskFormOpen: false,
+      editingTask: null,
+    }),
+
+    openTaskDetail: (task) => set({
+      isTaskDetailOpen: true,
+      selectedTask: task,
+    }),
+
+    closeTaskDetail: () => set({
+      isTaskDetailOpen: false,
+      selectedTask: null,
+    }),
+
+    openSettings: () => set({ isSettingsOpen: true }),
+    closeSettings: () => set({ isSettingsOpen: false }),
+
+    // ─── Tab ────────────────────────────────────────────────────────────────
+
+    setActiveTab: (tab) => set({ activeTab: tab }),
+
+    // ─── Filtreleme ──────────────────────────────────────────────────────────
+
+    setFilter: (partial) => set((state) => ({
+      filter: { ...state.filter, ...partial },
+    })),
+
+    resetFilter: () => set({ filter: DEFAULT_FILTER }),
+
+    // ─── Toast ──────────────────────────────────────────────────────────────
+
+    addToast: (toast) => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      set((state) => ({
+        toasts: [...state.toasts, { ...toast, id }],
+      }));
+      // Not: Otomatik kaldırma ExecutiveToast bileşeni tarafından 6s sonra yapılır.
+      // uiStore'da ayrıca timer başlatmak çift kaldırma (double removal) sorununa yol açar.
+    },
+
+    removeToast: (id) => set((state) => ({
+      toasts: state.toasts.filter(t => t.id !== id),
+    })),
+
+    // ─── Offline ────────────────────────────────────────────────────────────
+
+    setOfflineStatus: (isOffline, queueLength = 0) => set({
+      isOffline,
+      offlineQueueLength: queueLength,
+    }),
+
+    // ─── App Seviyesi Modal Aksiyonları ──────────────────────────────────────
+
+    setIsCreateModalOpen: (open) => set({ isCreateModalOpen: open }),
+    setIsEditModalOpen: (open) => set({ isEditModalOpen: open }),
+    setParentTaskId: (id) => set({ parentTaskId: id }),
+    setInitialTitle: (title) => set({ initialTitle: title }),
+    setSelectedTaskId: (id) => set({ selectedTaskId: id }),
+    setShowNotifications: (show) => set({ showNotifications: show }),
+
+    closeAllModals: () => set({
+      isCreateModalOpen: false,
+      isEditModalOpen: false,
+      parentTaskId: undefined,
+      initialTitle: undefined,
+    }),
+  })),
+  {
+    name: 'makam-ui-settings',
+    partialize: (state) => ({ theme: state.theme }),
+  }
+));

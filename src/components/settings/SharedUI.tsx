@@ -1,0 +1,120 @@
+import React from 'react';
+import { motion } from 'motion/react';
+import { cn } from '../../lib/utils';
+import { CheckCircle2, AlertCircle } from 'lucide-react';
+
+// ── Compact Settings Card ─────────────────────────────────────────────────────
+export interface SettingsCardProps {
+  title: string;
+  description?: string;
+  icon: React.ElementType;
+  accentColor?: 'slate' | 'red' | 'amber' | 'gold';
+  children: React.ReactNode;
+  index?: number;
+  fullWidth?: boolean;
+}
+
+export const SettingsCard = ({ title, description, icon: Icon, accentColor = 'slate', children, index = 0, fullWidth }: SettingsCardProps) => {
+  const colors = {
+    slate: { icon: 'bg-executive-blue/5 text-executive-blue', border: 'border-surface-border' },
+    red:   { icon: 'bg-red-50 text-red-600',         border: 'border-red-100/60 bg-red-50/20' },
+    amber: { icon: 'bg-[#C5A059]/10 text-[#C5A059]', border: 'border-[#C5A059]/20 bg-[#C5A059]/[0.03]' },
+    gold:  { icon: 'bg-[#C5A059]/10 text-[#C5A059]', border: 'border-[#C5A059]/20' },
+  }[accentColor];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 260, damping: 28, delay: index * 0.06 }}
+      className={cn(
+        'flex flex-col gap-3 p-4 bg-makam-glass backdrop-blur-xl border rounded-2xl',
+        'shadow-[0_1px_8px_rgba(22,21,19,0.02)] hover:shadow-[0_6px_24px_rgba(22,21,19,0.05)]',
+        'transition-all duration-300 hover:bg-surface-elevated',
+        colors.border,
+        fullWidth && 'col-span-full'
+      )}
+    >
+      {/* Card header */}
+      <div className="flex items-center gap-3">
+        <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0', colors.icon)}>
+          <Icon className="w-4 h-4 stroke-[1.5]" />
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <h3 className="text-[12px] font-medium text-executive-blue tracking-tight font-serif">{title}</h3>
+          {description && (
+            <p className="text-[9px] text-text-tertiary uppercase tracking-[0.25em]">{description}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="h-px bg-executive-blue/[0.04]" />
+
+      {/* Card content */}
+      <div className="flex flex-col gap-2.5">
+        {children}
+      </div>
+    </motion.div>
+  );
+};
+
+// ── Action Button ─────────────────────────────────────────────────────────────
+export interface ActionButtonProps {
+  onClick?: () => void;
+  label?: React.ReactNode;
+  htmlFor?: string;
+  variant?: 'primary' | 'secondary' | 'danger' | 'warning';
+  disabled?: boolean;
+  className?: string;
+}
+
+export const ActionButton = ({ onClick, label, htmlFor, variant = 'primary', disabled, className }: ActionButtonProps) => {
+  const styles = {
+    primary:   'bg-[#C5A059] text-white hover:bg-[#B38F46] shadow-lg shadow-[#C5A059]/20',
+    secondary: 'bg-makam-glass text-[#C5A059] border border-[#C5A059]/[0.15] hover:bg-surface-elevated hover:shadow-sm',
+    danger:    'bg-surface-elevated text-red-600 border border-red-100 hover:bg-red-500/10',
+    warning:   'bg-[#C5A059]/10 text-[#C5A059] border border-[#C5A059]/20 hover:bg-[#C5A059]/20',
+  }[variant];
+
+  const cls = cn(
+    'flex items-center justify-center gap-2 px-4 h-9 rounded-xl text-[9px] font-medium uppercase tracking-[0.25em]',
+    'transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none',
+    styles, className
+  );
+
+  if (htmlFor) {
+    return <label htmlFor={htmlFor} className={cn(cls, 'cursor-pointer')}>{label}</label>;
+  }
+
+  return (
+    <button onClick={onClick} disabled={disabled} className={cls}>
+      {label}
+    </button>
+  );
+};
+
+// ── Status Banner ─────────────────────────────────────────────────────────────
+export const StatusBanner = ({ status }: { status: { type: 'success' | 'error' | 'loading'; message: string } | null }) => {
+  if (!status) return null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn(
+        'flex items-center gap-3 p-3 rounded-xl border text-[11px] font-medium',
+        status.type === 'loading' ? 'bg-executive-blue/[0.03] border-executive-blue/10 text-executive-blue' :
+        status.type === 'success' ? 'bg-emerald-50/60 border-emerald-100/60 text-emerald-700' :
+        'bg-red-50/60 border-red-100/60 text-red-700'
+      )}
+    >
+      {status.type === 'loading' ? (
+        <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin flex-shrink-0" />
+      ) : status.type === 'success' ? (
+        <CheckCircle2 className="w-4 h-4 flex-shrink-0 stroke-[1.5]" />
+      ) : (
+        <AlertCircle className="w-4 h-4 flex-shrink-0 stroke-[1.5]" />
+      )}
+      <span className="uppercase tracking-[0.2em]">{status.message}</span>
+    </motion.div>
+  );
+};
