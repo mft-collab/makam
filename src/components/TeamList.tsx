@@ -37,6 +37,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState<UserRole>('Staff');
   const [newDept, setNewDept] = useState('');
+  const [addUserError, setAddUserError] = useState('');
 
   const [viewMode, setViewMode] = useState<'grid' | 'tree'>('grid');
   const [modalTab, setModalTab] = useState<'tasks' | 'logs'>('tasks');
@@ -117,12 +118,20 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
 
   const handleSave = () => {
     if (editingUser) {
-      onUpdateUser(editingUser.uid, {
-        role: editRole,
-        fullName: editName.trim(),
-        email: editEmail.toLowerCase().trim(),
-        departmentId: editDept.trim()
-      });
+      // Firestore kuralları, kullanıcının kendi profilini düzenlerken yalnızca
+      // fullName/photoURL/fcmTokens değiştirmesine izin verir — role/email/
+      // departmentId yalnızca Admin tarafından değiştirilebilir.
+      onUpdateUser(
+        editingUser.uid,
+        isAdmin
+          ? {
+              role: editRole,
+              fullName: editName.trim(),
+              email: editEmail.toLowerCase().trim(),
+              departmentId: editDept.trim()
+            }
+          : { fullName: editName.trim() }
+      );
       setIsEditModalOpen(false);
     }
   };
@@ -143,8 +152,13 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEmail || !newName) return;
+    const normalizedEmail = newEmail.toLowerCase().trim();
+    if (users.some(u => u.email.toLowerCase().trim() === normalizedEmail)) {
+      setAddUserError('Bu e-posta adresine sahip bir personel zaten kayıtlı.');
+      return;
+    }
     onAddUser({
-      email: newEmail.toLowerCase().trim(),
+      email: normalizedEmail,
       fullName: newName.trim(),
       role: newRole,
       departmentId: newDept.trim()
@@ -154,6 +168,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
     setNewName('');
     setNewRole('Staff');
     setNewDept('');
+    setAddUserError('');
   };
 
   const isAdmin = currentUser?.role === 'Admin';
@@ -505,7 +520,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                         modalTab === 'logs' ? "bg-executive-blue text-white shadow-sm" : "text-text-muted hover:text-text-heading"
                       )}
                     >
-                      İşlem Geçmişi
+                      Denetim İzi
                     </button>
                   </div>
                 </div>
@@ -571,7 +586,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                   <div className="flex items-center gap-2 mb-3 mt-1">
                     <History className="w-3.5 h-3.5 text-[#C5A059]" />
                     <span className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.35em]">
-                      İşlem Geçmişi — {userLogs.length} Kayıt
+                      Denetim İzi — {userLogs.length} Kayıt
                     </span>
                   </div>
                   <div className="flex flex-col gap-2 max-h-[40vh] overflow-y-auto custom-scrollbar pr-1">
@@ -658,10 +673,16 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
       </Modal>
 
       {/* ── Add User Modal ────────────────────────────────────── */}
-      <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Yeni Kadro Tanımla">
+      <Modal isOpen={isAddModalOpen} onClose={() => { setIsAddModalOpen(false); setAddUserError(''); }} title="Yeni Kadro Tanımla">
         <form onSubmit={handleAddSubmit} className="flex flex-col gap-4">
+          {addUserError && (
+            <div className="flex items-start gap-2 p-2.5 bg-red-50 border border-red-100 rounded-xl">
+              <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-[10px] text-red-600 font-semibold uppercase tracking-[0.1em] leading-relaxed">{addUserError}</p>
+            </div>
+          )}
           <Input label="Tam İsim" placeholder="Örn: Ali Yılmaz" value={newName} onChange={(e) => setNewName(e.target.value)} required />
-          <Input label="E-posta" placeholder="orn@makam.com" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required />
+          <Input label="E-posta" placeholder="orn@makam.com" type="email" value={newEmail} onChange={(e) => { setNewEmail(e.target.value); setAddUserError(''); }} required />
           <div className="flex flex-col gap-1.5">
             <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.35em] px-0.5">Yetki Seviyesi</label>
             <Select value={newRole} onChange={(e) => setNewRole(e.target.value as UserRole)} options={[
@@ -672,7 +693,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
           </div>
           <Input label="Departman / Birim" placeholder="Örn: Operasyon" value={newDept} onChange={(e) => setNewDept(e.target.value)} />
           <div className="flex justify-end gap-2.5 pt-4 border-t border-executive-blue/[0.04]">
-            <Button variant="secondary" type="button" onClick={() => setIsAddModalOpen(false)}>İptal</Button>
+            <Button variant="secondary" type="button" onClick={() => { setIsAddModalOpen(false); setAddUserError(''); }}>İptal</Button>
             <Button type="submit">Kadroyu Onayla</Button>
           </div>
         </form>
@@ -682,16 +703,27 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
       <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Kadro Revizyonu">
         <div className="flex flex-col gap-4">
           <Input label="Tam İsim" value={editName} onChange={(e) => setEditName(e.target.value)} required />
-          <Input label="E-posta" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} required />
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.35em] px-0.5">Yetki Seviyesi</label>
-            <Select value={editRole} onChange={(e) => setEditRole(e.target.value as UserRole)} options={[
-              { value: 'Staff', label: 'Personel (Staff)' },
-              { value: 'Manager', label: 'Müdür (Manager)' },
-              { value: 'Admin', label: 'Müftü (Admin)' }
-            ]} />
-          </div>
-          <Input label="Departman / Birim" value={editDept} onChange={(e) => setEditDept(e.target.value)} />
+          {isAdmin ? (
+            <>
+              <Input label="E-posta" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} required />
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.35em] px-0.5">Yetki Seviyesi</label>
+                <Select value={editRole} onChange={(e) => setEditRole(e.target.value as UserRole)} options={[
+                  { value: 'Staff', label: 'Personel (Staff)' },
+                  { value: 'Manager', label: 'Müdür (Manager)' },
+                  { value: 'Admin', label: 'Müftü (Admin)' }
+                ]} />
+              </div>
+              <Input label="Departman / Birim" value={editDept} onChange={(e) => setEditDept(e.target.value)} />
+            </>
+          ) : (
+            <div className="flex items-start gap-2 p-2.5 bg-[#F5F3EF]/60 border border-slate-100 rounded-xl">
+              <Shield className="w-3.5 h-3.5 text-text-tertiary flex-shrink-0 mt-0.5" />
+              <p className="text-[9px] text-text-tertiary font-medium uppercase tracking-[0.15em] leading-relaxed">
+                E-posta, yetki seviyesi ve departman yalnızca Admin tarafından değiştirilebilir.
+              </p>
+            </div>
+          )}
           <div className="flex justify-end gap-2.5 pt-4 border-t border-executive-blue/[0.04]">
             <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>İptal</Button>
             <Button onClick={handleSave}>Güncelle</Button>
@@ -705,6 +737,20 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
           <p className="text-[13px] text-text-muted font-light leading-relaxed">
             <strong className="text-red-600 font-medium">{userToDelete?.fullName}</strong> isimli personeli sistemden çıkarmak istediğinize emin misiniz?
           </p>
+          {userToDelete && (() => {
+            const activeTaskCount = tasks.filter(t =>
+              (t.assigneeId === userToDelete.uid || t.assigneeId === userToDelete.email) &&
+              t.status !== 'COMPLETED' && t.status !== 'CANCELLED'
+            ).length;
+            return activeTaskCount > 0 ? (
+              <div className="flex items-start gap-2 p-2.5 bg-red-50 border border-red-100 rounded-xl">
+                <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+                <p className="text-[10px] text-red-600 font-semibold uppercase tracking-[0.1em] leading-relaxed">
+                  Bu personelin üzerinde {activeTaskCount} aktif talimat var. Silme işleminden sonra bu talimatlar sahipsiz kalacaktır — devam etmeden önce sorumluluğu başka bir personele devretmeniz önerilir.
+                </p>
+              </div>
+            ) : null;
+          })()}
           <div className="flex justify-end gap-2.5 pt-4 border-t border-executive-blue/[0.04]">
             <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>İptal</Button>
             <Button variant="danger" onClick={confirmDelete}>Sistemden Çıkar</Button>

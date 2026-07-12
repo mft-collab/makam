@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, AlertCircle, CheckCircle2, Database, RotateCcw, Trash2, Smartphone, Bell, Settings as SettingsIcon, Clock } from 'lucide-react';
+import { Download, AlertCircle, CheckCircle2, Database, RotateCcw, ShieldCheck, Smartphone, Bell, Settings as SettingsIcon, Clock } from 'lucide-react';
 import { Task, User } from '../types';
 import { cn } from '../lib/utils';
 import { db, doc, writeBatch, collection, getDocs, query, setDoc, getCountFromServer, addDoc } from '../firebase';
@@ -9,6 +9,34 @@ import { motion } from 'motion/react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { getSLAConfigForPriority } from '../lib/sla';
 import { SettingsCard, ActionButton, StatusBanner } from './settings/SharedUI';
+
+// ── Yedek Doğrulama Şemaları (Restore) ──────────────────────────────────────
+const userBackupSchema = z.object({
+  uid: z.string(),
+  fullName: z.string(),
+  email: z.string().email(),
+  role: z.enum(['Admin', 'Manager', 'Staff'])
+});
+
+const taskBackupSchema = z.object({
+  id: z.string(),
+  title: z.string().min(1),
+  description: z.string(),
+  creatorId: z.string(),
+  assigneeId: z.string(),
+  status: z.enum(['ASSIGNED', 'PENDING_DELEGATION', 'IN_PROGRESS', 'BLOCKED', 'AWAITING_APPROVAL', 'COMPLETED', 'CANCELLED', 'CRISIS']),
+  priority: z.enum(['Low', 'Medium', 'High', 'Urgent']),
+  deadline: z.any(),
+  createdAt: z.any(),
+  updatedAt: z.any()
+});
+
+const restoreBackupSchema = z.object({
+  system: z.literal('MAKAM Executive Control'),
+  users: z.array(z.any()).optional(),
+  tasks: z.array(z.any()).optional(),
+  blockers: z.array(z.any()).optional(),
+});
 
 interface SettingsProps {
   tasks: Task[];
@@ -24,7 +52,6 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
   const [isOnline, setIsOnline] = useState(typeof window !== 'undefined' ? window.navigator.onLine : true);
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error' | 'loading'; message: string } | null>(null);
   const [isArchiving, setIsArchiving] = useState(false);
-  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const { isInstallable, isInstalled, install } = usePWAInstall();
 
   const [localAuditLogsCount, setLocalAuditLogsCount] = useState<number>(0);
@@ -280,33 +307,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
         if (!content) throw new Error('Dosya içeriği okunamadı.');
         const data = JSON.parse(content);
 
-        // Zod validation schemas
-        const userBackupSchema = z.object({
-          uid: z.string(),
-          fullName: z.string(),
-          email: z.string().email(),
-          role: z.enum(['Admin', 'Manager', 'Staff'])
-        });
-
-        const taskBackupSchema = z.object({
-          id: z.string(),
-          title: z.string().min(1),
-          description: z.string(),
-          creatorId: z.string(),
-          assigneeId: z.string(),
-          status: z.enum(['ASSIGNED', 'PENDING_DELEGATION', 'IN_PROGRESS', 'BLOCKED', 'AWAITING_APPROVAL', 'COMPLETED', 'CANCELLED', 'CRISIS']),
-          priority: z.enum(['Low', 'Medium', 'High', 'Urgent']),
-          deadline: z.any(),
-          createdAt: z.any(),
-          updatedAt: z.any()
-        });
-
-        const backupValidation = z.object({
-          system: z.literal('MAKAM Executive Control'),
-          users: z.array(z.any()).optional(),
-          tasks: z.array(z.any()).optional(),
-          blockers: z.array(z.any()).optional(),
-        }).safeParse(data);
+        const backupValidation = restoreBackupSchema.safeParse(data);
 
         if (!backupValidation.success) {
           throw new Error('Yedek dosyası formatı geçersiz (MAKAM verisi değil).');
@@ -389,12 +390,12 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
           setImportStatus({ type: 'loading', message: `Veri Yazılıyor... %${Math.round(((i + chunk.length) / items.length) * 100)}` });
         }
 
-        // Register restore audit log
+        // Register restore audit log — hangi dosyadan, kaç kayıt geri yüklendiği kaydedilir
         await addDoc(collection(db, 'audit_logs'), {
           taskId: 'system_backup_restore',
           changedBy: currentUser.uid,
-          oldValue: 'Before Restore',
-          newValue: 'Database Restored from Backup file',
+          oldValue: `Backup file: ${file.name}`,
+          newValue: `Restored ${data.users?.length ?? 0} users, ${data.tasks?.length ?? 0} tasks, ${data.blockers?.length ?? 0} blockers`,
           timestamp: Date.now()
         });
 
@@ -407,11 +408,14 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
     reader.readAsText(file);
   };
 
-  // ── Archive ───────────────────────────────────────────────────────────────
+  // ── Archive (export-only) ───────────────────────────────────────────────────
+  // NOT: Denetim izleri artık firestore.rules'ta değiştirilemez/silinemez
+  // (kanıt bütünlüğü). Bu işlem yalnızca dışa aktarır — veritabanından hiçbir
+  // kayıt silinmez.
   const handleArchive = async () => {
     if (!currentUser || currentUser.role !== 'Admin') {
       if (triggerToast) {
-        triggerToast('YETKİSİZ İŞLEM', 'Log arşivleme ve temizleme yetkisi yalnızca Admin makamına aittir.', 'danger');
+        triggerToast('YETKİSİZ İŞLEM', 'Log dışa aktarma yetkisi yalnızca Admin makamına aittir.', 'danger');
       }
       return;
     }
@@ -422,8 +426,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
       const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
       if (logs.length === 0) {
-        setImportStatus({ type: 'success', message: 'Temizlenecek denetim izi bulunamadı.' });
-        setShowArchiveConfirm(false);
+        setImportStatus({ type: 'success', message: 'Dışa aktarılacak denetim izi bulunamadı.' });
         return;
       }
 
@@ -444,35 +447,16 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      setImportStatus({ type: 'loading', message: 'Veritabanı Temizleniyor...' });
-
-      // Chunked Firestore Batch Deletion (max 500 items per batch limit of Firestore)
-      const CHUNK_SIZE = 500;
-      const docsList = snapshot.docs;
-      for (let i = 0; i < docsList.length; i += CHUNK_SIZE) {
-        const chunk = docsList.slice(i, i + CHUNK_SIZE);
-        const batch = writeBatch(db);
-        chunk.forEach(docSnap => batch.delete(docSnap.ref));
-        await batch.commit();
-        setImportStatus({ 
-          type: 'loading', 
-          message: `Arşiv Temizleniyor... %${Math.round(((i + chunk.length) / docsList.length) * 100)}` 
-        });
-      }
-
-      setLocalAuditLogsCount(0);
-
-      // Add audit log for log cleaning
+      // Dışa aktarma işleminin kendisi denetim izine kaydedilir (kayıtlar silinmez)
       await addDoc(collection(db, 'audit_logs'), {
-        taskId: 'system_log_cleaning',
+        taskId: 'system_log_export',
         changedBy: currentUser.uid,
         oldValue: logs.length + ' logs in DB',
-        newValue: 'Cleaned and Archived',
+        newValue: 'Exported to local file',
         timestamp: Date.now()
       });
 
-      setImportStatus({ type: 'success', message: 'Denetim izleri başarıyla yerel diske arşivlendi ve veritabanından kalıcı olarak silindi.' });
-      setShowArchiveConfirm(false);
+      setImportStatus({ type: 'success', message: `${logs.length} denetim izi kaydı başarıyla yerel diske aktarıldı.` });
     } catch (err: any) {
       setImportStatus({ type: 'error', message: `Arşivleme Hatası: ${err.message}` });
     } finally {
@@ -811,56 +795,32 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                       <div className="flex items-start gap-2 p-2.5 bg-[#C5A059]/[0.05] border border-[#C5A059]/15 rounded-xl">
                         <AlertCircle className="w-3.5 h-3.5 text-[#C5A059] flex-shrink-0 mt-0.5 stroke-[1.5]" />
                         <p className="text-[9px] text-[#C5A059] font-medium uppercase tracking-[0.2em] leading-relaxed">
-                          Bu işlem mevcut verilerin üzerine yazacaktır.
+                          Bu işlem mevcut verilerin üzerine yazacaktır. Kayıtlar toplu halde (chunk) yazılır — işlem yarıda kesilirse veritabanı kısmen güncellenmiş durumda kalabilir. Geri yüklemeden önce güncel bir yedek (Export) almanız önerilir.
                         </p>
                       </div>
                     </>
                   )}
                 </SettingsCard>
 
-                {/* Clear Audit Logs */}
-                <SettingsCard title="Denetim İzlerini Arşivle ve Temizle" description="Sistem log yönetimi" icon={Trash2} accentColor="red" index={2}>
+                {/* Export Audit Logs */}
+                <SettingsCard title="Denetim İzlerini Arşivle" description="Sistem log dışa aktarımı" icon={ShieldCheck} accentColor="slate" index={2}>
                   <p className="text-[11px] text-text-muted font-light leading-relaxed">
-                    Tüm sistem erişim ve değişim loglarını güvenli bir şekilde yerel JSON olarak arşivleyip indirir, ardından veritabanından kalıcı olarak temizler.
+                    Tüm sistem erişim ve değişim loglarını yerel bir JSON dosyasına aktarır. Denetim izleri kanıt bütünlüğü gereği değiştirilemez/silinemez olduğundan bu işlem veritabanından hiçbir kaydı kaldırmaz.
                   </p>
 
                   {!isOnline ? (
                     <div className="flex items-start gap-2 p-2.5 bg-red-50 border border-red-100 rounded-xl">
                       <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
                       <p className="text-[9px] text-red-600 font-semibold uppercase tracking-[0.15em] leading-relaxed">
-                        Denetim izlerini temizlemek için internet bağlantısı gereklidir.
+                        Denetim izlerini dışa aktarmak için internet bağlantısı gereklidir.
                       </p>
                     </div>
-                  ) : showArchiveConfirm ? (
-                    <motion.div
-                      initial={{ opacity: 0, y: -4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex flex-col gap-2"
-                    >
-                      <p className="text-[9px] text-red-600 font-medium uppercase tracking-[0.2em]">
-                        Loglar indirilip silinecektir. Emin misiniz?
-                      </p>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleArchive}
-                          disabled={isArchiving}
-                          className="flex-1 bg-red-600 text-white text-[9px] font-medium py-2 rounded-xl hover:bg-red-700 transition-all uppercase tracking-[0.2em] disabled:opacity-60"
-                        >
-                          {isArchiving ? 'Arşivleniyor...' : 'Evet, Arşivle ve Sil'}
-                        </button>
-                        <button
-                          onClick={() => setShowArchiveConfirm(false)}
-                          className="flex-1 bg-[#F5F3EF] text-text-muted text-[9px] font-medium py-2 rounded-xl hover:bg-slate-100 transition-all uppercase tracking-[0.2em]"
-                        >
-                          İptal
-                        </button>
-                      </div>
-                    </motion.div>
                   ) : (
                     <ActionButton
-                      variant="danger"
-                      onClick={() => setShowArchiveConfirm(true)}
-                      label={<><Trash2 className="w-3.5 h-3.5 stroke-[2]" />Arşivle ve Temizle</>}
+                      variant="primary"
+                      disabled={isArchiving}
+                      onClick={handleArchive}
+                      label={isArchiving ? 'Arşivleniyor...' : <><Download className="w-3.5 h-3.5 stroke-[2]" />Arşivi İndir (.json)</>}
                     />
                   )}
                 </SettingsCard>

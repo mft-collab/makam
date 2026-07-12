@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, ArrowRight, Loader2 } from 'lucide-react';
+import type { QueryDocumentSnapshot, DocumentData, QueryConstraint } from 'firebase/firestore';
 import { AuditLog, Task, User, TaskStatus } from '../types';
 import { Button } from './ui/Button';
 import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
 import { STATUS_LABELS, ROLE_LABELS } from '../constants';
-import { db, collection, getDocs, query, orderBy, limit, startAfter } from '../firebase';
+import { db, collection, getDocs, query, where, orderBy, limit, startAfter } from '../firebase';
 
 interface AuditLogListProps {
   tasks: Task[];
@@ -16,32 +17,33 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
   const [logsState, setLogsState] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [lastVisibleDoc, setLastVisibleDoc] = useState<any>(null);
+  const [lastVisibleDoc, setLastVisibleDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
 
   // Filter States
   const [selectedUser, setSelectedUser] = useState<string>('ALL');
   const [selectedType, setSelectedType] = useState<string>('ALL');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
 
-  const fetchLogs = async (isFirstLoad = false) => {
+  // Aktör ve tarih aralığı filtreleri sunucu tarafında (Firestore sorgusu) uygulanır —
+  // yalnızca yüklenmiş sayfada arama yapmak, henüz getirilmemiş eski kayıtları
+  // yanlışlıkla "kayıt yok" gibi göstererek denetim aramalarını yanıltabilirdi.
+  const buildQuery = (cursor: QueryDocumentSnapshot<DocumentData> | null) => {
+    const constraints: QueryConstraint[] = [];
+    if (selectedUser !== 'ALL') constraints.push(where('changedBy', '==', selectedUser));
+    if (dateFrom) constraints.push(where('timestamp', '>=', new Date(dateFrom).getTime()));
+    if (dateTo) constraints.push(where('timestamp', '<=', new Date(dateTo + 'T23:59:59.999').getTime()));
+    constraints.push(orderBy('timestamp', 'desc'));
+    if (cursor) constraints.push(startAfter(cursor));
+    constraints.push(limit(15));
+    return query(collection(db, 'audit_logs'), ...constraints);
+  };
+
+  const fetchLogs = async (isFirstLoad = false, cursor: QueryDocumentSnapshot<DocumentData> | null = null) => {
     if (loading) return;
     setLoading(true);
     try {
-      let q = query(
-        collection(db, 'audit_logs'),
-        orderBy('timestamp', 'desc'),
-        limit(15)
-      );
-
-      if (!isFirstLoad && lastVisibleDoc) {
-        q = query(
-          collection(db, 'audit_logs'),
-          orderBy('timestamp', 'desc'),
-          startAfter(lastVisibleDoc),
-          limit(15)
-        );
-      }
-
-      const snapshot = await getDocs(q);
+      const snapshot = await getDocs(buildQuery(cursor));
       const newLogs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AuditLog));
 
       if (isFirstLoad) {
@@ -54,7 +56,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
         setHasMore(false);
       } else {
         setHasMore(true);
-        setLastVisibleDoc(snapshot.docs[snapshot.docs.length - 1]);
+        setLastVisibleDoc(snapshot.docs[snapshot.docs.length - 1] ?? null);
       }
     } catch (error) {
       console.error('Error fetching audit logs:', error);
@@ -63,22 +65,25 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
     }
   };
 
+  // Aktör veya tarih aralığı değiştiğinde sorguyu baştan başlat (sayfalama sıfırlanır)
   useEffect(() => {
-    fetchLogs(true);
-  }, []);
+    setLogsState([]);
+    setLastVisibleDoc(null);
+    setHasMore(true);
+    fetchLogs(true, null);
+  }, [selectedUser, dateFrom, dateTo]);
 
   const filteredLogs = logsState.filter(log => {
-    const matchUser = selectedUser === 'ALL' || log.changedBy === selectedUser;
     const isStatusChange = !log.changes && log.newValue !== undefined;
-    const matchType = selectedType === 'ALL' || 
-      (selectedType === 'STATUS' && isStatusChange) || 
+    const matchType = selectedType === 'ALL' ||
+      (selectedType === 'STATUS' && isStatusChange) ||
       (selectedType === 'FIELD' && (log.changes !== undefined || (log.newValue === undefined && log.oldValue === undefined)));
-    return matchUser && matchType;
+    return matchType;
   });
 
   return (
     <div className="flex flex-col gap-5 py-4 max-w-[1440px] mx-auto font-sans">
-      
+
       {/* ── Page header ─────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-executive-blue/[0.04]">
         <div className="flex items-center gap-2.5">
@@ -86,7 +91,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
             <ShieldCheck className="w-4 h-4 text-white stroke-[1.5]" />
           </div>
           <div>
-            <span className="text-[10px] font-medium text-executive-blue uppercase tracking-[0.4em] block leading-none">GÜVENLİK PROTOKOLÜ</span>
+            <span className="text-[10px] font-medium text-executive-blue uppercase tracking-[0.4em] block leading-none">DENETİM İZLERİ</span>
             <span className="text-[9px] text-text-tertiary uppercase tracking-[0.3em]">
               {loading && logsState.length === 0 ? 'Yükleniyor...' : `${filteredLogs.length} / ${logsState.length} Kayıt`}
             </span>
@@ -127,6 +132,39 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
               <option value="FIELD" className="bg-surface-base text-text-heading">İçerik Güncellemeleri</option>
             </select>
           </div>
+
+          {/* Date range filter */}
+          <div className="flex items-center gap-1.5 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl px-3 py-2">
+            <label htmlFor="audit-date-from" className="sr-only">Başlangıç Tarihi</label>
+            <input
+              id="audit-date-from"
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              max={dateTo || undefined}
+              className="text-[11px] text-text-heading bg-transparent outline-none border-none cursor-pointer font-medium"
+              aria-label="Başlangıç Tarihi"
+            />
+            <ArrowRight className="w-3 h-3 text-text-tertiary flex-shrink-0" />
+            <label htmlFor="audit-date-to" className="sr-only">Bitiş Tarihi</label>
+            <input
+              id="audit-date-to"
+              type="date"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              min={dateFrom || undefined}
+              className="text-[11px] text-text-heading bg-transparent outline-none border-none cursor-pointer font-medium"
+              aria-label="Bitiş Tarihi"
+            />
+            {(dateFrom || dateTo) && (
+              <button
+                onClick={() => { setDateFrom(''); setDateTo(''); }}
+                className="text-[9px] text-text-tertiary hover:text-executive-blue uppercase tracking-wider pl-1"
+              >
+                Temizle
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -135,16 +173,16 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
           filteredLogs.map((log) => {
             const task = tasks.find((t: Task) => t.id === log.taskId);
             const user = users.find((u: User) => u.uid === log.changedBy);
-            
+
             return (
               <div key={log.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-xl group hover:bg-surface-elevated hover:shadow-sm transition-all relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-1 h-full bg-executive-blue/10 group-hover:bg-executive-blue transition-all rounded-l-xl" />
-                
+
                 <div className="flex items-center gap-6 flex-1">
                   {/* Avatar */}
                   <Avatar
                     name={user?.fullName ?? 'Sistem'}
-                    photoURL={(user as any)?.photoURL}
+                    photoURL={user?.photoURL}
                     size="sm"
                   />
                   <div className="flex flex-col gap-1.5">
@@ -238,7 +276,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
         <div className="flex justify-center pt-4">
           <Button
             variant="secondary"
-            onClick={() => fetchLogs(false)}
+            onClick={() => fetchLogs(false, lastVisibleDoc)}
             disabled={loading}
             className="flex items-center gap-2 px-6 py-2 uppercase tracking-[0.2em] text-[10px] font-medium rounded-xl border border-slate-200 bg-surface-elevated hover:bg-slate-50 transition-all"
           >

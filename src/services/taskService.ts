@@ -201,17 +201,9 @@ export const taskService = {
         await batch.commit();
       }
 
-      // Toplu sil: audit logs (sadece kök görev için)
-      if (!isSubTask) {
-        const auditLogsQuery = query(collection(db, 'audit_logs'), where('taskId', '==', taskId));
-        const auditLogsSnapshot = await getDocs(auditLogsQuery);
-        if (!auditLogsSnapshot.empty) {
-          const batch = writeBatch(db);
-          auditLogsSnapshot.docs.forEach(aDoc => batch.delete(aDoc.ref));
-          await batch.commit();
-        }
-      }
-
+      // NOT: Görev silindiğinde denetim izi bilinçli olarak SİLİNMİYOR — audit_logs
+      // artık firestore.rules'ta değiştirilemez/silinemez; görevin geçmişi (silme
+      // dahil) kanıt bütünlüğü için korunur.
       await deleteDoc(doc(db, 'tasks', taskId));
 
       if (!isSubTask) {
@@ -291,30 +283,34 @@ export const taskService = {
           updatedAt: now,
           lockVersion: currentServerVersion + 1
         }));
-      });
 
-      await addDoc(collection(db, 'audit_logs'), {
-        taskId,
-        changedBy: userId,
-        oldValue: 'Partial Update',
-        newValue: 'Partial Update',
-        timestamp: now,
-        changes: Object.keys(data).reduce((acc, key) => ({
-          ...acc,
-          [key]: { 
-            old: (oldTask as any)[key] === undefined ? null : (oldTask as any)[key], 
-            new: (data as any)[key] === undefined ? null : (data as any)[key] 
-          }
-        }), {})
-      });
+        // Audit Log — görev güncellemesiyle aynı transaction içinde yazılır ki
+        // biri başarısız olursa ikisi de geri alınsın (denetim izi bütünlüğü).
+        const auditRef = doc(collection(db, 'audit_logs'));
+        transaction.set(auditRef, {
+          taskId,
+          changedBy: userId,
+          oldValue: 'Partial Update',
+          newValue: 'Partial Update',
+          timestamp: now,
+          changes: Object.keys(data).reduce((acc, key) => ({
+            ...acc,
+            [key]: {
+              old: (oldTask as any)[key] === undefined ? null : (oldTask as any)[key],
+              new: (data as any)[key] === undefined ? null : (data as any)[key]
+            }
+          }), {})
+        });
 
-      // Aggregate Stats
-      if (data.status && data.status !== oldTask.status) {
-        await setDoc(doc(db, 'system', 'stats'), {
-          [`status_${oldTask.status}`]: increment(-1),
-          [`status_${data.status}`]: increment(1)
-        }, { merge: true });
-      }
+        // Aggregate Stats — aynı transaction içinde
+        if (data.status && data.status !== oldTask.status) {
+          const statsRef = doc(db, 'system', 'stats');
+          transaction.set(statsRef, {
+            [`status_${oldTask.status}`]: increment(-1),
+            [`status_${data.status}`]: increment(1)
+          }, { merge: true });
+        }
+      });
     });
   },
 
@@ -336,21 +332,5 @@ export const taskService = {
     } catch (error) {
       console.error('Cleanup error:', error);
     }
-  },
-
-  async clearAuditLogs() {
-    const q = query(collection(db, 'audit_logs'));
-    const snapshot = await getDocs(q);
-    const batch = writeBatch(db);
-    snapshot.docs.forEach(doc => batch.delete(doc.ref));
-    await batch.commit();
-  },
-
-  async clearSystemLogs() {
-    const q = query(collection(db, 'system_logs'));
-    const snapshot = await getDocs(q);
-    const batch = writeBatch(db);
-    snapshot.docs.forEach(doc => batch.delete(doc.ref));
-    await batch.commit();
   }
 };

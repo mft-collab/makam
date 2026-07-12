@@ -189,6 +189,9 @@ service cloud.firestore {
       return data.keys().hasAll(['taskId', 'changedBy', 'timestamp']) &&
              data.taskId is string &&
              data.changedBy is string &&
+             // Kaydı oluşturan istemci, başka bir kullanıcı adına sahte kayıt
+             // yazamaz — "kim yaptı" bilgisi request.auth.uid'e bağlanır.
+             data.changedBy == request.auth.uid &&
              data.timestamp is number;
     }
 
@@ -233,8 +236,18 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(userId) && (isAdmin() || isOwner(userId)) && isValidUser(incoming()) && (
-        isAdmin() || request.auth.token.email_verified == true
+      allow create: if isSignedIn() && isValidId(userId) && isValidUser(incoming()) && (
+        isAdmin() ||
+        (
+          // İlk giriş taşıması: Admin'in e-posta ile önceden oluşturduğu davet
+          // dokümanı gerçek UID'ye taşınır. Rol, davet dokümanındakiyle birebir
+          // aynı olmak zorunda — kullanıcı kendine keyfi bir rol atayamaz
+          // (aksi halde herkes kendini 'Admin' yaparak yetki yükseltebilirdi).
+          isOwner(userId) &&
+          request.auth.token.email_verified == true &&
+          exists(/databases/$(database)/documents/users/$(incoming().email)) &&
+          get(/databases/$(database)/documents/users/$(incoming().email)).data.role == incoming().role
+        )
       );
       allow update: if isSignedIn() && isValidId(userId) && (
         isAdmin() ||
@@ -276,7 +289,23 @@ service cloud.firestore {
     }
 
     match /blockers/{blockerId} {
-      allow read: if isSignedIn();
+      // Engelin bağlı olduğu görevin departmanına göre okuma izni — tasks
+      // koleksiyonuyla aynı desen. Bağlı görev yoksa (silinmiş/geçersiz
+      // referans) yalnızca Admin erişebilir.
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        (
+          exists(/databases/$(database)/documents/tasks/$(resource.data.taskId)) &&
+          (
+            get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.creatorId == request.auth.uid ||
+            get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.assigneeId == request.auth.uid ||
+            get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.departmentId == getUserDepartment() ||
+            !('departmentId' in get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data) ||
+            get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.departmentId == null ||
+            get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.departmentId == ""
+          )
+        )
+      );
       allow create: if isSignedIn() && isValidId(blockerId) && isValidBlocker(incoming()) && (
         isAdmin() ||
         (
@@ -285,20 +314,31 @@ service cloud.firestore {
             get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data.creatorId == request.auth.uid ||
             get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data.assigneeId == request.auth.uid ||
             get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data.departmentId == getUserDepartment() ||
-            !('departmentId' in get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data) || 
-            get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data.departmentId == null || 
+            !('departmentId' in get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data) ||
+            get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data.departmentId == null ||
             get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data.departmentId == ""
           )
         )
       );
-      allow update: if isSignedIn() && isValidId(blockerId) && isValidBlocker(incoming()) && isAdminOrManager();
+      // Manager yalnızca kendi departmanındaki görevlere bağlı engelleri
+      // güncelleyebilir (tasks update kuralıyla aynı sıkılıkta) — Admin sınırsız.
+      allow update: if isSignedIn() && isValidId(blockerId) && isValidBlocker(incoming()) && (
+        isAdmin() ||
+        (
+          isManager() &&
+          exists(/databases/$(database)/documents/tasks/$(existing().taskId)) &&
+          get(/databases/$(database)/documents/tasks/$(existing().taskId)).data.departmentId == getUserDepartment()
+        )
+      );
       allow delete: if isAdmin();
     }
 
     match /audit_logs/{logId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidId(logId) && isValidAuditLog(incoming());
-      allow update, delete: if isAdmin();
+      // Denetim izi değiştirilemez/silinemez — Admin dahil hiçbir istemci rolü
+      // kaydı sonradan değiştiremez veya silemez (kanıt bütünlüğü).
+      allow update, delete: if false;
     }
 
     match /notifications/{notificationId} {
