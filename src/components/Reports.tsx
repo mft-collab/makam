@@ -8,7 +8,6 @@ import {
 } from 'recharts';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import { exportTasksToPDF, exportTasksToCSV } from '../services/exportService';
 
 interface ReportsProps {
   tasks: Task[];
@@ -94,9 +93,13 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
     return blockers.filter(b => filteredTaskIds.has(b.taskId));
   }, [blockers, filteredTasks]);
 
+  // jsPDF (+jspdf-autotable, ~140KB gzip) yalnızca Export butonuna basıldığında
+  // yükleniyor — statik import Reports sekmesine her girişte bu paketi
+  // gereksiz yere indiriyordu.
   const handleExportPDF = useCallback(async () => {
     setIsExporting(true);
     try {
+      const { exportTasksToPDF } = await import('../services/exportService');
       await exportTasksToPDF(filteredTasks, users, {
         from: new Date(dateFrom),
         to: new Date(dateTo + 'T23:59:59'),
@@ -108,7 +111,8 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
     }
   }, [filteredTasks, users, dateFrom, dateTo]);
 
-  const handleExportCSV = useCallback(() => {
+  const handleExportCSV = useCallback(async () => {
+    const { exportTasksToCSV } = await import('../services/exportService');
     exportTasksToCSV(filteredTasks, users, {
       from: new Date(dateFrom),
       to: new Date(dateTo + 'T23:59:59'),

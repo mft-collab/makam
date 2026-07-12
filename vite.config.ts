@@ -97,6 +97,16 @@ export default defineConfig(({ mode }) => {
           },
         },
       },
+      modulePreload: {
+        // Vite varsayılan olarak lazy route'ların bağımlı olduğu TÜM vendor
+        // chunk'ları için <link rel="modulepreload"> ekliyor — bu da recharts
+        // (405KB) ve jsPDF (422KB) paketlerini, kullanıcı henüz giriş bile
+        // yapmamışken (Login ekranı) indirmeye zorluyordu ve gerçek kritik
+        // kaynaklarla bant genişliği için yarışıyordu (ölçülen FCP/LCP ~9s).
+        // Bu iki paket yalnızca ilgili sekmeye girildiğinde gerekli.
+        resolveDependencies: (_filename, deps) =>
+          deps.filter(dep => !dep.includes('vendor-charts') && !dep.includes('vendor-pdf')),
+      },
     },
     resolve: {
       alias: {
