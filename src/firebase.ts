@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, where, or, orderBy, limit, startAfter, addDoc, serverTimestamp, getDocFromServer, runTransaction, writeBatch, getCountFromServer, increment } from 'firebase/firestore';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithCustomToken, signOut, onAuthStateChanged, connectAuthEmulator } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, where, or, orderBy, limit, startAfter, addDoc, serverTimestamp, getDocFromServer, runTransaction, writeBatch, getCountFromServer, increment, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getMessaging, isSupported } from 'firebase/messaging';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
@@ -49,6 +49,20 @@ export const db = getFirestore(app, databaseId);
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 
+// E2E/yerel geliştirme için Firebase Emulator Suite'e bağlanma.
+// Yalnızca `vite dev` (import.meta.env.DEV) ile ve VITE_USE_FIREBASE_EMULATOR
+// açıkça 'true' verildiğinde aktif olur — `vite build` çıktısında DEV her
+// zaman false'a sabitlendiği için bu kod prod bundle'ında hiçbir zaman
+// çalışamaz, ortam değişkeni yanlışlıkla kalsa bile.
+export const isUsingFirebaseEmulator =
+  import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true';
+
+if (isUsingFirebaseEmulator) {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+  connectFirestoreEmulator(db, '127.0.0.1', 8080);
+  logger.debug('[Firebase] Emulator Suite\'e bağlanıldı (Auth :9099, Firestore :8080).');
+}
+
 export let messaging: any = null;
 isSupported().then((supported) => {
   if (supported) {
@@ -77,4 +91,4 @@ async function testConnection() {
 }
 setTimeout(testConnection, 2000); // Wait a bit for initialization
 
-export { signInWithPopup, signOut, onAuthStateChanged, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, where, or, orderBy, limit, startAfter, addDoc, serverTimestamp, ref, uploadBytes, getDownloadURL, runTransaction, writeBatch, getCountFromServer, increment };
+export { signInWithPopup, signInWithCustomToken, signOut, onAuthStateChanged, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, where, or, orderBy, limit, startAfter, addDoc, serverTimestamp, ref, uploadBytes, getDownloadURL, runTransaction, writeBatch, getCountFromServer, increment };

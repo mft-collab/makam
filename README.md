@@ -41,7 +41,7 @@ cp .env.example .env
 
 Client tarafı Firebase yapılandırması (`apiKey`, `projectId` vb.) `firebase-applet-config.json` içinde tutulur ve `.env`'deki `VITE_FIREBASE_*` değişkenleri bunu geçersiz kılabilir. `FIREBASE_PRIVATE_KEY` / `FIREBASE_CLIENT_EMAIL` gibi Admin SDK alanları yalnızca sunucu tarafı (Cloud Functions) için gereklidir ve asla client bundle'ına dahil edilmemelidir.
 
-> Not: Proje şu an yerel bir Firebase Emulator Suite kurulumu içermiyor — geliştirme ortamı doğrudan `.env`'de belirtilen Firebase projesine bağlanır. Gerçek verilerle çalışırken dikkatli olun.
+> Not: `npm run dev` doğrudan `.env`'de belirtilen gerçek Firebase projesine bağlanır — gerçek verilerle çalışırken dikkatli olun. Kimlik doğrulamalı e2e testleri için ayrı bir Firebase Emulator Suite akışı vardır, bkz. aşağıdaki "E2E testleri" bölümü.
 
 ## Geliştirme
 
@@ -59,6 +59,16 @@ E2E testleri (Playwright) için:
 ```bash
 npx playwright test
 ```
+
+Bu, `tests/e2e/core.spec.ts`'i gerçek Firebase projesine karşı çalıştırır — kimlik doğrulama gerektirmediği için yalnızca Login ekranını (yükleme + a11y) kapsar.
+
+Kimlik doğrulama gerektiren ekranları (Dashboard, Talimatlar vb.) test etmek için ayrı bir akış var — Firebase Emulator Suite'i ayağa kaldırır, bir test Admin kullanıcısı + örnek görev tohumlar (`scripts/seedE2E.ts`), ve gerçek Google OAuth popup'ını otomatikleştirmek yerine bir custom auth token ile giriş yapar (bkz. `src/App.tsx`'teki `isUsingFirebaseEmulator` bypass'ı — yalnızca `vite dev` + `VITE_USE_FIREBASE_EMULATOR=true` ile aktif olur, prod build'de hiçbir zaman çalışamaz):
+
+```bash
+npm run test:e2e:emulator
+```
+
+Bu komut `firebase emulators:exec` ile Auth+Firestore emulator'larını başlatır, tohumlama script'ini ve `tests/e2e/authenticated.spec.ts`'i çalıştırır, sonunda emulator'ları kapatır. Gerçek projeye hiçbir şekilde dokunmaz. Gereksinim: Java 11+ (Firebase Emulator Suite için).
 
 ## Mimari Notları
 

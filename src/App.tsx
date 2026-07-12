@@ -5,8 +5,8 @@
 
 import { useState, useEffect, useCallback, useRef, lazy, Suspense, useMemo } from 'react';
 import {
-  auth, db, googleProvider, signInWithPopup, signOut, onAuthStateChanged,
-  doc, getDoc, updateDoc, onSnapshot, writeBatch
+  auth, db, googleProvider, signInWithPopup, signInWithCustomToken, signOut, onAuthStateChanged,
+  doc, getDoc, updateDoc, onSnapshot, writeBatch, isUsingFirebaseEmulator
 } from './firebase';
 import { User, Task } from './types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -299,6 +299,19 @@ export default function App() {
     });
     return unsubscribe;
   }, [addToast]);
+
+  // E2E test girişi — yalnızca Firebase Emulator Suite'e bağlıyken ve URL'de
+  // ?e2e_token= parametresi varsa çalışır. Gerçek Google OAuth popup'ını
+  // otomatikleştirmek pratik olmadığından, Playwright bu token'ı bir seed
+  // script'inin (scripts/seedE2E.ts) ürettiği custom token ile sağlar.
+  useEffect(() => {
+    if (!isUsingFirebaseEmulator) return;
+    const token = new URLSearchParams(window.location.search).get('e2e_token');
+    if (!token) return;
+    signInWithCustomToken(auth, token).catch((err) => {
+      console.error('[E2E] signInWithCustomToken failed:', err);
+    });
+  }, []);
 
   // Auth Listener
   useEffect(() => {

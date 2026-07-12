@@ -15,7 +15,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "size": "size-limit",
-    "lighthouse": "lhci autorun"
+    "lighthouse": "lhci autorun",
+    "seed:e2e": "tsx scripts/seedE2E.ts",
+    "test:e2e:emulator": "firebase emulators:exec --only auth,firestore \"npm run seed:e2e && npx playwright test --config=playwright.emulator.config.ts\""
   },
   "dependencies": {
     "@firebase/eslint-plugin-security-rules": "^0.0.2",
