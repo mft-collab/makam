@@ -12,6 +12,8 @@ import { tr } from 'date-fns/locale';
 import { cn } from '../lib/utils';
 import { Badge } from './ui/Badge';
 import { Avatar } from './ui/Avatar';
+import { Modal } from './ui/Modal';
+import { Button } from './ui/Button';
 import { db, collection, query, where, getDocs } from '../firebase';
 
 export const TaskDetails = ({ 
@@ -43,6 +45,7 @@ export const TaskDetails = ({
   const [newComment, setNewComment] = useState('');
   const [blockerReason, setBlockerReason] = useState('');
   const [newChecklistItem, setNewChecklistItem] = useState('');
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   const handleAddChecklistItem = (e: React.FormEvent) => {
     e.preventDefault();
@@ -242,7 +245,7 @@ export const TaskDetails = ({
                   Düzenle
                 </button>
                 <div className="w-[1px] h-3 bg-makam-border/10 mx-1" />
-                <button onClick={onDelete} className="px-4 py-2 text-[10px] font-medium text-text-muted hover:text-red-600 transition-colors uppercase tracking-[0.2em]">
+                <button onClick={() => setIsDeleteConfirmOpen(true)} className="px-4 py-2 text-[10px] font-medium text-text-muted hover:text-red-600 transition-colors uppercase tracking-[0.2em]">
                   <Trash2 className="w-3.5 h-3.5 inline mr-2" />
                   Sil
                 </button>
@@ -775,6 +778,27 @@ export const TaskDetails = ({
         )}
       </div>
     </div>
+
+    {/* ── Silme Onayı ────────────────────────────────────────────── */}
+    <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)} title="Talimatı Sil">
+      <div className="flex flex-col gap-4">
+        <p className="text-[13px] text-text-muted font-light leading-relaxed">
+          <strong className="text-red-600 font-medium">{task.title}</strong> talimatını kalıcı olarak silmek istediğinize emin misiniz? Bu işlem geri alınamaz.
+        </p>
+        {subtasks.length > 0 && (
+          <div className="flex items-start gap-2 p-2.5 bg-red-50 border border-red-100 rounded-xl">
+            <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+            <p className="text-[10px] text-red-600 font-semibold uppercase tracking-[0.1em] leading-relaxed">
+              Bu talimatın {subtasks.length} alt talimatı var. Bu işlem hepsini kademeli olarak silecektir.
+            </p>
+          </div>
+        )}
+        <div className="flex justify-end gap-2.5 pt-4 border-t border-executive-blue/[0.04]">
+          <Button variant="secondary" onClick={() => setIsDeleteConfirmOpen(false)}>İptal</Button>
+          <Button variant="danger" onClick={() => { setIsDeleteConfirmOpen(false); onDelete(); }}>Kalıcı Olarak Sil</Button>
+        </div>
+      </div>
+    </Modal>
     </>
   );
 };

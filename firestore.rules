@@ -83,9 +83,13 @@ service cloud.firestore {
       let fromAwaiting = oldStatus == 'AWAITING_APPROVAL' && 
         newStatus in ['COMPLETED', 'IN_PROGRESS', 'CANCELLED'];
 
-      // CRISIS → IN_PROGRESS, CANCELLED, COMPLETED
-      let fromCrisis = oldStatus == 'CRISIS' && 
-        newStatus in ['IN_PROGRESS', 'CANCELLED', 'COMPLETED'];
+      // CRISIS → IN_PROGRESS, CANCELLED, COMPLETED, AWAITING_APPROVAL
+      // (AWAITING_APPROVAL eklendi — Admin olmayan bir sorumlunun kriz
+      // durumundaki bir işi IN_PROGRESS'teki ile aynı onay akışına
+      // sunabilmesi gerekir; TaskDetails.tsx'teki "Tamamla ve Onaya Sun"
+      // butonu bunu zaten deniyordu, kural izin vermiyordu.)
+      let fromCrisis = oldStatus == 'CRISIS' &&
+        newStatus in ['IN_PROGRESS', 'CANCELLED', 'COMPLETED', 'AWAITING_APPROVAL'];
 
       // COMPLETED → Değiştirilemez (sadece Admin silebilir)
       let fromCompleted = oldStatus == 'COMPLETED' && false;
