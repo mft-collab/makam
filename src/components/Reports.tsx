@@ -86,6 +86,14 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
     });
   }, [tasks, dateFrom, dateTo, selectedDept]);
 
+  // Seçili tarih/birim filtresine giren görevlere bağlı engeller — KPI kartının
+  // diğer metriklerle aynı kapsamı yansıtması için (öncesinde tüm sistemi
+  // gösteriyordu, filtreyle tutarsızdı).
+  const filteredBlockers = useMemo(() => {
+    const filteredTaskIds = new Set(filteredTasks.map(t => t.id));
+    return blockers.filter(b => filteredTaskIds.has(b.taskId));
+  }, [blockers, filteredTasks]);
+
   const handleExportPDF = useCallback(async () => {
     setIsExporting(true);
     try {
@@ -282,16 +290,157 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
       {/* ── KPI Cards — 1 col mobile, 3 cols sm+ ─────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <KpiCard label="Ort. Tamamlanma" value={`${avgDays} Gün`}  icon={Zap}           color="blue"  index={0} />
-        <KpiCard label="Aktif Darboğaz"  value={`${blockers.filter(b => !b.isResolved).length}`} icon={AlertTriangle} color="red" index={1} />
+        <KpiCard label="Aktif Darboğaz"  value={`${filteredBlockers.filter(b => !b.isResolved).length}`} icon={AlertTriangle} color="red" index={1} />
         <KpiCard label="Hedef Gerçekleşme" value={`%${completionRate}`} icon={Target}    color="green" index={2} />
       </div>
 
+      {/* ── Görsel Analiz — özet sayılardan sonra, detay tablosundan önce ── */}
+      {/* #6 — SLA Trend + Durum Dağılımı */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        {/* SLA Uyum Trend Çizgi Grafiği */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 200, damping: 28, delay: 0.2 }}
+          className="bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl p-4 shadow-[0_1px_8px_rgba(22,21,19,0.02)]"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-[13px] font-medium text-executive-blue font-serif tracking-tight">SLA Uyum Trendi</h3>
+              <p className="text-[9px] text-text-tertiary uppercase tracking-[0.3em] mt-0.5">Son 14 Gün</p>
+            </div>
+            <TrendingUp className="w-4 h-4 text-[#C5A059] stroke-[1.5]" />
+          </div>
+          <div className="h-[180px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={slaComplianceTrend} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                <XAxis dataKey="name" fontSize={8} tickLine={false} axisLine={false} tick={{ fill: '#94A3B8' }} />
+                <YAxis domain={[0, 100]} fontSize={8} tickLine={false} axisLine={false} tick={{ fill: '#94A3B8' }}
+                  tickFormatter={(v) => `%${v}`} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'var(--color-surface-base)',
+                    borderColor: 'var(--color-surface-border)',
+                    borderRadius: '14px',
+                    fontSize: '11px',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                    backdropFilter: 'blur(20px)',
+                    color: 'var(--color-text-heading)'
+                  }}
+                  itemStyle={{ color: 'var(--color-text-body)' }}
+                  formatter={(v: any) => v !== null ? [`%${v}`, 'SLA Uyum'] : ['Veri yok', '']}
+                />
+                <Line dataKey="oran" stroke="#C5A059" strokeWidth={2} dot={{ r: 3, fill: '#C5A059' }}
+                  activeDot={{ r: 5 }} connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </motion.div>
+
+        {/* Durum Dağılımı (Pie) */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 200, damping: 28, delay: 0.25 }}
+          className="bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl p-4 shadow-[0_1px_8px_rgba(22,21,19,0.02)]"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-[13px] font-medium text-executive-blue font-serif tracking-tight">Talimat Dağılımı</h3>
+              <p className="text-[9px] text-text-tertiary uppercase tracking-[0.3em] mt-0.5">Durum Matrisi</p>
+            </div>
+            <CheckCircle2 className="w-4 h-4 text-emerald-500 stroke-[1.5]" />
+          </div>
+          <div className="h-[180px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={statusDistribution} dataKey="count" nameKey="label"
+                  cx="50%" cy="50%" innerRadius={50} outerRadius={75}
+                  paddingAngle={3}
+                >
+                  {statusDistribution.map((entry, idx) => (
+                    <Cell key={idx} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'var(--color-surface-base)',
+                    borderColor: 'var(--color-surface-border)',
+                    borderRadius: '14px',
+                    fontSize: '11px',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                    backdropFilter: 'blur(20px)',
+                    color: 'var(--color-text-heading)'
+                  }}
+                  itemStyle={{ color: 'var(--color-text-body)' }}
+                  formatter={(v: any, name: any) => [v, name]}
+                />
+                <Legend iconSize={8} iconType="circle"
+                  formatter={(v) => <span style={{ fontSize: 9, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.15em' }}>{v}</span>}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Personel Yük Dağılımı */}
+      {staffWorkload.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 200, damping: 28, delay: 0.3 }}
+          className="bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl p-4 shadow-[0_1px_8px_rgba(22,21,19,0.02)]"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-[13px] font-medium text-executive-blue font-serif tracking-tight">Personel İş Yükü</h3>
+              <p className="text-[9px] text-text-tertiary uppercase tracking-[0.3em] mt-0.5">Aktif vs Tamamlanan</p>
+            </div>
+            <Users className="w-4 h-4 text-text-tertiary stroke-[1]" />
+          </div>
+          <div className="h-[180px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={staffWorkload} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                <defs>
+                  <linearGradient id="barActive" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--color-executive-blue)" stopOpacity="0.8" />
+                    <stop offset="100%" stopColor="var(--color-executive-blue)" stopOpacity="0.35" />
+                  </linearGradient>
+                  <linearGradient id="barCompleted" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#82C29C" />
+                    <stop offset="100%" stopColor="#1B7A51" />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="name" fontSize={9} tickLine={false} axisLine={false} tick={{ fill: '#94A3B8' }} />
+                <YAxis fontSize={8} tickLine={false} axisLine={false} tick={{ fill: '#94A3B8' }} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'var(--color-surface-base)',
+                    borderColor: 'var(--color-surface-border)',
+                    borderRadius: '14px',
+                    fontSize: '11px',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                    backdropFilter: 'blur(20px)',
+                    color: 'var(--color-text-heading)'
+                  }}
+                  itemStyle={{ color: 'var(--color-text-body)' }}
+                  cursor={{ fill: 'rgba(22, 21, 19, 0.02)' }}
+                />
+                <Bar dataKey="assigned" name="Aktif" fill="url(#barActive)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="completed" name="Tamamlanan" fill="url(#barCompleted)" radius={[4, 4, 0, 0]} />
+                <Legend iconSize={8} iconType="circle"
+                  formatter={(v) => <span style={{ fontSize: 9, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.15em' }}>{v}</span>}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </motion.div>
+      )}
 
       {/* ── Manager Performance Table ─────────────────────────────── */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 200, damping: 28, delay: 0.2 }}
+        transition={{ type: 'spring', stiffness: 200, damping: 28, delay: 0.4 }}
         className="bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl overflow-hidden shadow-[0_1px_8px_rgba(22,21,19,0.02)]"
       >
         {/* Table header */}
@@ -492,146 +641,6 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
           </table>
         </div>
       </motion.div>
-      {/* #6 — SLA Trend + Personel Yük + Durum Dağılımı */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-        {/* SLA Uyum Trend Çizgi Grafiği */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 200, damping: 28, delay: 0.35 }}
-          className="bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl p-4 shadow-[0_1px_8px_rgba(22,21,19,0.02)]"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h3 className="text-[13px] font-medium text-executive-blue font-serif tracking-tight">SLA Uyum Trendi</h3>
-              <p className="text-[9px] text-text-tertiary uppercase tracking-[0.3em] mt-0.5">Son 14 Gün</p>
-            </div>
-            <TrendingUp className="w-4 h-4 text-[#C5A059] stroke-[1.5]" />
-          </div>
-          <div className="h-[180px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={slaComplianceTrend} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
-                <XAxis dataKey="name" fontSize={8} tickLine={false} axisLine={false} tick={{ fill: '#94A3B8' }} />
-                <YAxis domain={[0, 100]} fontSize={8} tickLine={false} axisLine={false} tick={{ fill: '#94A3B8' }}
-                  tickFormatter={(v) => `%${v}`} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'var(--color-surface-base)',
-                    borderColor: 'var(--color-surface-border)',
-                    borderRadius: '14px',
-                    fontSize: '11px',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-                    backdropFilter: 'blur(20px)',
-                    color: 'var(--color-text-heading)'
-                  }}
-                  itemStyle={{ color: 'var(--color-text-body)' }}
-                  formatter={(v: any) => v !== null ? [`%${v}`, 'SLA Uyum'] : ['Veri yok', '']}
-                />
-                <Line dataKey="oran" stroke="#C5A059" strokeWidth={2} dot={{ r: 3, fill: '#C5A059' }}
-                  activeDot={{ r: 5 }} connectNulls />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-
-        {/* Durum Dağılımı (Pie) */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 200, damping: 28, delay: 0.4 }}
-          className="bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl p-4 shadow-[0_1px_8px_rgba(22,21,19,0.02)]"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h3 className="text-[13px] font-medium text-executive-blue font-serif tracking-tight">Talimat Dağılımı</h3>
-              <p className="text-[9px] text-text-tertiary uppercase tracking-[0.3em] mt-0.5">Durum Matrisi</p>
-            </div>
-            <CheckCircle2 className="w-4 h-4 text-emerald-500 stroke-[1.5]" />
-          </div>
-          <div className="h-[180px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={statusDistribution} dataKey="count" nameKey="label"
-                  cx="50%" cy="50%" innerRadius={50} outerRadius={75}
-                  paddingAngle={3}
-                >
-                  {statusDistribution.map((entry, idx) => (
-                    <Cell key={idx} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'var(--color-surface-base)',
-                    borderColor: 'var(--color-surface-border)',
-                    borderRadius: '14px',
-                    fontSize: '11px',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-                    backdropFilter: 'blur(20px)',
-                    color: 'var(--color-text-heading)'
-                  }}
-                  itemStyle={{ color: 'var(--color-text-body)' }}
-                  formatter={(v: any, name: any) => [v, name]}
-                />
-                <Legend iconSize={8} iconType="circle"
-                  formatter={(v) => <span style={{ fontSize: 9, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.15em' }}>{v}</span>}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Personel Yük Dağılımı */}
-      {staffWorkload.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 200, damping: 28, delay: 0.5 }}
-          className="bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl p-4 shadow-[0_1px_8px_rgba(22,21,19,0.02)]"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h3 className="text-[13px] font-medium text-executive-blue font-serif tracking-tight">Personel İş Yükü</h3>
-              <p className="text-[9px] text-text-tertiary uppercase tracking-[0.3em] mt-0.5">Aktif vs Tamamlanan</p>
-            </div>
-            <Users className="w-4 h-4 text-text-tertiary stroke-[1]" />
-          </div>
-          <div className="h-[180px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={staffWorkload} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
-                <defs>
-                  <linearGradient id="barActive" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--color-executive-blue)" stopOpacity="0.8" />
-                    <stop offset="100%" stopColor="var(--color-executive-blue)" stopOpacity="0.35" />
-                  </linearGradient>
-                  <linearGradient id="barCompleted" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#82C29C" />
-                    <stop offset="100%" stopColor="#1B7A51" />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="name" fontSize={9} tickLine={false} axisLine={false} tick={{ fill: '#94A3B8' }} />
-                <YAxis fontSize={8} tickLine={false} axisLine={false} tick={{ fill: '#94A3B8' }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'var(--color-surface-base)',
-                    borderColor: 'var(--color-surface-border)',
-                    borderRadius: '14px',
-                    fontSize: '11px',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-                    backdropFilter: 'blur(20px)',
-                    color: 'var(--color-text-heading)'
-                  }}
-                  itemStyle={{ color: 'var(--color-text-body)' }}
-                  cursor={{ fill: 'rgba(22, 21, 19, 0.02)' }}
-                />
-                <Bar dataKey="assigned" name="Aktif" fill="url(#barActive)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="completed" name="Tamamlanan" fill="url(#barCompleted)" radius={[4, 4, 0, 0]} />
-                <Legend iconSize={8} iconType="circle"
-                  formatter={(v) => <span style={{ fontSize: 9, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.15em' }}>{v}</span>}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-      )}
 
     </div>
   );

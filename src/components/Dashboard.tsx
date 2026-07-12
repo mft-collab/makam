@@ -348,7 +348,7 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
 
   const deltas = useMemo(() => {
     // Takvim günü bazlı pencereler (rolling 24h yerine)
-    const now = new Date();
+    const now = new Date(tick);
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const yesterdayStart = todayStart - 24 * 60 * 60 * 1000;
     const yesterdayEnd = todayStart - 1;
@@ -365,9 +365,8 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
     const yesterdayBlocked = tasks.filter(t => t.status === 'BLOCKED' && t.updatedAt >= yesterdayStart && t.updatedAt <= yesterdayEnd).length;
     const blockedDelta = todayBlocked - yesterdayBlocked;
 
-    const now_ = Date.now();
-    const todayCrisis = tasks.filter(t => t.status !== 'COMPLETED' && t.status !== 'CANCELLED' && now_ > t.deadline && t.updatedAt >= todayStart).length;
-    const yesterdayCrisis = tasks.filter(t => t.status !== 'COMPLETED' && t.status !== 'CANCELLED' && now_ > t.deadline && t.updatedAt >= yesterdayStart && t.updatedAt <= yesterdayEnd).length;
+    const todayCrisis = tasks.filter(t => t.status !== 'COMPLETED' && t.status !== 'CANCELLED' && tick > t.deadline && t.updatedAt >= todayStart).length;
+    const yesterdayCrisis = tasks.filter(t => t.status !== 'COMPLETED' && t.status !== 'CANCELLED' && tick > t.deadline && t.updatedAt >= yesterdayStart && t.updatedAt <= yesterdayEnd).length;
     const crisisDelta = todayCrisis - yesterdayCrisis;
 
     return {
@@ -376,10 +375,10 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
       blocked:    blockedDelta,
       crisis:     crisisDelta
     };
-  }, [tasks]);
+  }, [tasks, tick]);
 
   const stats = useMemo(() => {
-    const isCrisis   = (t: Task) => t.status !== 'COMPLETED' && t.status !== 'CANCELLED' && Date.now() > t.deadline;
+    const isCrisis   = (t: Task) => t.status !== 'COMPLETED' && t.status !== 'CANCELLED' && tick > t.deadline;
     const crisisCount = tasks.filter(isCrisis).length;
 
     const isBlocked   = (t: Task) => t.status === 'BLOCKED';
@@ -412,7 +411,7 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
       completed:  tasks.filter(isCompleted).length,
       crisis:     crisisCount,
     };
-  }, [tasks, globalStats, isFiltered]);
+  }, [tasks, globalStats, isFiltered, tick]);
 
   const executiveQueue = useMemo(
     () => getInterventionQueue(tasks, users, tick, 8),
@@ -458,9 +457,9 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
   const criticalTasks = useMemo(() => tasks.filter(t =>
     t.status === 'BLOCKED' ||
     (t.status !== 'COMPLETED' && t.status !== 'CANCELLED' &&
-     (Date.now() - t.updatedAt) > IDLE_THRESHOLD_MS &&
+     (tick - t.updatedAt) > IDLE_THRESHOLD_MS &&
      (t.priority === 'High' || t.priority === 'Urgent'))
-  ), [tasks]);
+  ), [tasks, tick]);
 
   const reviewTasks = useMemo(() => tasks.filter(t => t.status === 'AWAITING_APPROVAL'), [tasks]);
 

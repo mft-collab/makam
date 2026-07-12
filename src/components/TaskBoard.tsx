@@ -55,12 +55,12 @@ export const TaskBoard = ({
     const matchesAssignee = assigneeFilter === 'All' || task.assigneeId === assigneeFilter || (users.find(u => u.uid === assigneeFilter)?.email === task.assigneeId);
     const matchesStatus   = statusFilter   === 'All' || task.status === statusFilter;
 
-    let roleFilter = true;
-    if (currentUser?.role === 'Manager') {
-      roleFilter = isAssignedToMe || task.creatorId === currentUser.uid;
-    }
-
-    return matchesSearch && isVisible && roleFilter && matchesPriority && matchesAssignee && matchesStatus;
+    // NOT: Rol bazlı ek bir kısıtlama burada uygulanmıyor — `tasks` prop'u zaten
+    // Firestore kurallarınca departman bazlı filtrelenmiş geliyor (Manager kendi
+    // departmanının tamamını görebilir, Dashboard ile aynı kapsam). Manager'ı
+    // yalnızca "bana atanan/benim oluşturduğum" ile sınırlamak departman gözetimi
+    // rolünü işlevsiz kılardı.
+    return matchesSearch && isVisible && matchesPriority && matchesAssignee && matchesStatus;
   }), [tasks, search, currentUser, showSubtasks, priorityFilter, assigneeFilter, statusFilter, users]);
 
   const hasActiveFilter = priorityFilter !== 'All' || assigneeFilter !== 'All' || statusFilter !== 'All' || search !== '';
