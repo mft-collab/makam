@@ -563,9 +563,13 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
               )} />
               <span className={cn(
                 "text-[10px] font-bold uppercase tracking-widest",
-                healthScore >= 80 ? "text-emerald-600 dark:text-emerald-400" :
-                healthScore >= 50 ? "text-amber-600 dark:text-amber-400" :
-                "text-red-600 dark:text-red-400"
+                // NOT: emerald-600/amber-600 (bu app'te amber-600 marka altını
+                // #C5A059'a remap ediyor, beyaz zeminde kontrastı ~2.5) küçük
+                // metinde WCAG AA'yı geçemiyordu — axe-core e2e taramasıyla
+                // bulundu. 700 tonlarına çekildi.
+                healthScore >= 80 ? "text-emerald-700 dark:text-emerald-400" :
+                healthScore >= 50 ? "text-amber-700 dark:text-amber-400" :
+                "text-status-danger dark:text-red-400"
               )}>
                 {healthScore >= 80 ? "STABİL / GÜVENLİ" :
                  healthScore >= 50 ? "GÖZETİM ALTINDA" :
@@ -622,9 +626,13 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
                   key={signal.label}
                   className={cn(
                     'min-w-0 rounded-xl border px-2 py-1.5 text-center',
-                    signal.tone === 'red' ? 'bg-red-50 text-red-600 border-red-100' :
-                    signal.tone === 'amber' ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                    'bg-emerald-50 text-emerald-700 border-emerald-100'
+                    // NOT: Tailwind'in varsayılan red/amber/emerald paleti (oklch
+                    // tabanlı) axe-core taramasında bu bileşende beklenmedik
+                    // şekilde neredeyse görünmez metin olarak ölçüldü. Solid hex
+                    // semantik status token'larına geçirildi (bkz. index.css).
+                    signal.tone === 'red' ? 'bg-status-danger/10 text-status-danger border-status-danger/20' :
+                    signal.tone === 'amber' ? 'bg-status-warning/10 text-status-warning border-status-warning/20' :
+                    'bg-status-success/10 text-status-success border-status-success/20'
                   )}
                 >
                   <div className="text-[14px] font-semibold tabular-nums leading-none">{signal.value}</div>

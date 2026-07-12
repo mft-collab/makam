@@ -2,6 +2,26 @@
 <html lang="tr">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Tema class'ını ilk boyamadan önce senkron uygula — React/Zustand
+      // mount olana kadar bekleseydi her yüklemede yanlış temayla bir anlık
+      // "flaş" (FOUC) yaşanırdı. Kaynak: uiStore'un persist ettiği
+      // 'makam-ui-settings' anahtarı (bkz. src/store/uiStore.ts).
+      (function () {
+        try {
+          var stored = localStorage.getItem('makam-ui-settings');
+          var theme = stored ? JSON.parse(stored).state.theme : 'system';
+          var resolved = theme === 'dark' || theme === 'light'
+            ? theme
+            : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          document.documentElement.classList.add(resolved);
+        } catch (e) {
+          document.documentElement.classList.add(
+            window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+          );
+        }
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/makam-logo.svg" />
     <link rel="apple-touch-icon" href="/makam-logo-192.png" />
     <meta property="og:title" content="MAKAM | Stratejik Yönetim" />

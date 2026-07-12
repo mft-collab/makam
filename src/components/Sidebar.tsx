@@ -69,7 +69,7 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
       />
       <span className={cn(
         'font-normal text-[13px] tracking-wide transition-colors duration-300',
-        activeTab === item.id ? 'text-[#C5A059] font-medium' : 'text-white/45 group-hover:text-white/80'
+        activeTab === item.id ? 'text-[#D4B573] font-medium' : 'text-white/60 group-hover:text-white/80'
       )}>
         {item.label}
       </span>
@@ -104,7 +104,7 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
 
       <nav className="flex flex-col gap-7 flex-1" aria-label="Ana menü">
         <div className="flex flex-col gap-1.5">
-          <div className="text-[9px] text-white/30 font-medium uppercase tracking-[0.22em] mb-2 px-2" aria-hidden="true">
+          <div className="text-[9px] text-white/60 font-medium uppercase tracking-[0.22em] mb-2 px-2" aria-hidden="true">
             OPERASYON
           </div>
           {filteredPrimaryItems.map(renderMenuItem)}
@@ -112,7 +112,7 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
 
         {filteredSystemItems.length > 0 && (
           <div className="flex flex-col gap-1.5 pt-2 border-t border-white/[0.06]">
-            <div className="text-[9px] text-white/25 font-medium uppercase tracking-[0.22em] mb-2 px-2" aria-hidden="true">
+            <div className="text-[9px] text-white/60 font-medium uppercase tracking-[0.22em] mb-2 px-2" aria-hidden="true">
               SİSTEM
             </div>
             {filteredSystemItems.map(renderMenuItem)}
@@ -134,7 +134,7 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
             <span className="text-[14px] font-normal text-white truncate tracking-tight leading-none font-display">{user?.fullName}</span>
             <div className="flex items-center gap-1.5 mt-1">
               <span className="w-1 h-1 rounded-full bg-emerald-500" />
-              <span className="text-[8px] text-executive-gold font-medium uppercase tracking-[0.22em]">{user ? ROLE_LABELS[user.role] : ''}</span>
+              <span className="text-[8px] text-[#D4B573] font-medium uppercase tracking-[0.22em]">{user ? ROLE_LABELS[user.role] : ''}</span>
             </div>
           </div>
         </div>
