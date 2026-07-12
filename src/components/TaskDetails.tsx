@@ -502,7 +502,7 @@ export const TaskDetails = ({
         {activeTab === 'blockers' && (
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-4">
-              <h4 className="text-[9px] font-medium text-text-muted uppercase tracking-[0.18em]">Aktif Engeller & Riskler</h4>
+              <h4 className="text-[9px] font-medium text-text-muted uppercase tracking-[0.18em]">Aktif Engeller</h4>
               <div className="flex flex-col gap-3">
                 {blockers.length === 0 ? (
                   <div className="py-20 flex flex-col items-center justify-center text-text-muted/30 uppercase tracking-[0.18em] text-[10px] border border-dashed border-makam-border/10 rounded-2xl">

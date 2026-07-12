@@ -71,11 +71,11 @@ export function AppHeader({
              <h1 className="text-[13px] font-medium text-text-heading uppercase tracking-[0.22em] font-display">
                {Boolean(activeTab === 'dashboard') && 'Stratejik Harekat Merkezi'}
                {Boolean(activeTab === 'tasks') && 'Talimatlar'}
-               {Boolean(activeTab === 'blockers') && 'Riskler'}
+               {Boolean(activeTab === 'blockers') && 'Engeller'}
                {Boolean(activeTab === 'team') && 'Kadro'}
                {Boolean(activeTab === 'reports') && 'Raporlar'}
-               {Boolean(activeTab === 'audit') && 'Sistem Denetim İzleri'}
-               {Boolean(activeTab === 'settings') && 'Sistem Konfigürasyon Merkezi'}
+               {Boolean(activeTab === 'audit') && 'Denetim İzleri'}
+               {Boolean(activeTab === 'settings') && 'Sistem Ayarları'}
              </h1>
              <div className="flex items-center gap-3">
                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]" />

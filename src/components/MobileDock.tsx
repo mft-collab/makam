@@ -19,7 +19,7 @@ interface DockItem {
 const ALL_ITEMS: DockItem[] = [
   { id: 'dashboard', label: 'Harekat',   icon: ShieldCheck,   roles: ['Admin', 'Manager', 'Staff'] },
   { id: 'tasks',     label: 'Talimatlar', icon: CheckSquare,  roles: ['Admin', 'Manager', 'Staff'] },
-  { id: 'blockers',  label: 'Riskler',   icon: AlertTriangle, roles: ['Admin', 'Manager'] },
+  { id: 'blockers',  label: 'Engeller',  icon: AlertTriangle, roles: ['Admin', 'Manager'] },
   { id: 'team',      label: 'Kadro',     icon: Users,         roles: ['Admin', 'Manager'] },
   { id: 'reports',   label: 'Raporlar',  icon: BarChart3,     roles: ['Admin'] },
   { id: 'audit',     label: 'Denetim',   icon: Database,      roles: ['Admin'] },

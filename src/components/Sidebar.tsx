@@ -31,7 +31,7 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
   const primaryItems: MenuItem[] = [
     { id: 'dashboard', label: 'Harekat Merkezi', icon: ShieldCheck, roles: ['Admin', 'Manager', 'Staff'] },
     { id: 'tasks', label: 'Talimatlar', icon: CheckSquare, roles: ['Admin', 'Manager', 'Staff'] },
-    { id: 'blockers', label: 'Riskler', icon: AlertTriangle, roles: ['Admin', 'Manager'] },
+    { id: 'blockers', label: 'Engeller', icon: AlertTriangle, roles: ['Admin', 'Manager'] },
     { id: 'team', label: 'Kadro', icon: Users, roles: ['Admin', 'Manager'] },
     { id: 'reports', label: 'Raporlar', icon: BarChart3, roles: ['Admin'] },
   ];
