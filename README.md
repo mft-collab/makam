@@ -9,7 +9,7 @@ Kurumsal görev, blocker ve SLA takip uygulaması. React 19 + TypeScript + Fireb
 - **Blocker yönetimi**: Görevleri engelleyen sebeplerin kaydı ve çözümü.
 - **Rol tabanlı erişim**: Admin / Manager / Staff, departman bazlı görünürlük — bkz. `firestore.rules`.
 - **Denetim kaydı (audit log)**: Görev üzerindeki değişikliklerin izlenmesi.
-- **Çevrimdışı destek**: `idb-keyval` tabanlı yerel kuyruk, optimistic locking (`lockVersion`) ile senkronizasyon çakışması tespiti.
+- **Çevrimdışı destek**: `localStorage` tabanlı mutasyon kuyruğu (`src/lib/offlineQueue.ts`) ve `idb-keyval` ile IndexedDB'ye persist edilen uygulama state'i (`src/store/dataStore.ts`), optimistic locking (`lockVersion`) ile senkronizasyon çakışması tespiti.
 - **PWA**: Yüklenebilir uygulama, service worker ile önbellekleme (`vite-plugin-pwa`).
 - **Bildirimler**: Firebase Cloud Messaging entegrasyonu.
 - **Raporlama**: PDF export (`jspdf`) ve grafik (`recharts`) destekli yönetici raporları.
@@ -62,7 +62,7 @@ npx playwright test
 
 ## Mimari Notları
 
-- **Offline-first**: Veri değişiklikleri önce yerel kuyruğa (`src/lib/offlineQueue.ts`) yazılır, bağlantı geldiğinde senkronize edilir. Çakışan eşzamanlı güncellemeler `lockVersion` alanı üzerinden optimistic locking ile tespit edilir (`VERSION_MISMATCH`).
+- **Offline-first**: Veri değişiklikleri önce yerel kuyruğa (`src/lib/offlineQueue.ts`, `localStorage`) yazılır, bağlantı geldiğinde senkronize edilir. Uygulama state'i (`tasks`/`users`/`blockers`) ayrıca `idb-keyval` ile IndexedDB'ye persist edilir (`src/store/dataStore.ts`) — iki farklı depolama katmanı bilinçli olarak ayrı amaçlara hizmet eder: kuyruk küçük/geçici mutasyon listesidir, state persist ise büyük veri setleri için IndexedDB'nin senkron olmayan, daha yüksek kapasiteli yapısından faydalanır. Çakışan eşzamanlı güncellemeler `lockVersion` alanı üzerinden optimistic locking ile tespit edilir (`VERSION_MISMATCH`).
 - **Firestore güvenlik kuralları** (`firestore.rules`): Default-deny, custom claims tabanlı rol kontrolü, görev durum geçişleri için state-machine doğrulaması, alan bazlı (field-level) yazma izinleri.
 - **Cloud Functions** (`functions/src`): Görev tetikleyicileri, zamanlanmış denetim (audit) işleri, temizlik (cleanup) görevleri.
 
