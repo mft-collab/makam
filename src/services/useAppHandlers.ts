@@ -8,7 +8,6 @@
  * Bağımlılıklar uiStore üzerinden okunur — prop drilling ortadan kalkar.
  */
 import { useCallback } from 'react';
-import { db, doc, deleteDoc } from '../firebase';
 import { taskService } from './taskService';
 import { userService } from './userService';
 import { blockerService } from './blockerService';
@@ -325,13 +324,6 @@ export function useAppHandlers({
     }
   }, [user, blockers, tasks, toast, onError]);
 
-  // ─── Denetim log silme ───────────────────────────────────────────────────
-  const deleteAuditLog = useCallback(async (logId: string) => {
-    if (!user) return;
-    try { await deleteDoc(doc(db, 'audit_logs', logId)); }
-    catch (err) { onError(err, 'delete', `audit_logs/${logId}`); }
-  }, [user, onError]);
-
   return {
     updateTaskStatus,
     createTask,
@@ -345,6 +337,5 @@ export function useAppHandlers({
     deleteUser,
     updateBlocker,
     deleteBlocker,
-    deleteAuditLog,
   };
 }

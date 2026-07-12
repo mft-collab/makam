@@ -11,3 +11,4 @@ dev-dist/
 playwright-report/
 test-results/
 functions/lib/
+.lighthouseci/

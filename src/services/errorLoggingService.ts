@@ -73,14 +73,3 @@ export async function logError(
     console.warn('[ErrorLogging] Firestore log yazımı başarısız — sessizce geçildi.');
   }
 }
-
-/**
- * Kritik olmayan uyarıları loglar (warning level).
- * Üretimde konsol yerine Firestore'a yazar.
- */
-export async function logWarning(
-  message: string,
-  context?: Record<string, unknown>
-): Promise<void> {
-  return logError(new Error(message), 'manual', { context: { ...context, level: 'warning' } });
-}
