@@ -7,6 +7,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { offlineQueue, type OfflineMutation } from '../lib/offlineQueue';
+import { logger } from '../lib/logger';
 
 
 interface UseOfflineQueueReturn {
@@ -44,8 +45,8 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
     const handleOnline = async () => {
       updateNetworkStatus();
       if (offlineQueue.getQueue().length > 0) {
-        console.log('[useOfflineQueue] Connection restored, syncing queue...');
-        await offlineQueue.sync().catch(console.warn);
+        logger.debug('[useOfflineQueue] Connection restored, syncing queue...');
+        await offlineQueue.sync().catch(logger.warn);
         updateQueue();
       }
     };

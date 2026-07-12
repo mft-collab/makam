@@ -5,14 +5,15 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getMessaging, isSupported } from 'firebase/messaging';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import firebaseConfigJson from '../firebase-applet-config.json';
+import { logger } from './lib/logger';
 
 // Detect if environment variables are "suspicious" (e.g., databaseId is a URL)
 const envDatabaseId = import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID;
 const isSuspiciousEnv = envDatabaseId && envDatabaseId.startsWith('http');
 
 if (isSuspiciousEnv) {
-  console.warn('CRITICAL NOTICE: Detected invalid Firebase environment variables (Database ID is a URL).');
-  console.warn('Ignoring VITE_FIREBASE_* environment variables and using firebase-applet-config.json instead.');
+  logger.warn('CRITICAL NOTICE: Detected invalid Firebase environment variables (Database ID is a URL).');
+  logger.warn('Ignoring VITE_FIREBASE_* environment variables and using firebase-applet-config.json instead.');
 }
 
 // Using firebase-applet-config.json as primary source, allowing env overrides ONLY if not suspicious
@@ -60,17 +61,17 @@ async function testConnection() {
   try {
     // Try to reach the server
     await getDocFromServer(doc(db, 'system', 'connection_test'));
-    console.log('Firestore connection successful.');
+    logger.debug('Firestore connection successful.');
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Firebase configuration error: Client is offline. Check your project settings.");
-      console.error("This usually means the databaseId or projectId is incorrect.");
-      console.error("Current Database ID:", databaseId);
-      console.error("Current Project ID:", firebaseConfig.projectId);
-      console.error("Please verify that your firestoreDatabaseId matches the one in Firebase Console.");
+      logger.error("Firebase configuration error: Client is offline. Check your project settings.");
+      logger.error("This usually means the databaseId or projectId is incorrect.");
+      logger.error("Current Database ID:", databaseId);
+      logger.error("Current Project ID:", firebaseConfig.projectId);
+      logger.error("Please verify that your firestoreDatabaseId matches the one in Firebase Console.");
     } else {
       // Other errors are fine, might just be a missing document
-      console.log('Firestore connection test finished with:', error instanceof Error ? error.message : String(error));
+      logger.debug('Firestore connection test finished with:', error instanceof Error ? error.message : String(error));
     }
   }
 }

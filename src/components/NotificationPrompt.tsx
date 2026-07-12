@@ -6,6 +6,7 @@ import React, { useState, useEffect } from 'react';
 import { Bell, ShieldCheck, X, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { notificationService } from '../services/notificationService';
+import { logger } from '../lib/logger';
 
 interface NotificationPromptProps {
   userId: string;
@@ -21,7 +22,7 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
     
     if (Notification.permission === 'granted') {
       // Zaten izin verilmişse sessizce token al ve kaydet
-      notificationService.requestPermissionAndGetToken(userId).catch(console.error);
+      notificationService.requestPermissionAndGetToken(userId).catch(logger.error);
       return;
     }
 
@@ -73,11 +74,11 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
 
       if (permission === 'granted') {
         notificationService.requestPermissionAndGetToken(userId).catch(err => {
-          console.warn('FCM registration skipped or failed in background:', err);
+          logger.warn('FCM registration skipped or failed in background:', err);
         });
       } else {
         localStorage.setItem('in_app_notifications_only', 'true');
-        console.log('Notification permission restricted. Gracefully fell back to in-app notifications.');
+        logger.debug('Notification permission restricted. Gracefully fell back to in-app notifications.');
       }
 
       setTimeout(() => {
@@ -86,7 +87,7 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
       }, 2000);
 
     } catch (error) {
-      console.error('Bildirim aktifleştirilemedi, ancak arayüz başarıyla kurtarıldı:', error);
+      logger.error('Bildirim aktifleştirilemedi, ancak arayüz başarıyla kurtarıldı:', error);
       // En kötü senaryoda bile kullanıcıyı kırmayıp başarı moduna geçir (Apple Delight)
       setStep('success');
       localStorage.setItem('in_app_notifications_only', 'true');

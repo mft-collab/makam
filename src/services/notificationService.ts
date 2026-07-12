@@ -3,6 +3,7 @@ import { getToken } from 'firebase/messaging';
 import { db, messaging, auth } from '../firebase';
 import type { Notification as AppNotification, Task, User } from '../types';
 import { IDLE_THRESHOLD_MS } from '../constants';
+import { logger } from '../lib/logger';
 
 enum OperationType {
   CREATE = 'create',
@@ -172,7 +173,7 @@ export const notificationService = {
       if (!lastAuditSnap.empty && lastAuditSnap.docs.length > 0) {
         const lastTimestamp = lastAuditSnap.docs[0]?.data()?.timestamp as number | undefined;
         if (lastTimestamp && now - lastTimestamp < AUDIT_COOLDOWN_MS) {
-          console.log('[Audit] Son 23 saat içinde çalıştırıldı, atlandı.');
+          logger.debug('[Audit] Son 23 saat içinde çalıştırıldı, atlandı.');
           return;
         }
       }

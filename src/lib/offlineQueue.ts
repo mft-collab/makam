@@ -1,12 +1,13 @@
-import { 
-  db, 
-  doc, 
-  setDoc, 
-  deleteDoc, 
-  collection, 
-  addDoc, 
-  updateDoc 
+import {
+  db,
+  doc,
+  setDoc,
+  deleteDoc,
+  collection,
+  addDoc,
+  updateDoc
 } from '../firebase';
+import { logger } from './logger';
 
 export interface OfflineMutation {
   id: string;
@@ -27,7 +28,7 @@ export const offlineQueue = {
       const data = localStorage.getItem(QUEUE_KEY);
       return data ? JSON.parse(data) : [];
     } catch (e) {
-      console.error('Failed to parse offline mutations queue:', e);
+      logger.error('Failed to parse offline mutations queue:', e);
       return [];
     }
   },
@@ -38,7 +39,7 @@ export const offlineQueue = {
       // Trigger a custom event to update the UI banner
       window.dispatchEvent(new CustomEvent('makam_queue_changed'));
     } catch (e) {
-      console.error('Failed to save offline mutations queue:', e);
+      logger.error('Failed to save offline mutations queue:', e);
     }
   },
 
@@ -54,17 +55,17 @@ export const offlineQueue = {
     };
     queue.push(mutation);
     this.saveQueue(queue);
-    console.log(`[Offline Queue] Enqueued mutation: ${action} on ${collectionName}`);
+    logger.debug(`[Offline Queue] Enqueued mutation: ${action} on ${collectionName}`);
   },
 
   async sync(): Promise<boolean> {
     if (isSyncing) {
-      console.log('[Offline Queue] Sync already in progress. Skipping execution to prevent race conditions.');
+      logger.debug('[Offline Queue] Sync already in progress. Skipping execution to prevent race conditions.');
       return false;
     }
 
     if (typeof window !== 'undefined' && !window.navigator.onLine) {
-      console.log('[Offline Queue] Sync skipped: Browser is offline.');
+      logger.debug('[Offline Queue] Sync skipped: Browser is offline.');
       return false;
     }
 
@@ -72,7 +73,7 @@ export const offlineQueue = {
     if (queue.length === 0) return true;
 
     isSyncing = true;
-    console.log(`[Offline Queue] Starting sync for ${queue.length} mutations...`);
+    logger.debug(`[Offline Queue] Starting sync for ${queue.length} mutations...`);
 
     const idsToSync = queue.map(m => m.id);
 
@@ -99,7 +100,7 @@ export const offlineQueue = {
               // Sonraki kuyruk ogelerinde gecici ID'leri kalici Firestore ID'siyle eslestir
               const tempId = mutation.data?.id;
               if (tempId && docRef.id && tempId !== docRef.id) {
-                console.log(`[Offline Queue] Remapping ${tempId} -> ${docRef.id}`);
+                logger.debug(`[Offline Queue] Remapping ${tempId} -> ${docRef.id}`);
                 for (let j = i + 1; j < workingQueue.length; j++) {
                   const item = workingQueue[j]!;
                   if (item.docId === tempId) item.docId = docRef.id;
@@ -132,9 +133,9 @@ export const offlineQueue = {
               }
               break;
           }
-          console.log(`[Offline Queue] Successfully synced mutation ${mutation.id}`);
+          logger.debug(`[Offline Queue] Successfully synced mutation ${mutation.id}`);
         } catch (err) {
-          console.error(`[Offline Queue] Failed to sync mutation ${mutation.id}:`, err);
+          logger.error(`[Offline Queue] Failed to sync mutation ${mutation.id}:`, err);
           remaining.push(mutation);
         }
       }
@@ -157,14 +158,14 @@ export const offlineQueue = {
 // Auto-trigger sync when coming back online
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
-    console.log('[Offline Queue] Connection restored! Triggering synchronization...');
-    offlineQueue.sync().catch(console.error);
+    logger.debug('[Offline Queue] Connection restored! Triggering synchronization...');
+    offlineQueue.sync().catch(logger.error);
   });
-  
+
   // Initial sync check on load
   setTimeout(() => {
     if (window.navigator.onLine) {
-      offlineQueue.sync().catch(console.error);
+      offlineQueue.sync().catch(logger.error);
     }
   }, 3000);
 }

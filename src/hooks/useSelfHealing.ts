@@ -9,6 +9,7 @@
  */
 import { useEffect } from 'react';
 import { taskService } from '../services/taskService';
+import { logger } from '../lib/logger';
 import type { Task, TaskBlocker, User } from '../types';
 
 interface UseSelfHealingOptions {
@@ -28,13 +29,13 @@ export function useSelfHealing({ user, tasks, blockers }: UseSelfHealingOptions)
       for (const task of blockedTasks) {
         const hasActiveBlocker = blockers.some(b => b.taskId === task.id && !b.isResolved);
         if (!hasActiveBlocker) {
-          console.log(
+          logger.debug(
             `[SelfHealing] "${task.title}" — aktif blocker yok, IN_PROGRESS'e döndürülüyor...`
           );
           try {
             await taskService.updateTaskStatus(task.id, 'IN_PROGRESS', 'BLOCKED', user.uid);
           } catch (e) {
-            console.warn('[SelfHealing] Onarım başarısız:', e);
+            logger.warn('[SelfHealing] Onarım başarısız:', e);
           }
         }
       }

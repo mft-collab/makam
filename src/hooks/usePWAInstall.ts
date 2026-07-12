@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { logger } from '../lib/logger';
 
 export function usePWAInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -23,7 +24,7 @@ export function usePWAInstall() {
       setDeferredPrompt(e);
       // Update UI notify the user they can install the PWA
       setIsInstallable(true);
-      console.log('PWA install prompt is ready to be deferred');
+      logger.debug('PWA install prompt is ready to be deferred');
     };
 
     const handleAppInstalled = () => {
@@ -31,7 +32,7 @@ export function usePWAInstall() {
       setDeferredPrompt(null);
       setIsInstallable(false);
       setIsInstalled(true);
-      console.log('PWA was installed');
+      logger.debug('PWA was installed');
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -39,7 +40,7 @@ export function usePWAInstall() {
 
     // Initial check in case it fired before hook loaded
     if (window.hasOwnProperty('beforeinstallprompt')) {
-      console.log('window has beforeinstallprompt already');
+      logger.debug('window has beforeinstallprompt already');
     }
 
     return () => {
@@ -50,7 +51,7 @@ export function usePWAInstall() {
 
   const install = async () => {
     if (!deferredPrompt) {
-      console.warn('Install prompt not available yet');
+      logger.warn('Install prompt not available yet');
       return false;
     }
     
@@ -60,7 +61,7 @@ export function usePWAInstall() {
       
       // Wait for the user to respond to the prompt
       const { outcome } = await deferredPrompt.userChoice;
-      console.log(`User response to the install prompt: ${outcome}`);
+      logger.debug(`User response to the install prompt: ${outcome}`);
       
       // We've used the prompt, and can't use it again, discard it
       setDeferredPrompt(null);
@@ -68,7 +69,7 @@ export function usePWAInstall() {
       
       return outcome === 'accepted';
     } catch (err) {
-      console.error('Error during PWA installation:', err);
+      logger.error('Error during PWA installation:', err);
       return false;
     }
   };

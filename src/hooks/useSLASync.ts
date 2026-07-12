@@ -7,6 +7,7 @@
  */
 import { useEffect } from 'react';
 import { db, doc, onSnapshot } from '../firebase';
+import { logger } from '../lib/logger';
 import type { User } from '../types';
 
 const DEFAULTS = {
@@ -40,9 +41,9 @@ export function useSLASync(user: User | null) {
             }
           : DEFAULTS;
         localStorage.setItem('makam_sla_config', JSON.stringify(config));
-        if (data) console.log('[SLA Sync] Synchronized from Firestore.');
+        if (data) logger.debug('[SLA Sync] Synchronized from Firestore.');
       },
-      (err) => console.warn('[SLA Sync] Failed:', err)
+      (err) => logger.warn('[SLA Sync] Failed:', err)
     );
 
     return () => unsubscribe();
