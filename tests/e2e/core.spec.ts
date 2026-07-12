@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 test.describe('MAKAM E2E Core Workflow', () => {
   test('should load the application and show Stratejik Veri Baglantisi loader', async ({ page }) => {
@@ -22,12 +23,22 @@ test.describe('MAKAM E2E Core Workflow', () => {
     }
   });
 
-  test('should have a clean DOM structure without critical accessibility violations', async ({ page }) => {
+  test('should have no critical accessibility violations (axe-core, WCAG 2 AA dahil kontrast)', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    
-    // Ana root elementinin sayfada render edildiğini doğrula
-    const root = page.locator('#root');
-    await expect(root).toBeAttached();
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
+
+    const critical = results.violations.filter(
+      (v) => v.impact === 'critical' || v.impact === 'serious'
+    );
+
+    if (critical.length > 0) {
+      console.log(JSON.stringify(critical, null, 2));
+    }
+
+    expect(critical, `Kritik/ciddi a11y ihlalleri: ${critical.map(v => v.id).join(', ')}`).toEqual([]);
   });
 });

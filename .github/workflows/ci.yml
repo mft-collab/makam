@@ -36,10 +36,12 @@ jobs:
         run: npm ci
 
       - name: Bağımlılık Güvenlik Denetimi
-        # NOT: audit-level=critical olarak ayarlandı çünkü mevcut "high" seviye
-        # bulgular (vite <=6.4.2) yalnızca major sürüm atlamasıyla (vite 7.x)
-        # çözülüyor ve build zincirini (vite-plugin-pwa, @tailwindcss/vite)
-        # kırma riski taşıyor. Bkz. takip: Faz 3.3 bağımlılık modernizasyonu.
+        # NOT: audit-level=critical olarak ayarlandı çünkü kalan "high" seviye
+        # bulgular yalnızca firebase-admin (google-gax/@grpc/grpc-js zinciri,
+        # server-side Admin SDK) ve @lhci/cli (dev-only) major sürüm
+        # atlamasıyla çözülüyor ve build zincirini kırma riski taşıyor.
+        # vite açığı (GHSA-fx2h-pf6j-xcff) 6.4.3 patch güncellemesiyle çözüldü.
+        # Bkz. takip: Faz 3.3 bağımlılık modernizasyonu.
         run: npm audit --audit-level=critical
 
   # ─── 1. Kod Kalitesi ve Test ────────────────────────────────────────────────
@@ -147,8 +149,11 @@ jobs:
         run: npm run size
 
       - name: Lighthouse CI (a11y, best-practices, SEO, perf)
+        # NOT: accessibility/best-practices/seo "error" seviyesinde gerçek bir
+        # kapı — build'i kırar. performance şimdilik "warn" (bkz. lighthouserc.json):
+        # mevcut skor (~0.57) büyük ölçüde firebase/pdf/chart vendor paketlerinden
+        # kaynaklanıyor ve ayrı bir bundle-optimizasyon çalışması gerektiriyor.
         run: npm run lighthouse
-        continue-on-error: true
 
   # ─── 3. Firebase Hosting Deploy (sadece main branch) ───────────────────────
   deploy:

@@ -447,6 +447,7 @@ export default function App() {
 
         {/* Toast Bölgesi */}
         <div
+          role="region"
           aria-label="Bildirimler"
           className="fixed top-12 left-1/2 -translate-x-1/2 z-[150] flex flex-col gap-4 pointer-events-none w-full max-w-md px-6"
         >
@@ -461,7 +462,9 @@ export default function App() {
         </div>
 
         {!user ? (
-          <Login onLogin={handleLogin} />
+          <main id="main-content">
+            <Login onLogin={handleLogin} />
+          </main>
         ) : (
           <>
             <Sidebar user={user} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} />

@@ -1,6 +1,7 @@
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { motion, AnimatePresence } from 'motion/react'
 import { RefreshCw, X } from 'lucide-react'
+import { logger } from '../lib/logger'
 
 export function ReloadPrompt() {
   const {
@@ -9,10 +10,10 @@ export function ReloadPrompt() {
     updateServiceWorker,
   } = useRegisterSW({
     onRegistered(r) {
-      console.log('SW Registered: ' + r)
+      logger.debug('SW Registered: ' + r)
     },
     onRegisterError(error) {
-      console.log('SW registration error', error)
+      logger.error('SW registration error', error)
     },
   })
 
@@ -47,7 +48,7 @@ export function ReloadPrompt() {
                       </p>
                    </div>
                 </div>
-                <button onClick={close} className="p-1 hover:bg-surface-border/40 rounded-lg transition-colors">
+                <button onClick={close} aria-label="Kapat" className="p-1 hover:bg-surface-border/40 rounded-lg transition-colors">
                    <X className="w-4 h-4 text-text-muted" />
                 </button>
              </div>
