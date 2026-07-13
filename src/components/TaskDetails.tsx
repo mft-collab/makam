@@ -15,6 +15,7 @@ import { Avatar } from './ui/Avatar';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { EmptyState } from './ui/EmptyState';
+import { Tooltip } from './ui/Tooltip';
 import { db, collection, query, where, getDocs, storage, ref, uploadBytes, getDownloadURL } from '../firebase';
 
 // Öncelik → Badge varyantı eşlemesi (İvedi=kırmızı, Öncelikli=altın, Normal=mavi, Rutin=nötr)
@@ -36,23 +37,25 @@ export interface PrimaryAction {
   collectsEvidence: boolean;
   /** Terminal/geri dönüşü zor geçiş — yerinde onay (confirm-in-place) ister. */
   needsConfirm: boolean;
+  /** Butonun ne yaptığını açıklayan kısa ipucu metni. */
+  hint: string;
 }
 
 export const getPrimaryAction = (task: Task, currentUser: UserType | null): PrimaryAction | null => {
   const isAdmin = currentUser?.role === 'Admin';
   if (task.status === 'ASSIGNED') {
-    return { label: 'SÜRECİ BAŞLAT', next: 'IN_PROGRESS', variant: 'gold', collectsEvidence: false, needsConfirm: false };
+    return { label: 'SÜRECİ BAŞLAT', next: 'IN_PROGRESS', variant: 'gold', collectsEvidence: false, needsConfirm: false, hint: 'Talimatı icraya alır; mühlet sayacı bu andan itibaren işlemeye başlar.' };
   }
   if (task.status === 'PENDING_DELEGATION') {
-    return { label: 'DEVRİ KABUL ET VE BAŞLAT', next: 'IN_PROGRESS', variant: 'gold', collectsEvidence: false, needsConfirm: false };
+    return { label: 'DEVRİ KABUL ET VE BAŞLAT', next: 'IN_PROGRESS', variant: 'gold', collectsEvidence: false, needsConfirm: false, hint: 'Devredilen talimatı üstlenir ve doğrudan icraya alır.' };
   }
   if (task.status === 'IN_PROGRESS' || task.status === 'CRISIS') {
     return isAdmin
-      ? { label: 'KESİN TAMAMLA', next: 'COMPLETED', variant: 'success', collectsEvidence: true, needsConfirm: true }
-      : { label: 'TAMAMLA VE ONAYA SUN', next: 'AWAITING_APPROVAL', variant: 'success', collectsEvidence: true, needsConfirm: false };
+      ? { label: 'KESİN TAMAMLA', next: 'COMPLETED', variant: 'success', collectsEvidence: true, needsConfirm: true, hint: 'Talimatı doğrudan tamamlanmış sayıp kapatır — onay süreci atlanır, geri alınamaz.' }
+      : { label: 'TAMAMLA VE ONAYA SUN', next: 'AWAITING_APPROVAL', variant: 'success', collectsEvidence: true, needsConfirm: false, hint: 'İşi bitirdiğinizi bildirir ve Makam onayına sunar — talimat bu adımda henüz kapanmaz.' };
   }
   if (task.status === 'AWAITING_APPROVAL' && isAdmin) {
-    return { label: 'TALİMATI ONAYLA VE KAPAT', next: 'COMPLETED', variant: 'gold', collectsEvidence: true, needsConfirm: true };
+    return { label: 'TALİMATI ONAYLA VE KAPAT', next: 'COMPLETED', variant: 'gold', collectsEvidence: true, needsConfirm: true, hint: 'Onay bekleyen talimatı inceleyip kesin olarak kapatır — geri alınamaz.' };
   }
   return null;
 };
@@ -174,8 +177,11 @@ export const TaskDetailsFooter = ({ task, currentUser, onStatusChange }: {
     <div className="flex flex-col md:flex-row md:items-end gap-4">
       {action.collectsEvidence && (
         <div className="flex flex-col gap-2 flex-1 min-w-0">
-          <span className="text-[9px] font-medium text-text-muted uppercase tracking-[0.18em]">
+          <span className="text-[9px] font-medium text-text-muted uppercase tracking-[0.18em] inline-flex items-center gap-1.5">
             İcra Kanıtı <span className="normal-case tracking-normal font-light">(isteğe bağlı)</span>
+            <Tooltip content="İşin nasıl tamamlandığını belgeler — denetim izlerinde ve olası itirazlarda referans olarak kullanılır.">
+              <Info className="w-3 h-3 text-text-tertiary cursor-help" aria-label="Kanıt neden önemli" />
+            </Tooltip>
           </span>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center bg-makam-glass border border-surface-border rounded-full p-0.5 shrink-0" role="group" aria-label="Kanıt türü">
@@ -240,17 +246,19 @@ export const TaskDetailsFooter = ({ task, currentUser, onStatusChange }: {
           )}
         </div>
       )}
-      <Button
-        variant={action.variant}
-        onClick={handleClick}
-        isLoading={isSubmitting}
-        className={cn(
-          'h-12 text-[10px] tracking-widest w-full md:w-auto md:min-w-[240px] shrink-0 md:ml-auto',
-          confirmArmed && 'ring-2 ring-offset-2 ring-executive-gold animate-pulse'
-        )}
-      >
-        {isSubmitting ? 'İŞLENİYOR…' : confirmArmed ? 'EMİN MİSİNİZ? ONAYLA' : action.label}
-      </Button>
+      <Tooltip content={action.hint} className="w-full md:w-auto md:ml-auto shrink-0">
+        <Button
+          variant={action.variant}
+          onClick={handleClick}
+          isLoading={isSubmitting}
+          className={cn(
+            'h-12 text-[10px] tracking-widest w-full md:w-auto md:min-w-[240px]',
+            confirmArmed && 'ring-2 ring-offset-2 ring-executive-gold animate-pulse'
+          )}
+        >
+          {isSubmitting ? 'İŞLENİYOR…' : confirmArmed ? 'EMİN MİSİNİZ? ONAYLA' : action.label}
+        </Button>
+      </Tooltip>
     </div>
   );
 };
@@ -717,7 +725,12 @@ export const TaskDetails = ({
                 </div>
 
                 <div className="flex flex-col gap-4">
-                  <h4 className="text-[9px] font-medium text-text-muted uppercase tracking-[0.18em]">Zaman Yönetimi</h4>
+                  <div className="flex items-center gap-1.5">
+                    <h4 className="text-[9px] font-medium text-text-muted uppercase tracking-[0.18em]">Zaman Yönetimi</h4>
+                    <Tooltip content="Mühlet yalnızca mesai saatleri (09:00–18:00) içinde işler; hafta sonu/resmî tatiller ve Engellendi/Onay Sürecinde geçen süre sayılmaz.">
+                      <Info className="w-3 h-3 text-text-tertiary cursor-help" aria-label="Mühlet hesaplama kuralı" />
+                    </Tooltip>
+                  </div>
                   <div className="p-3 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-xl flex items-center gap-3">
                     <Calendar className="w-4 h-4 text-executive-gold stroke-[1.3] flex-shrink-0" />
                     <div className="flex flex-col gap-0.5">
@@ -811,22 +824,26 @@ export const TaskDetails = ({
                   <h4 className="text-[9px] font-medium text-text-muted uppercase tracking-[0.18em]">Sonuç Belgeleri</h4>
                   <div className="p-3 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl flex flex-col gap-2">
                     {task.status === 'COMPLETED' && task.completedAt && task.completedAt <= task.deadline && (
-                      <button
-                        onClick={() => onShowCertificate?.(task)}
-                        className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[11px] font-medium text-executive-gold uppercase tracking-widest hover:bg-executive-gold/10 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue"
-                      >
-                        <Award className="w-4 h-4 shrink-0" aria-hidden="true" />
-                        Liyakat Belgesi
-                      </button>
+                      <Tooltip content="Mühleti içinde tamamlanan talimatlar için otomatik olarak hazırlanır." side="bottom" className="w-full">
+                        <button
+                          onClick={() => onShowCertificate?.(task)}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[11px] font-medium text-executive-gold uppercase tracking-widest hover:bg-executive-gold/10 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue"
+                        >
+                          <Award className="w-4 h-4 shrink-0" aria-hidden="true" />
+                          Liyakat Belgesi
+                        </button>
+                      </Tooltip>
                     )}
                     {task.status === 'COMPLETED' && task.completedAt && task.completedAt > task.deadline && (
-                      <button
-                        onClick={() => onShowWarning?.(task)}
-                        className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[11px] font-medium text-red-600 uppercase tracking-widest hover:bg-red-500/10 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-                      >
-                        <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
-                        İkaz Belgesi
-                      </button>
+                      <Tooltip content="Mühleti aşıldıktan sonra tamamlanan talimatlar için otomatik olarak hazırlanır." side="bottom" className="w-full">
+                        <button
+                          onClick={() => onShowWarning?.(task)}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[11px] font-medium text-red-600 uppercase tracking-widest hover:bg-red-500/10 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                        >
+                          <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
+                          İkaz Belgesi
+                        </button>
+                      </Tooltip>
                     )}
                     {task.evidence && (
                       /^https?:\/\//i.test(task.evidence) ? (

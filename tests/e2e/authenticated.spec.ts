@@ -30,7 +30,7 @@ test.describe('MAKAM E2E — Kimlik Doğrulamalı Akışlar', () => {
   });
 
   test('Admin girişi Harekat Merkezi\'ni yükler', async ({ page }) => {
-    await expect(page).toHaveTitle(/MAKAM Executive Control/);
+    await expect(page).toHaveTitle(/MAKAM \| Stratejik Yönetim/);
     await expect(page.getByText('Stratejik Sağlık Endeksi')).toBeVisible();
   });
 

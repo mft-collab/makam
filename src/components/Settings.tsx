@@ -2,10 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Download, AlertCircle, CheckCircle2, Database, RotateCcw, ShieldCheck, Smartphone, Bell, Settings as SettingsIcon, Clock } from 'lucide-react';
 import { Task, User } from '../types';
 import { cn } from '../lib/utils';
-import { db, doc, writeBatch, collection, getDocs, query, setDoc, getCountFromServer, addDoc } from '../firebase';
+import { db, doc, writeBatch, collection, getDocs, query, setDoc, addDoc } from '../firebase';
 import { z } from 'zod';
 import { taskService } from '../services/taskService';
-import { motion } from 'motion/react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { getSLAConfigForPriority } from '../lib/sla';
 import { SettingsCard, ActionButton, StatusBanner } from './settings/SharedUI';
@@ -32,7 +31,10 @@ const taskBackupSchema = z.object({
 });
 
 const restoreBackupSchema = z.object({
-  system: z.literal('MAKAM Executive Control'),
+  // Eski yedekler 'MAKAM Executive Control' değerini taşıyor — geriye
+  // dönük uyumluluk için ikisi de kabul edilir (bkz. AboutModal/index.html
+  // markasının Türkçeleştirilmesi).
+  system: z.enum(['MAKAM Stratejik Yönetim', 'MAKAM Executive Control']),
   users: z.array(z.any()).optional(),
   tasks: z.array(z.any()).optional(),
   blockers: z.array(z.any()).optional(),
@@ -53,8 +55,6 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error' | 'loading'; message: string } | null>(null);
   const [isArchiving, setIsArchiving] = useState(false);
   const { isInstallable, isInstalled, install } = usePWAInstall();
-
-  const [localAuditLogsCount, setLocalAuditLogsCount] = useState<number>(0);
 
   const isAdmin = currentUser?.role === 'Admin';
 
@@ -224,18 +224,6 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
     }
   };
 
-  useEffect(() => {
-    const fetchAuditLogsCount = async () => {
-      try {
-        const snapshot = await getCountFromServer(collection(db, 'audit_logs'));
-        setLocalAuditLogsCount(snapshot.data().count);
-      } catch (err) {
-        console.error('Failed to fetch settings audit logs count:', err);
-      }
-    };
-    fetchAuditLogsCount();
-  }, []);
-
   const handleInstallClick = async () => {
     const success = await install();
     if (success) {
@@ -244,14 +232,6 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
       setImportStatus({ type: 'error', message: 'Yükleme başlatılamadı veya iptal edildi.' });
     }
   };
-
-  // ── System snapshot data ──────────────────────────────────────────────────
-  const snapshotStats = [
-    { label: 'Talimat',       value: tasks.length },
-    { label: 'Personel',    value: users.length },
-    { label: 'Engel',       value: blockers.length },
-    { label: 'Denetim İzi', value: localAuditLogsCount },
-  ];
 
   // ── Export ────────────────────────────────────────────────────────────────
   const handleExport = async () => {
@@ -270,7 +250,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
         tasks, users, blockers, auditLogs: logs,
         exportDate: new Date().toISOString(),
         version: '2.1.0',
-        system: 'MAKAM Executive Control',
+        system: 'MAKAM Stratejik Yönetim',
       };
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
       const url  = URL.createObjectURL(blob);
@@ -435,7 +415,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
         auditLogs: logs,
         archiveDate: new Date().toISOString(),
         version: '2.1.0',
-        system: 'MAKAM Executive Control Audit Archive',
+        system: 'MAKAM Stratejik Yönetim Denetim Arşivi',
       };
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -586,7 +566,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                       </div>
                       <div className="h-px bg-executive-blue/[0.04] my-1" />
                       <ul className="list-disc pl-4 flex flex-col gap-1 text-[9px] text-text-tertiary">
-                        <li><strong>iOS (iPhone/iPad):</strong> Safari tarayıcısında alt menüdeki <span className="text-text-muted font-semibold">Paylaş (Share)</span> butonuna tıklayıp, gelen menüden <span className="text-text-muted font-semibold">"Ana Ekrana Ekle"</span> seçeneğini seçin.</li>
+                        <li><strong>iOS (iPhone/iPad):</strong> Safari tarayıcısında alt menüdeki <span className="text-text-muted font-semibold">Paylaş</span> butonuna tıklayıp, gelen menüden <span className="text-text-muted font-semibold">"Ana Ekrana Ekle"</span> seçeneğini seçin.</li>
                         <li><strong>Android (Chrome):</strong> Sağ üstteki üç noktaya tıklayıp <span className="text-text-muted font-semibold">"Uygulamayı yükle"</span> veya <span className="text-text-muted font-semibold">"Ana ekrana ekle"</span> seçeneğini seçin.</li>
                         <li><strong>Masaüstü (Chrome/Edge):</strong> Adres çubuğunun sağ tarafındaki <span className="text-text-muted font-semibold">"Yükle" (küçük monitör/ok)</span> simgesine tıklayın.</li>
                       </ul>
@@ -615,7 +595,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.15em]">Rutin (Low)</label>
+                    <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.15em]">Rutin</label>
                     <div className="flex gap-1.5">
                       <input
                         type="number"
@@ -639,7 +619,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                   </div>
 
                   <div className="flex flex-col gap-1">
-                    <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.15em]">Normal (Medium)</label>
+                    <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.15em]">Normal</label>
                     <div className="flex gap-1.5">
                       <input
                         type="number"
@@ -663,7 +643,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                   </div>
 
                   <div className="flex flex-col gap-1">
-                    <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.15em]">Öncelikli (High)</label>
+                    <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.15em]">Öncelikli</label>
                     <div className="flex gap-1.5">
                       <input
                         type="number"
@@ -687,7 +667,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                   </div>
 
                   <div className="flex flex-col gap-1">
-                    <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.15em]">İvedi (Urgent)</label>
+                    <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.15em]">İvedi</label>
                     <div className="flex gap-1.5">
                       <input
                         type="number"
@@ -733,31 +713,11 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
           {/* TAB 3: DATA MANAGEMENT */}
           {activeSubTab === 'data' && isAdmin && (
             <div className="flex flex-col gap-4">
-              
-              {/* System Snapshot */}
-              <motion.div
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-                className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-w-4xl"
-              >
-                {snapshotStats.map(({ label, value }) => (
-                  <div
-                    key={label}
-                    className="flex flex-col gap-0.5 p-3 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-xl shadow-[0_1px_6px_rgba(22,21,19,0.02)]"
-                  >
-                    <span className="text-[20px] font-light text-executive-blue tabular-nums tracking-tight leading-none font-display">
-                      {value}
-                    </span>
-                    <span className="text-[8px] text-text-tertiary font-medium uppercase tracking-[0.3em]">{label}</span>
-                  </div>
-                ))}
-              </motion.div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
                 {/* Export */}
-                <SettingsCard title="Arşivleme (Export)" description="Sistem yedeği oluştur" icon={Download} accentColor="slate" index={0}>
+                <SettingsCard title="Arşivleme" description="Sistem yedeği oluştur" icon={Download} accentColor="slate" index={0}>
                   <p className="text-[11px] text-text-muted font-light leading-relaxed">
                     Tüm talimat, personel ve denetim verilerini tek bir JSON dosyasına aktarır.
                   </p>
@@ -770,7 +730,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                 </SettingsCard>
 
                 {/* Import / Restore */}
-                <SettingsCard title="Geri Yükleme (Restore)" description="Yedekten sistemi döndür" icon={RotateCcw} accentColor="amber" index={1}>
+                <SettingsCard title="Geri Yükleme" description="Yedekten sistemi döndür" icon={RotateCcw} accentColor="amber" index={1}>
                   <p className="text-[11px] text-text-muted font-light leading-relaxed">
                     Daha önce alınan bir yedek dosyasından sistemi geri yükler (Çalışma zamanı Zod doğrulaması içerir).
                   </p>
@@ -795,7 +755,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                       <div className="flex items-start gap-2 p-2.5 bg-executive-gold/[0.05] border border-executive-gold/15 rounded-xl">
                         <AlertCircle className="w-3.5 h-3.5 text-executive-gold flex-shrink-0 mt-0.5 stroke-[1.5]" />
                         <p className="text-[9px] text-executive-gold font-medium uppercase tracking-[0.2em] leading-relaxed">
-                          Bu işlem mevcut verilerin üzerine yazacaktır. Kayıtlar toplu halde (chunk) yazılır — işlem yarıda kesilirse veritabanı kısmen güncellenmiş durumda kalabilir. Geri yüklemeden önce güncel bir yedek (Export) almanız önerilir.
+                          Bu işlem mevcut verilerin üzerine yazacaktır. Kayıtlar toplu halde (chunk) yazılır — işlem yarıda kesilirse veritabanı kısmen güncellenmiş durumda kalabilir. Geri yüklemeden önce güncel bir yedek almanız önerilir.
                         </p>
                       </div>
                     </>

@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => {
         registerType: 'autoUpdate',
         includeAssets: ['makam-logo.svg', 'makam-logo-192.png', 'makam-logo-512.png', 'favicon.ico', 'robots.txt'],
         manifest: {
-          name: 'MAKAM Executive Control',
+          name: 'MAKAM Stratejik Yönetim',
           short_name: 'MAKAM',
           description: 'Makam Harekat ve Stratejik Yönetim Sistemi',
           theme_color: '#0F172A',

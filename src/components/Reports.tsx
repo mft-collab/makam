@@ -93,7 +93,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
     return blockers.filter(b => filteredTaskIds.has(b.taskId));
   }, [blockers, filteredTasks]);
 
-  // jsPDF (+jspdf-autotable, ~140KB gzip) yalnızca Export butonuna basıldığında
+  // jsPDF (+html2canvas, ~140KB gzip) yalnızca Export butonuna basıldığında
   // yükleniyor — statik import Reports sekmesine her girişte bu paketi
   // gereksiz yere indiriyordu.
   const handleExportPDF = useCallback(async () => {

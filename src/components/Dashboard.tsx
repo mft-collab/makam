@@ -556,106 +556,13 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
         <StatCard label="Tamamlanan" value={stats.completed}  max={stats.total} icon={ListChecks}   color="green"  index={5} onClick={() => setSelectedStatCategory('completed')} />
       </div>
 
-      {/* ── Executive Decision Surface ───────────────────────────────── */} 
-      <div className="grid grid-cols-1 xl:grid-cols-[1.45fr_0.95fr] gap-3">
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 200, damping: 28, delay: 0.18 }}
-          className="bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl p-4 shadow-[0_1px_8px_rgba(22,21,19,0.02)]"
-        >
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3">
-            <div>
-              <h3 className="text-[13px] font-medium text-executive-blue tracking-tight font-display">{isPersonalView ? 'Önceliklerim' : 'Yönetici Müdahale Kuyruğu'}</h3>
-              <p className="text-[9px] text-text-tertiary uppercase tracking-[0.16em] mt-0.5">
-                {queueFilter
-                  ? <>Filtre: {executiveSignals.find(s => s.key === queueFilter)?.label} · <button type="button" onClick={() => setQueueFilter(null)} className="underline hover:text-executive-blue">Temizle</button></>
-                  : isPersonalView ? 'Size ait risk ve mühlet önceliği' : 'Risk, mühlet, atalet ve onay önceliği'}
-              </p>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 w-full md:w-auto">
-              {executiveSignals.map(signal => (
-                <button
-                  key={signal.key}
-                  type="button"
-                  onClick={() => setQueueFilter(prev => prev === signal.key ? null : signal.key)}
-                  aria-pressed={queueFilter === signal.key}
-                  className={cn(
-                    'min-w-0 rounded-xl border px-2 py-1.5 text-center transition-all duration-200',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
-                    // NOT: Tailwind'in varsayılan red/amber/emerald paleti (oklch
-                    // tabanlı) axe-core taramasında bu bileşende beklenmedik
-                    // şekilde neredeyse görünmez metin olarak ölçüldü. Solid hex
-                    // semantik status token'larına geçirildi (bkz. index.css).
-                    signal.tone === 'red' ? 'bg-status-danger/10 text-status-danger border-status-danger/20' :
-                    signal.tone === 'amber' ? 'bg-status-warning/10 text-status-warning border-status-warning/20' :
-                    'bg-status-success/10 text-status-success border-status-success/20',
-                    queueFilter === signal.key && 'ring-2 ring-offset-2 ring-offset-surface-base ring-executive-blue/40 scale-[0.97]'
-                  )}
-                >
-                  <div className="text-[14px] font-semibold tabular-nums leading-none">{signal.value}</div>
-                  <div className="text-[7px] uppercase tracking-[0.12em] mt-1 truncate">{signal.label}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            {visibleQueue.length > 0 ? (
-              visibleQueue.map((item, index) => (
-                <InterventionRow
-                  key={item.task.id}
-                  item={item}
-                  users={users}
-                  index={index}
-                  onView={() => onViewTask?.(item.task)}
-                />
-              ))
-            ) : (
-              <div className="flex flex-col items-center justify-center py-10 gap-2 rounded-xl border border-dashed border-executive-blue/[0.05] bg-[#F5F3EF]/50">
-                <ShieldCheck className="w-7 h-7 text-status-success stroke-[1.2]" />
-                <span className="text-[9px] text-text-tertiary uppercase tracking-[0.16em]">
-                  {queueFilter ? 'Bu filtrede müdahale yok' : 'Müdahale Gerektiren Başlık Yok'}
-                </span>
-              </div>
-            )}
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 200, damping: 28, delay: 0.24 }}
-          className="bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl p-4 shadow-[0_1px_8px_rgba(22,21,19,0.02)]"
-        >
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div>
-              <h3 className="text-[13px] font-medium text-executive-blue tracking-tight font-display">{isPersonalView ? 'Performans Özetim' : 'Kadro Yük Matrisi'}</h3>
-              <p className="text-[9px] text-text-tertiary uppercase tracking-[0.16em] mt-0.5">{isPersonalView ? 'Kendi yükünüz ve SLA disiplininiz' : 'Aktif yük ve SLA disiplini'}</p>
-            </div>
-            <UsersIcon className="w-4 h-4 text-text-tertiary" />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            {performanceProfiles.length > 0 ? (
-              performanceProfiles.slice(0, 5).map((profile, index) => (
-                <PerformanceRow key={profile.user.uid} profile={profile} index={index} />
-              ))
-            ) : (
-              <div className="flex flex-col items-center justify-center py-10 gap-2 rounded-xl border border-dashed border-executive-blue/[0.05] bg-[#F5F3EF]/50">
-                <Gauge className="w-7 h-7 text-text-muted/40 stroke-[1.2]" />
-                <span className="text-[9px] text-text-tertiary uppercase tracking-[0.16em]">Yük Verisi Yok</span>
-              </div>
-            )}
-          </div>
-        </motion.div>
-      </div>
-
       {/* ── Chart ───────────────────────────────────────────────────── */}
+      {/* Sayısal kartlardan hemen sonra, kuyruk/yük panellerinden önce — önce
+          "genel eğilim", sonra "üzerinde durulması gereken ayrıntı" sırası. */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 200, damping: 28, delay: 0.25 }}
+        transition={{ type: 'spring', stiffness: 200, damping: 28, delay: 0.32 }}
         className="bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl p-4 shadow-[0_1px_8px_rgba(22,21,19,0.02)]"
       >
         <div className="flex justify-between items-center mb-3">
@@ -719,6 +626,101 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
         {/* Ekran okuyucular için grafiğin metinsel özeti — recharts SVG'si erişilebilir değildir */}
         <p className="sr-only">{chartSummary}</p>
       </motion.div>
+
+      {/* ── Executive Decision Surface ───────────────────────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1.45fr_0.95fr] gap-3">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 200, damping: 28, delay: 0.38 }}
+          className="bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl p-4 shadow-[0_1px_8px_rgba(22,21,19,0.02)]"
+        >
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3">
+            <div>
+              <h3 className="text-[13px] font-medium text-executive-blue tracking-tight font-display">{isPersonalView ? 'Önceliklerim' : 'Yönetici Müdahale Kuyruğu'}</h3>
+              <p className="text-[9px] text-text-tertiary uppercase tracking-[0.16em] mt-0.5">
+                {queueFilter
+                  ? <>Filtre: {executiveSignals.find(s => s.key === queueFilter)?.label} · <button type="button" onClick={() => setQueueFilter(null)} className="underline hover:text-executive-blue">Temizle</button></>
+                  : isPersonalView ? 'Size ait risk ve mühlet önceliği' : 'Risk, mühlet, atalet ve onay önceliği'}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 w-full md:w-auto">
+              {executiveSignals.map(signal => (
+                <button
+                  key={signal.key}
+                  type="button"
+                  onClick={() => setQueueFilter(prev => prev === signal.key ? null : signal.key)}
+                  aria-pressed={queueFilter === signal.key}
+                  className={cn(
+                    'min-w-0 rounded-xl border px-2 py-1.5 text-center transition-all duration-200',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+                    // NOT: Tailwind'in varsayılan red/amber/emerald paleti (oklch
+                    // tabanlı) axe-core taramasında bu bileşende beklenmedik
+                    // şekilde neredeyse görünmez metin olarak ölçüldü. Solid hex
+                    // semantik status token'larına geçirildi (bkz. index.css).
+                    signal.tone === 'red' ? 'bg-status-danger/10 text-status-danger border-status-danger/20' :
+                    signal.tone === 'amber' ? 'bg-status-warning/10 text-status-warning border-status-warning/20' :
+                    'bg-status-success/10 text-status-success border-status-success/20',
+                    queueFilter === signal.key && 'ring-2 ring-offset-2 ring-offset-surface-base ring-executive-blue/40 scale-[0.97]'
+                  )}
+                >
+                  <div className="text-[14px] font-semibold tabular-nums leading-none">{signal.value}</div>
+                  <div className="text-[7px] uppercase tracking-[0.12em] mt-1 truncate">{signal.label}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            {visibleQueue.length > 0 ? (
+              visibleQueue.map((item, index) => (
+                <InterventionRow
+                  key={item.task.id}
+                  item={item}
+                  users={users}
+                  index={index}
+                  onView={() => onViewTask?.(item.task)}
+                />
+              ))
+            ) : (
+              <div className="flex flex-col items-center justify-center py-10 gap-2 rounded-xl border border-dashed border-executive-blue/[0.05] bg-[#F5F3EF]/50">
+                <ShieldCheck className="w-7 h-7 text-status-success stroke-[1.2]" />
+                <span className="text-[9px] text-text-tertiary uppercase tracking-[0.16em]">
+                  {queueFilter ? 'Bu filtrede müdahale yok' : 'Müdahale Gerektiren Başlık Yok'}
+                </span>
+              </div>
+            )}
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 200, damping: 28, delay: 0.44 }}
+          className="bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl p-4 shadow-[0_1px_8px_rgba(22,21,19,0.02)]"
+        >
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <h3 className="text-[13px] font-medium text-executive-blue tracking-tight font-display">{isPersonalView ? 'Performans Özetim' : 'Kadro Yük Matrisi'}</h3>
+              <p className="text-[9px] text-text-tertiary uppercase tracking-[0.16em] mt-0.5">{isPersonalView ? 'Kendi yükünüz ve SLA disiplininiz' : 'Aktif yük ve SLA disiplini'}</p>
+            </div>
+            <UsersIcon className="w-4 h-4 text-text-tertiary" />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            {performanceProfiles.length > 0 ? (
+              performanceProfiles.slice(0, 5).map((profile, index) => (
+                <PerformanceRow key={profile.user.uid} profile={profile} index={index} />
+              ))
+            ) : (
+              <div className="flex flex-col items-center justify-center py-10 gap-2 rounded-xl border border-dashed border-executive-blue/[0.05] bg-[#F5F3EF]/50">
+                <Gauge className="w-7 h-7 text-text-muted/40 stroke-[1.2]" />
+                <span className="text-[9px] text-text-tertiary uppercase tracking-[0.16em]">Yük Verisi Yok</span>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      </div>
 
       {/* ── Stat Detail Modal ────────────────────────────────────────── */}
       <Modal

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, Sun, Moon, Monitor, Building } from 'lucide-react';
+import { AlertCircle, Sun, Moon, Monitor, Building, BookOpen } from 'lucide-react';
 import { Logo } from './Logo';
 import { Avatar } from './ui/Avatar';
 import { LocalTime } from './LocalTime';
 import { Badge } from './ui/Badge';
+import { Tooltip } from './ui/Tooltip';
+import { GuideModal } from './GuideModal';
 import { ROLE_LABELS } from '../constants';
 import { useUIStore } from '../store/uiStore';
 import type { User, Notification } from '../types';
@@ -33,6 +35,7 @@ export function AppHeader({
   const { theme, setTheme } = useUIStore();
   const [isOnline, setIsOnline] = useState(typeof window !== 'undefined' ? window.navigator.onLine : true);
   const [queueCount, setQueueCount] = useState(0);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -138,6 +141,16 @@ export function AppHeader({
             </div>
           )}
 
+          <Tooltip content="Çalışma kuralları, mühlet disiplinleri ve belge koşulları">
+            <button
+              onClick={() => setIsGuideOpen(true)}
+              aria-label="Kılavuzu aç"
+              className="w-9 h-9 flex items-center justify-center rounded-full border border-makam-border/10 bg-makam-glass hover:bg-text-muted/5 transition-all text-text-muted hover:text-executive-blue cursor-pointer"
+            >
+              <BookOpen className="w-4 h-4 stroke-[1.5]" />
+            </button>
+          </Tooltip>
+
           <button
             onClick={handleToggleTheme}
             aria-label={`Temayı değiştir. Şu anki tema: ${
@@ -184,6 +197,14 @@ export function AppHeader({
           </div>
 
           <button
+            onClick={() => setIsGuideOpen(true)}
+            aria-label="Kılavuzu aç"
+            className="w-8 h-8 flex items-center justify-center rounded-full border border-makam-border/10 bg-makam-glass text-text-muted hover:text-executive-blue"
+          >
+            <BookOpen className="w-3.5 h-3.5 stroke-[1.5]" />
+          </button>
+
+          <button
             onClick={handleToggleTheme}
             aria-label="Temayı değiştir"
             className="w-8 h-8 flex items-center justify-center rounded-full border border-makam-border/10 bg-makam-glass text-text-muted hover:text-executive-blue"
@@ -204,6 +225,8 @@ export function AppHeader({
           )}
         </div>
       </header>
+
+      <GuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
     </>
   );
 }

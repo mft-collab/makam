@@ -368,7 +368,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
         <div className="flex flex-col items-center gap-12 py-8 overflow-x-auto w-full no-scrollbar select-none bg-makam-glass border border-surface-border rounded-3xl p-6">
           {/* Level 1: Admins */}
           <div className="flex flex-col items-center gap-2">
-            <span className="text-[8px] font-bold uppercase tracking-[0.3em] text-red-500 bg-red-50 border border-red-100 px-2.5 py-1 rounded-full">Yönetim Kurulu (Admins)</span>
+            <span className="text-[8px] font-bold uppercase tracking-[0.3em] text-red-500 bg-red-50 border border-red-100 px-2.5 py-1 rounded-full">Yönetim Kurulu</span>
             <div className="flex flex-wrap justify-center gap-6 mt-2">
               {users.filter(u => u.role === 'Admin').map(u => (
                 <OrgNodeCard key={u.uid} user={u} />
@@ -381,7 +381,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
 
           {/* Level 2: Managers */}
           <div className="flex flex-col items-center gap-4 w-full">
-            <span className="text-[8px] font-bold uppercase tracking-[0.3em] text-executive-blue bg-executive-blue/5 border border-executive-blue/10 px-2.5 py-1 rounded-full">Birim Yöneticileri (Managers)</span>
+            <span className="text-[8px] font-bold uppercase tracking-[0.3em] text-executive-blue bg-executive-blue/5 border border-executive-blue/10 px-2.5 py-1 rounded-full">Birim Yöneticileri</span>
             <div className="flex flex-wrap justify-center gap-8 mt-2 w-full">
               {users.filter(u => u.role === 'Manager').map(u => {
                 const staffInDept = users.filter(staff => staff.role === 'Staff' && staff.departmentId === u.departmentId);
@@ -409,7 +409,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
             <>
               <div className="w-[1px] h-8 bg-executive-blue/15" />
               <div className="flex flex-col items-center gap-2">
-                <span className="text-[8px] font-bold uppercase tracking-[0.3em] text-text-tertiary bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full">Bağımsız Kadro (Independent Staff)</span>
+                <span className="text-[8px] font-bold uppercase tracking-[0.3em] text-text-tertiary bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full">Bağımsız Kadro</span>
                 <div className="flex flex-wrap justify-center gap-3 mt-2">
                   {users.filter(u => u.role === 'Staff' && (!u.departmentId || !users.some(m => m.role === 'Manager' && m.departmentId === u.departmentId))).map(u => (
                     <OrgNodeCard key={u.uid} user={u} isMini />
@@ -686,9 +686,9 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
           <div className="flex flex-col gap-1.5">
             <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.35em] px-0.5">Yetki Seviyesi</label>
             <Select value={newRole} onChange={(e) => setNewRole(e.target.value as UserRole)} options={[
-              { value: 'Staff', label: 'Personel (Staff)' },
-              { value: 'Manager', label: 'Müdür (Manager)' },
-              { value: 'Admin', label: 'Müftü (Admin)' }
+              { value: 'Staff', label: 'Personel' },
+              { value: 'Manager', label: 'Müdür' },
+              { value: 'Admin', label: 'Müftü' }
             ]} />
           </div>
           <Input label="Departman / Birim" placeholder="Örn: Operasyon" value={newDept} onChange={(e) => setNewDept(e.target.value)} />
@@ -709,9 +709,9 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
               <div className="flex flex-col gap-1.5">
                 <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.35em] px-0.5">Yetki Seviyesi</label>
                 <Select value={editRole} onChange={(e) => setEditRole(e.target.value as UserRole)} options={[
-                  { value: 'Staff', label: 'Personel (Staff)' },
-                  { value: 'Manager', label: 'Müdür (Manager)' },
-                  { value: 'Admin', label: 'Müftü (Admin)' }
+                  { value: 'Staff', label: 'Personel' },
+                  { value: 'Manager', label: 'Müdür' },
+                  { value: 'Admin', label: 'Müftü' }
                 ]} />
               </div>
               <Input label="Departman / Birim" value={editDept} onChange={(e) => setEditDept(e.target.value)} />

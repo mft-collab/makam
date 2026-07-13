@@ -6,7 +6,7 @@ test.describe('MAKAM E2E Core Workflow', () => {
     await page.goto('/');
     
     // Uygulamanın title'ını kontrol et
-    await expect(page).toHaveTitle(/MAKAM Executive Control/);
+    await expect(page).toHaveTitle(/MAKAM \| Stratejik Yönetim/);
 
     // Uygulama yüklenirken çıkan yazının göründüğünden emin ol
     // Eğer anında geçiyorsa timeout olabilir, o yüzden toleranslı bir check.

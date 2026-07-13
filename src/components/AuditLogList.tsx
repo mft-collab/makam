@@ -5,7 +5,7 @@ import { AuditLog, Task, User, TaskStatus } from '../types';
 import { Button } from './ui/Button';
 import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
-import { STATUS_LABELS, ROLE_LABELS } from '../constants';
+import { STATUS_LABELS, ROLE_LABELS, PRIORITY_LABELS } from '../constants';
 import { db, collection, getDocs, query, where, orderBy, limit, startAfter } from '../firebase';
 
 interface AuditLogListProps {
@@ -218,6 +218,11 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
 
                         const truncateValue = (val: any) => {
                           if (val === null || val === undefined) return '-';
+                          // Ham enum değerleri (ör. öncelik) İngilizce saklanır — denetim
+                          // izinde okunabilir olması için Türkçe etikete çevrilir.
+                          if (field === 'priority' && typeof val === 'string' && val in PRIORITY_LABELS) {
+                            return PRIORITY_LABELS[val as keyof typeof PRIORITY_LABELS];
+                          }
                           if (typeof val === 'object') return JSON.stringify(val).slice(0, 30);
                           const str = String(val);
                           return str.length > 20 ? str.slice(0, 20) + '...' : str;

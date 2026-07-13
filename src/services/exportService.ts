@@ -1,9 +1,8 @@
 /**
  * PDF ve CSV Dışa Aktarma Servisi
- * jsPDF + jspdf-autotable kullanır — ücretsiz, client-side
+ * jsPDF + html2canvas (jsPDF'in dahili .html() API'si) kullanır — ücretsiz, client-side
  */
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import type { Task, User } from '../types';
@@ -27,8 +26,41 @@ function getUserName(userId: string, users: User[]): string {
   return user?.fullName ?? userId.slice(0, 8) + '...';
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Marka paleti (bkz. src/index.css — Midnight Slate & Satin Gold)
+const OBSIDIAN = '#161513';
+const SATIN_GOLD = '#C5A059';
+const STATUS_HEX: Record<Task['status'], string> = {
+  ASSIGNED: '#64748B',
+  PENDING_DELEGATION: '#B48F46',
+  IN_PROGRESS: OBSIDIAN,
+  BLOCKED: '#DC2626',
+  AWAITING_APPROVAL: '#B45309',
+  COMPLETED: '#047857',
+  CANCELLED: '#94A3B8',
+  CRISIS: '#DC2626',
+};
+
 /**
- * Görevleri PDF olarak dışa aktar
+ * Görevleri PDF olarak dışa aktar.
+ *
+ * NOT: jsPDF'in yerleşik özel-font gömme/subsetting mekanizması (addFont +
+ * otomatik glyph subset), üretilen font'un cmap/maxp tablolarını tutarsız
+ * bırakan bilinen, çözülmemiş bir hataya sahiptir (bkz. jsPDF #3850) — bu da
+ * "İ", "ş", "ğ" gibi Türkçe'ye özgü harflerin PDF çıktısında bozuk/eksik
+ * görünmesine yol açıyordu. Bunu tamamen atlatmak için rapor içeriği gerçek
+ * bir DOM/CSS parçası olarak oluşturulup jsPDF'in `.html()` API'siyle
+ * (html2canvas üzerinden, taşıyıcı zaten bir bağımlılık) render ediliyor —
+ * metin tarayıcının kendi font motoruyla çizildiği için Türkçe karakterler
+ * garanti doğru çıkar. Yalnızca sayfa altbilgisi (yalnızca Latin-1 kapsamında
+ * "ö" içerir) jsPDF'in yerleşik "helvetica" fontuyla çiziliyor.
  */
 export async function exportTasksToPDF(
   tasks: Task[],
@@ -38,94 +70,111 @@ export async function exportTasksToPDF(
   const filtered = getFilteredTasks(tasks, filter);
   const now = new Date();
 
-  const doc = new jsPDF({
-    orientation: 'landscape',
-    unit: 'mm',
-    format: 'a4',
-  });
-
-  // Üst bilgi
-  doc.setFillColor(22, 21, 19); // #161513
-  doc.rect(0, 0, 297, 22, 'F');
-
-  doc.setTextColor(197, 160, 89); // #C5A059 — satin gold
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('MAKAM', 14, 14);
-
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Executive Management System — Talimat Raporu', 55, 10);
-  doc.text(`Oluşturma: ${format(now, 'd MMMM yyyy HH:mm', { locale: tr })}`, 55, 16);
-
-  if (filter.from || filter.to) {
-    const range = `Aralık: ${filter.from ? format(filter.from, 'd MMM yyyy', { locale: tr }) : '—'} — ${filter.to ? format(filter.to, 'd MMM yyyy', { locale: tr }) : '—'}`;
-    doc.text(range, 180, 13);
-  }
-
-  // Özet istatistikler
-  doc.setTextColor(22, 21, 19);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-
   const completed = filtered.filter(t => t.status === 'COMPLETED').length;
   const inProgress = filtered.filter(t => t.status === 'IN_PROGRESS').length;
   const blocked = filtered.filter(t => t.status === 'BLOCKED').length;
 
-  doc.text(`Toplam: ${filtered.length} talimat`, 14, 30);
-  doc.text(`Tamamlanan: ${completed}`, 60, 30);
-  doc.text(`İşlemdeki: ${inProgress}`, 100, 30);
-  doc.text(`Engelli: ${blocked}`, 140, 30);
+  const summaryChips: Array<{ label: string; value: number; color: string }> = [
+    { label: 'TOPLAM TALİMAT', value: filtered.length, color: OBSIDIAN },
+    { label: 'TAMAMLANAN', value: completed, color: STATUS_HEX.COMPLETED },
+    { label: 'İŞLEMDEKİ', value: inProgress, color: STATUS_HEX.IN_PROGRESS },
+    { label: 'ENGELLİ', value: blocked, color: STATUS_HEX.BLOCKED },
+  ];
 
-  // Tablo
-  autoTable(doc, {
-    startY: 36,
-    head: [['#', 'Başlık', 'Durum', 'Öncelik', 'Sorumlu', 'Oluşturulma', 'Bitiş', 'Alt Görev']],
-    body: filtered.map((task, idx) => [
-      idx + 1,
-      task.title.length > 45 ? task.title.slice(0, 42) + '...' : task.title,
-      STATUS_LABELS[task.status] ?? task.status,
-      PRIORITY_LABELS[task.priority] ?? task.priority,
-      getUserName(task.assigneeId, users),
-      format(task.createdAt, 'd MMM yyyy', { locale: tr }),
-      format(task.deadline, 'd MMM yyyy', { locale: tr }),
-      task.parentId ? 'Evet' : 'Hayır',
-    ]),
-    styles: {
-      fontSize: 8,
-      cellPadding: 3,
-      font: 'helvetica',
-    },
-    headStyles: {
-      fillColor: [22, 21, 19],
-      textColor: [197, 160, 89],
-      fontStyle: 'bold',
-      fontSize: 8,
-    },
-    alternateRowStyles: {
-      fillColor: [248, 248, 247],
-    },
-    columnStyles: {
-      0: { cellWidth: 8, halign: 'center' },
-      1: { cellWidth: 70 },
-      2: { cellWidth: 28 },
-      3: { cellWidth: 20 },
-      4: { cellWidth: 35 },
-      5: { cellWidth: 24 },
-      6: { cellWidth: 24 },
-      7: { cellWidth: 16, halign: 'center' },
-    },
-  });
+  const rangeLabel = (filter.from || filter.to)
+    ? `Aralık: ${filter.from ? format(filter.from, 'd MMM yyyy', { locale: tr }) : '—'} — ${filter.to ? format(filter.to, 'd MMM yyyy', { locale: tr }) : '—'}`
+    : '';
 
-  // Alt bilgi
-  const pageCount = (doc as any).internal.getNumberOfPages();
+  const rowsHtml = filtered.map((task, idx) => {
+    const title = task.title.length > 60 ? task.title.slice(0, 57) + '...' : task.title;
+    return `
+      <tr style="background:${idx % 2 === 1 ? '#F9F8F6' : '#FFFFFF'};">
+        <td style="padding:7px 8px;color:#96938A;text-align:center;font-variant-numeric:tabular-nums;">${idx + 1}</td>
+        <td style="padding:7px 8px;color:#2C2B29;font-weight:500;">${escapeHtml(title)}</td>
+        <td style="padding:7px 8px;color:${STATUS_HEX[task.status] ?? '#2C2B29'};font-weight:600;">${escapeHtml(STATUS_LABELS[task.status] ?? task.status)}</td>
+        <td style="padding:7px 8px;color:#2C2B29;">${escapeHtml(PRIORITY_LABELS[task.priority] ?? task.priority)}</td>
+        <td style="padding:7px 8px;color:#2C2B29;">${escapeHtml(getUserName(task.assigneeId, users))}</td>
+        <td style="padding:7px 8px;color:#57544E;font-variant-numeric:tabular-nums;">${format(task.createdAt, 'd MMM yyyy', { locale: tr })}</td>
+        <td style="padding:7px 8px;color:#57544E;font-variant-numeric:tabular-nums;">${format(task.deadline, 'd MMM yyyy', { locale: tr })}</td>
+        <td style="padding:7px 8px;color:#2C2B29;text-align:center;">${task.parentId ? 'Evet' : 'Hayır'}</td>
+      </tr>`;
+  }).join('');
+
+  const reportHtml = `
+    <div style="width:1360px;font-family:'Inter',sans-serif;background:#FFFFFF;color:#2C2B29;">
+      <div style="background:${OBSIDIAN};border-bottom:3px solid ${SATIN_GOLD};padding:22px 28px;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="color:${SATIN_GOLD};font-size:26px;font-weight:700;letter-spacing:0.04em;">MAKAM</div>
+          <div style="color:#FFFFFF;font-size:13px;margin-top:4px;">Stratejik Yönetim Sistemi &mdash; Talimat Raporu</div>
+          <div style="color:#B8B6B0;font-size:11px;margin-top:2px;">Oluşturma: ${format(now, 'd MMMM yyyy HH:mm', { locale: tr })}</div>
+        </div>
+        ${rangeLabel ? `<div style="color:#FFFFFF;font-size:11px;">${rangeLabel}</div>` : ''}
+      </div>
+
+      <div style="display:flex;gap:12px;padding:20px 28px 4px;">
+        ${summaryChips.map(chip => `
+          <div style="display:flex;align-items:baseline;gap:8px;padding:9px 16px;border-radius:10px;background:${chip.color}14;">
+            <span style="font-size:20px;font-weight:700;color:${chip.color};font-variant-numeric:tabular-nums;">${chip.value}</span>
+            <span style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:#726F68;text-transform:uppercase;">${chip.label}</span>
+          </div>
+        `).join('')}
+      </div>
+
+      <div style="padding:16px 28px 28px;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead>
+            <tr style="background:${OBSIDIAN};">
+              <th style="padding:9px 8px;color:${SATIN_GOLD};font-size:10px;letter-spacing:0.08em;text-transform:uppercase;text-align:center;">#</th>
+              <th style="padding:9px 8px;color:${SATIN_GOLD};font-size:10px;letter-spacing:0.08em;text-transform:uppercase;text-align:left;">Başlık</th>
+              <th style="padding:9px 8px;color:${SATIN_GOLD};font-size:10px;letter-spacing:0.08em;text-transform:uppercase;text-align:left;">Durum</th>
+              <th style="padding:9px 8px;color:${SATIN_GOLD};font-size:10px;letter-spacing:0.08em;text-transform:uppercase;text-align:left;">Öncelik</th>
+              <th style="padding:9px 8px;color:${SATIN_GOLD};font-size:10px;letter-spacing:0.08em;text-transform:uppercase;text-align:left;">Sorumlu</th>
+              <th style="padding:9px 8px;color:${SATIN_GOLD};font-size:10px;letter-spacing:0.08em;text-transform:uppercase;text-align:left;">Oluşturulma</th>
+              <th style="padding:9px 8px;color:${SATIN_GOLD};font-size:10px;letter-spacing:0.08em;text-transform:uppercase;text-align:left;">Bitiş</th>
+              <th style="padding:9px 8px;color:${SATIN_GOLD};font-size:10px;letter-spacing:0.08em;text-transform:uppercase;text-align:center;">Alt Görev</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.top = '0';
+  container.style.left = '-10000px';
+  container.innerHTML = reportHtml;
+  document.body.appendChild(container);
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      doc.html(container, {
+        x: 10,
+        y: 10,
+        width: 277,
+        windowWidth: 1360,
+        autoPaging: 'text',
+        html2canvas: { scale: 2, backgroundColor: '#FFFFFF' },
+        callback: () => resolve(),
+      }).catch(reject);
+    });
+  } finally {
+    document.body.removeChild(container);
+  }
+
+  // Sayfa altbilgisi — yerleşik helvetica yeterlidir (yalnızca Latin-1
+  // kapsamındaki "ö" harfini içerir).
+  const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
-    doc.setTextColor(150);
+    doc.setTextColor(150, 147, 138);
     doc.text(
-      `Makam Executive — Gizli — Sayfa ${i} / ${pageCount}`,
+      `MAKAM Stratejik Yönetim — Gizli — Sayfa ${i} / ${pageCount}`,
       297 / 2,
       doc.internal.pageSize.getHeight() - 5,
       { align: 'center' }
@@ -147,7 +196,7 @@ export function exportTasksToCSV(
   const filtered = getFilteredTasks(tasks, filter);
 
   const headers = ['ID', 'Başlık', 'Açıklama', 'Durum', 'Öncelik', 'Sorumlu', 'Oluşturan', 'Oluşturulma', 'Bitiş', 'Alt Görev'];
-  
+
   const rows = filtered.map(task => [
     task.id,
     `"${task.title.replace(/"/g, '""')}"`,
@@ -162,9 +211,9 @@ export function exportTasksToCSV(
   ]);
 
   const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
-  
+
   const link = document.createElement('a');
   link.href = url;
   link.download = `makam-rapor-${format(new Date(), 'yyyy-MM-dd')}.csv`;

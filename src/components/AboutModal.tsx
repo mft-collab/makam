@@ -15,7 +15,7 @@ export const AboutModal = ({ isOpen, onClose }: AboutModalProps) => {
         <Logo size="xl" withText={false} variant="dark" />
         
         <div className="flex flex-col gap-1">
-          <h2 className="text-2xl font-serif text-text-heading tracking-tight">MAKAM Executive Control</h2>
+          <h2 className="text-2xl font-serif text-text-heading tracking-tight">MAKAM Stratejik Yönetim</h2>
           <div className="flex items-center justify-center gap-2 mt-1">
             <span className="text-[10px] uppercase tracking-[0.22em] text-executive-gold font-medium">Sürüm v2.1.0</span>
             <span className="text-[10px] text-text-muted">•</span>
@@ -24,18 +24,18 @@ export const AboutModal = ({ isOpen, onClose }: AboutModalProps) => {
         </div>
 
         <p className="text-[13px] text-text-muted leading-relaxed max-w-sm">
-          Bu sistem, stratejik verileri minimum gecikme ve maksimum güvenlikle işlemek üzere tasarlanmış <strong className="text-text-heading font-medium">World-Class</strong> mimari üzerine inşa edilmiştir.
+          Bu sistem, stratejik verileri minimum gecikme ve maksimum güvenlikle işlemek üzere tasarlanmış <strong className="text-text-heading font-medium">dünya standartlarında</strong> bir mimari üzerine inşa edilmiştir.
         </p>
 
         <div className="w-full bg-surface-glass rounded-2xl border border-surface-border p-5 mt-2">
           <ul className="text-left flex flex-col gap-4">
             <li className="flex items-center gap-3 text-[12px] text-text-heading">
               <Zap className="w-4 h-4 text-emerald-500 shrink-0" />
-              <span><strong className="font-medium">Offline-First Engine:</strong> Zustand & IndexedDB</span>
+              <span><strong className="font-medium">Çevrimdışı Öncelikli Motor:</strong> Zustand & IndexedDB</span>
             </li>
             <li className="flex items-center gap-3 text-[12px] text-text-heading">
               <Layout className="w-4 h-4 text-blue-500 shrink-0" />
-              <span><strong className="font-medium">Quiet Luxury UI:</strong> Dinamik Gece Teması & Framer Motion</span>
+              <span><strong className="font-medium">Sessiz Lüks Arayüz:</strong> Dinamik Gece Teması & Framer Motion</span>
             </li>
             <li className="flex items-center gap-3 text-[12px] text-text-heading">
               <ShieldCheck className="w-4 h-4 text-purple-500 shrink-0" />
@@ -43,7 +43,7 @@ export const AboutModal = ({ isOpen, onClose }: AboutModalProps) => {
             </li>
             <li className="flex items-center gap-3 text-[12px] text-text-heading">
               <Smartphone className="w-4 h-4 text-amber-500 shrink-0" />
-              <span><strong className="font-medium">Cross-Platform:</strong> PWA Destekli Adaptif Mimari</span>
+              <span><strong className="font-medium">Çoklu Platform:</strong> PWA Destekli Adaptif Mimari</span>
             </li>
           </ul>
         </div>
