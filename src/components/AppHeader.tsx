@@ -120,21 +120,23 @@ export function AppHeader({
               </span>
             </div>
           )}
-          {/* Global Focus Filter Selector */}
-          <div className="flex items-center gap-2 bg-[#F5F3EF]/60 p-1.5 rounded-full border border-executive-blue/[0.04] shadow-sm select-none">
-            <Building className="w-3.5 h-3.5 text-executive-blue stroke-[1.5] flex-shrink-0" />
-            <select
-              value={globalFocusDept}
-              onChange={(e) => onGlobalFocusDeptChange(e.target.value)}
-              className="text-[9px] uppercase tracking-widest text-text-heading bg-transparent border-none outline-none font-bold cursor-pointer pr-4 focus:ring-0"
-              aria-label="Global Odak Birimi Filtresi"
-            >
-              <option value="ALL" className="bg-surface-base text-text-heading">Tüm Odaklar</option>
-              {departments.map(dept => (
-                <option key={dept} value={dept} className="bg-surface-base text-text-heading">{dept}</option>
-              ))}
-            </select>
-          </div>
+          {/* Global Focus Filter Selector — Staff panosu kişisel kapsamlıdır, birim odağı anlamsız */}
+          {user.role !== 'Staff' && (
+            <div className="flex items-center gap-2 bg-[#F5F3EF]/60 p-1.5 rounded-full border border-executive-blue/[0.04] shadow-sm select-none">
+              <Building className="w-3.5 h-3.5 text-executive-blue stroke-[1.5] flex-shrink-0" />
+              <select
+                value={globalFocusDept}
+                onChange={(e) => onGlobalFocusDeptChange(e.target.value)}
+                className="text-[9px] uppercase tracking-widest text-text-heading bg-transparent border-none outline-none font-bold cursor-pointer pr-4 focus:ring-0"
+                aria-label="Global Odak Birimi Filtresi"
+              >
+                <option value="ALL" className="bg-surface-base text-text-heading">Tüm Odaklar</option>
+                {departments.map(dept => (
+                  <option key={dept} value={dept} className="bg-surface-base text-text-heading">{dept}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <button
             onClick={handleToggleTheme}

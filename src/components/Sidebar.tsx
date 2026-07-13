@@ -56,7 +56,7 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
       className={cn(
         'flex items-center gap-4 px-3.5 py-2.5 rounded-xl transition-all duration-500 group relative border border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-gold focus-visible:ring-offset-2 focus-visible:ring-offset-[#161513]',
         activeTab === item.id
-          ? 'bg-[#C5A059]/[0.08] border-[#C5A059]/15 shadow-[0_8px_32px_rgba(197,160,89,0.05)] translate-x-1'
+          ? 'bg-executive-gold/[0.08] border-executive-gold/15 shadow-[0_8px_32px_rgba(197,160,89,0.05)] translate-x-1'
           : 'hover:bg-white/[0.03] hover:translate-x-0.5'
       )}
     >
@@ -133,7 +133,7 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
           <div className="flex flex-col overflow-hidden gap-1">
             <span className="text-[14px] font-normal text-white truncate tracking-tight leading-none font-display">{user?.fullName}</span>
             <div className="flex items-center gap-1.5 mt-1">
-              <span className="w-1 h-1 rounded-full bg-emerald-500" />
+              <span className="w-1 h-1 rounded-full bg-status-success" />
               <span className="text-[8px] text-[#D4B573] font-medium uppercase tracking-[0.22em]">{user ? ROLE_LABELS[user.role] : ''}</span>
             </div>
           </div>
@@ -145,7 +145,7 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
             onLogout();
           }}
           aria-label="Oturumu kapat"
-          className="flex items-center justify-center gap-2 px-5 py-3 text-white/40 hover:text-red-500 hover:bg-red-500/100/10 rounded-full transition-all group font-medium text-[11px] uppercase tracking-[0.16em] border border-surface-border hover:border-red-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#161513]"
+          className="flex items-center justify-center gap-2 px-5 py-3 text-white/40 hover:text-status-danger hover:bg-status-danger/10 rounded-full transition-all group font-medium text-[11px] uppercase tracking-[0.16em] border border-surface-border hover:border-status-danger/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger focus-visible:ring-offset-2 focus-visible:ring-offset-[#161513]"
         >
           <LogOut className="w-4 h-4 transition-transform group-hover:-translate-x-1" aria-hidden="true" />
           <span>Oturumu Kapat</span>

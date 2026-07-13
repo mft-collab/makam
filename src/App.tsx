@@ -25,7 +25,7 @@ const Reports = lazy(() => import('./components/Reports').then(m => ({ default: 
 const Settings = lazy(() => import('./components/Settings').then(m => ({ default: m.Settings })));
 import { Modal } from './components/ui/Modal';
 import { TaskFormModal } from './components/TaskFormModal';
-import { TaskDetails } from './components/TaskDetails';
+import { TaskDetails, TaskDetailsFooter, getPrimaryAction } from './components/TaskDetails';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { NotificationPrompt } from './components/NotificationPrompt';
 import { ExecutiveToast } from './components/ExecutiveToast';
@@ -236,6 +236,19 @@ export default function App() {
 
   // ─── Global Focus Filter (Birim Odak Filtresi) ───────────────────────────
   const [globalFocusDept, setGlobalFocusDept] = useState<string>('ALL');
+
+  // Rol bazlı ilk odak: Yönetici için varsayılan kendi birimidir. Login başına
+  // yalnızca bir kez çalışır (ref, uid'i saklar) — Firestore snapshot'ı user
+  // referansını yenilediğinde ya da kullanıcı manuel "Tüm Odaklar" seçtiğinde
+  // asla geri ezilmez.
+  const focusInitializedUidRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!user?.uid || focusInitializedUidRef.current === user.uid) return;
+    focusInitializedUidRef.current = user.uid;
+    if (user.role === 'Manager' && user.departmentId) {
+      setGlobalFocusDept(user.departmentId);
+    }
+  }, [user]);
 
   const departments = useMemo(() => {
     const depts = new Set<string>();
@@ -590,6 +603,13 @@ export default function App() {
               title="Talimat Detayı & İcra"
               size="xl"
               layoutId={selectedTask ? `task-card-${selectedTask.id}` : undefined}
+              footer={selectedTask && getPrimaryAction(selectedTask, user) ? (
+                <TaskDetailsFooter
+                  task={selectedTask}
+                  currentUser={user}
+                  onStatusChange={(status, evidence, type) => updateTaskStatus(selectedTask.id, status, evidence, type)}
+                />
+              ) : undefined}
             >
               {Boolean(selectedTask) && (
                 <TaskDetails
@@ -598,7 +618,6 @@ export default function App() {
                   users={users}
                   currentUser={user!}
                   blockers={blockers.filter(b => b.taskId === selectedTask!.id)}
-                  onStatusChange={(status, evidence, type) => selectedTask && updateTaskStatus(selectedTask.id, status, evidence, type as any)}
                   onAddBlocker={(reason) => selectedTask && addBlocker(selectedTask.id, reason)}
                   onResolveBlocker={resolveBlocker}
                   onAddSubTask={(parentId, title) => { setParentTaskId(parentId); setInitialTitle(title); setIsCreateModalOpen(true); }}
