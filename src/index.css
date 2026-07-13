@@ -42,6 +42,12 @@
   --status-success: #047857;
   --status-warning: #B45309;
   --status-danger: #DC2626;
+
+  /* Dashboard "Son 7 Gün" grafiği seri renkleri — dataviz validatöründen
+     geçirilmiş (lightness bandı, chroma tabanı, CVD ayrımı, zemin kontrastı).
+     Aydınlık zemin: #FAF8F5. */
+  --chart-created: #0284C7;   /* Yeni Talimat (Strategic Data Cyan ailesi) */
+  --chart-completed: #047857; /* İcra Edilen */
 }
 
 .dark {
@@ -71,11 +77,19 @@
   --status-success: #34D399; /* emerald-400 */
   --status-warning: #FCD34D; /* amber-300 */
   --status-danger: #F87171; /* red-400 */
+
+  /* Karanlık zemin (#0A0A09) için grafik seri adımları — aynı ton aileleri,
+     karanlık mod lightness bandına (L 0.48–0.67) çekilmiş adımlar. */
+  --chart-created: #0994D6;
+  --chart-completed: #059669;
 }
 
 @theme {
   --font-sans: "Inter", sans-serif;
   --font-display: "Outfit", sans-serif;
+  /* font-serif kullanımları tarayıcı varsayılanına düşmesin diye
+     mevcut display fontuna bağlandı (yeni font dosyası eklenmedi). */
+  --font-serif: "Outfit", "Inter", serif;
   --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
   /* Global Theme Overrides - Mapping full spectrum to Executive Palette */
@@ -117,6 +131,7 @@
   --color-executive-gold: var(--color-amber-600);
   --color-executive-gold-light: var(--color-amber-50);
   --color-executive-gold-dark: var(--color-amber-700);
+  --color-executive-gold-hover: #B38F46; /* Satin Gold hover tonu (eski hardcoded #B38F46) */
   --color-executive-blue: var(--color-executive-blue-dynamic);
   --color-brand-gold: var(--color-executive-gold);
   --color-brand-obsidian: #0E0E0D;
@@ -190,7 +205,7 @@
   }
 
   .makam-button {
-    @apply px-6 py-2.5 rounded-full font-medium transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 uppercase tracking-[0.14em] text-[8.5px];
+    @apply px-6 py-2.5 rounded-full font-medium transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 uppercase tracking-[0.14em] text-[10px];
   }
 
   .makam-button-primary {

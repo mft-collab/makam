@@ -578,7 +578,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                   ) : (
                     <div className="flex flex-col gap-2 p-3 bg-slate-50/60 border border-slate-100 rounded-xl text-[10px] text-text-muted font-normal leading-relaxed">
                       <div className="flex items-start gap-2">
-                        <AlertCircle className="w-3.5 h-3.5 text-[#C5A059] flex-shrink-0 mt-0.5 animate-pulse" />
+                        <AlertCircle className="w-3.5 h-3.5 text-executive-gold flex-shrink-0 mt-0.5 animate-pulse" />
                         <div>
                           <span className="font-semibold text-text-heading block mb-0.5">Yükleme Kılavuzu</span>
                           <span>Tarayıcınız otomatik yükleme butonunu şu an desteklemiyor olabilir. Alternatif yükleme adımları:</span>
@@ -624,13 +624,13 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                         value={slaLowVal}
                         onChange={(e) => setSlaLowVal(Math.max(1, parseInt(e.target.value) || 0))}
                         disabled={!isOnline || isSavingSla}
-                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-[#C5A059] disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
+                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
                       />
                       <select
                         value={slaLowUnit}
                         onChange={(e) => setSlaLowUnit(e.target.value as any)}
                         disabled={!isOnline || isSavingSla}
-                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-[#C5A059] disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
+                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
                       >
                         <option value="days">İş Günü</option>
                         <option value="hours">İş Saati</option>
@@ -648,13 +648,13 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                         value={slaMediumVal}
                         onChange={(e) => setSlaMediumVal(Math.max(1, parseInt(e.target.value) || 0))}
                         disabled={!isOnline || isSavingSla}
-                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-[#C5A059] disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
+                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
                       />
                       <select
                         value={slaMediumUnit}
                         onChange={(e) => setSlaMediumUnit(e.target.value as any)}
                         disabled={!isOnline || isSavingSla}
-                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-[#C5A059] disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
+                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
                       >
                         <option value="days">İş Günü</option>
                         <option value="hours">İş Saati</option>
@@ -672,13 +672,13 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                         value={slaHighVal}
                         onChange={(e) => setSlaHighVal(Math.max(1, parseInt(e.target.value) || 0))}
                         disabled={!isOnline || isSavingSla}
-                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-[#C5A059] disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
+                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
                       />
                       <select
                         value={slaHighUnit}
                         onChange={(e) => setSlaHighUnit(e.target.value as any)}
                         disabled={!isOnline || isSavingSla}
-                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-[#C5A059] disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
+                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
                       >
                         <option value="days">İş Günü</option>
                         <option value="hours">İş Saati</option>
@@ -696,13 +696,13 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                         value={slaUrgentVal}
                         onChange={(e) => setSlaUrgentVal(Math.max(1, parseInt(e.target.value) || 0))}
                         disabled={!isOnline || isSavingSla}
-                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-[#C5A059] disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
+                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
                       />
                       <select
                         value={slaUrgentUnit}
                         onChange={(e) => setSlaUrgentUnit(e.target.value as any)}
                         disabled={!isOnline || isSavingSla}
-                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-[#C5A059] disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
+                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
                       >
                         <option value="days">İş Günü</option>
                         <option value="hours">İş Saati</option>
@@ -792,9 +792,9 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                         label={<><RotateCcw className="w-3.5 h-3.5 stroke-[2]" />Yedekten Dön</>}
                       />
 
-                      <div className="flex items-start gap-2 p-2.5 bg-[#C5A059]/[0.05] border border-[#C5A059]/15 rounded-xl">
-                        <AlertCircle className="w-3.5 h-3.5 text-[#C5A059] flex-shrink-0 mt-0.5 stroke-[1.5]" />
-                        <p className="text-[9px] text-[#C5A059] font-medium uppercase tracking-[0.2em] leading-relaxed">
+                      <div className="flex items-start gap-2 p-2.5 bg-executive-gold/[0.05] border border-executive-gold/15 rounded-xl">
+                        <AlertCircle className="w-3.5 h-3.5 text-executive-gold flex-shrink-0 mt-0.5 stroke-[1.5]" />
+                        <p className="text-[9px] text-executive-gold font-medium uppercase tracking-[0.2em] leading-relaxed">
                           Bu işlem mevcut verilerin üzerine yazacaktır. Kayıtlar toplu halde (chunk) yazılır — işlem yarıda kesilirse veritabanı kısmen güncellenmiş durumda kalabilir. Geri yüklemeden önce güncel bir yedek (Export) almanız önerilir.
                         </p>
                       </div>

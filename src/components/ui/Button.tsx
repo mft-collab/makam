@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '../../lib/utils';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'gold' | 'success';
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
 }
@@ -12,8 +12,11 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const variants = {
       primary: 'makam-button-primary',
       secondary: 'makam-button-secondary',
-      danger: 'bg-red-50/50 text-red-600 hover:bg-red-500/10 border border-red-100/50 shadow-sm',
+      // Tema-duyarlı: hem açık hem koyu modda çalışan opacity tabanlı kırmızı
+      danger: 'bg-red-500/10 text-red-600 hover:bg-red-500/15 border border-red-500/20 shadow-sm',
       ghost: 'bg-transparent hover:bg-executive-blue/[0.02] text-text-muted hover:text-executive-blue border-transparent',
+      gold: 'bg-executive-gold text-white hover:bg-executive-gold-hover shadow-lg shadow-executive-gold/20',
+      success: 'bg-emerald-600 text-white hover:bg-emerald-600/90 shadow-lg shadow-emerald-600/10',
     };
 
     const sizes = {

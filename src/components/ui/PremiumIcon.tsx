@@ -60,7 +60,7 @@ export const PremiumIcon = ({
           "will-change-transform transform-gpu backface-visibility-hidden retina-perfect", // GPU acceleration for subpixel aliasing
           sizes[size],
           active 
-            ? "bg-gradient-to-br from-white to-[#F5F3EF] text-executive-blue border-white/70 shadow-[inset_0_1.5px_2.5px_rgba(255,255,255,0.85),inset_0_-1px_1.5px_rgba(0,0,0,0.1),0_10px_24px_rgba(22,21,19,0.12)] ring-1 ring-[#C5A059]/20" 
+            ? "bg-gradient-to-br from-white to-[#F5F3EF] text-executive-blue border-white/70 shadow-[inset_0_1.5px_2.5px_rgba(255,255,255,0.85),inset_0_-1px_1.5px_rgba(0,0,0,0.1),0_10px_24px_rgba(22,21,19,0.12)] ring-1 ring-executive-gold/20" 
             : variants[variant],
           className
         )}
@@ -85,7 +85,7 @@ export const PremiumIcon = ({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
               style={{ clipPath: 'url(#appleIconSquircle)' }}
-              className="absolute inset-0 bg-[#C5A059]/10 blur-sm -z-0"
+              className="absolute inset-0 bg-executive-gold/10 blur-sm -z-0"
             />
           )}
         </AnimatePresence>

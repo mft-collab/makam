@@ -1,8 +1,92 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
+
+/* ── Modal Stack ─────────────────────────────────────────────────────────
+   Birden fazla modal iç içe açıldığında (ör. detay modalı içindeki silme
+   onayı):
+   - Escape ve focus-trap yalnızca en üstteki (son açılan) modal tarafından
+     yönetilir,
+   - body scroll kilidi yalnızca stack tamamen boşalınca kaldırılır
+     (ref-count mantığı). */
+let modalStack: symbol[] = [];
+
+interface ModalBehaviorOptions {
+  isOpen: boolean;
+  onClose: () => void;
+  /** Focus-trap'in içinde dolaşacağı modal paneli */
+  containerRef: React.RefObject<HTMLElement | null>;
+  /** Modal açıldığında odaklanılacak eleman (genellikle kapat butonu) */
+  initialFocusRef?: React.RefObject<HTMLElement | null>;
+}
+
+/**
+ * Ortak modal davranışı: Escape ile kapatma, focus-trap, body scroll kilidi
+ * ve açılışta odaklama. `ui/Modal` shell'ini kullanmayan tam-özel modallar
+ * (CertificateModal, WarningModal) da bu hook'u paylaşır.
+ */
+export const useModalBehavior = ({ isOpen, onClose, containerRef, initialFocusRef }: ModalBehaviorOptions) => {
+  const idRef = useRef<symbol | null>(null);
+  if (idRef.current === null) idRef.current = Symbol('modal');
+
+  // onClose her render'da değişebilir; listener'ı yeniden bağlamamak için ref'te tut
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const id = idRef.current!;
+    modalStack.push(id);
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Yalnızca en üstteki modal klavye olaylarını yönetir
+      if (modalStack[modalStack.length - 1] !== id) return;
+
+      if (e.key === 'Escape') {
+        onCloseRef.current();
+        return;
+      }
+
+      // Focus Trap: Tab tuşu modal içinde dolaşır, dışına çıkmaz
+      if (e.key === 'Tab' && containerRef.current) {
+        const focusable = containerRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+        );
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last?.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first?.focus();
+          }
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+
+    const focusTimer = window.setTimeout(() => initialFocusRef?.current?.focus(), 50);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener('keydown', handleKeyDown);
+      modalStack = modalStack.filter(entry => entry !== id);
+      // Scroll kilidi yalnızca son modal kapanınca kalkar
+      if (modalStack.length === 0) document.body.style.overflow = '';
+    };
+    // containerRef ve initialFocusRef sabit ref nesneleridir
+  }, [isOpen]);
+};
 
 interface ModalProps {
   isOpen: boolean;
@@ -27,50 +111,8 @@ export const Modal = ({ isOpen, onClose, title, children, footer, size = 'md', l
     setMounted(true);
   }, []);
 
-  // Modal açıldığında kapat butonuna odaklan
-  useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => closeButtonRef.current?.focus(), 50);
-    }
-  }, [isOpen]);
-
-  // Escape tuşu ile kapat
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') onClose();
-
-    // Focus Trap: Tab tuşu modal içinde dolaşır, dışına çıkmaz
-    if (e.key === 'Tab' && modalRef.current) {
-      const focusable = modalRef.current.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
-      );
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-
-      if (e.shiftKey) {
-        if (document.activeElement === first) {
-          e.preventDefault();
-          last?.focus();
-        }
-      } else {
-        if (document.activeElement === last) {
-          e.preventDefault();
-          first?.focus();
-        }
-      }
-    }
-  }, [onClose]);
-
-  useEffect(() => {
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
-      // Modal açıkken arka planı scroll'dan kilitle
-      document.body.style.overflow = 'hidden';
-    }
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
-    };
-  }, [isOpen, handleKeyDown]);
+  // Escape, focus-trap, scroll-lock ve açılış odağı (paylaşılan davranış)
+  useModalBehavior({ isOpen, onClose, containerRef: modalRef, initialFocusRef: closeButtonRef });
 
   const sizes: Record<string, string> = {
     sm: 'max-w-md',
@@ -140,7 +182,7 @@ export const Modal = ({ isOpen, onClose, title, children, footer, size = 'md', l
               </div>
 
               {footer && (
-                <div className="px-8 py-6 border-t border-makam-border/5 bg-surface-border/20/30 shrink-0">
+                <div className="px-8 py-6 border-t border-makam-border/5 bg-surface-border/30 shrink-0">
                   {footer}
                 </div>
               )}

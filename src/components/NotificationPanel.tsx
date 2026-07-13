@@ -74,7 +74,7 @@ export function NotificationPanel({
                 <div className={cn(
                   'w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5',
                   isCrisis  ? 'bg-red-50 text-red-500' :
-                  isWarning ? 'bg-[#C5A059]/10 text-[#C5A059]' :
+                  isWarning ? 'bg-executive-gold/10 text-executive-gold' :
                   'bg-executive-blue/5 text-executive-blue'
                 )}>
                   <AlertCircle className="w-3 h-3" />
@@ -84,7 +84,7 @@ export function NotificationPanel({
                     <span className={cn(
                       'text-[7px] font-bold uppercase tracking-[0.3em] px-1.5 py-0.5 rounded-full',
                       isCrisis  ? 'bg-red-100 text-red-700' :
-                      isWarning ? 'bg-[#C5A059]/10 text-[#C5A059]' :
+                      isWarning ? 'bg-executive-gold/10 text-executive-gold' :
                       'bg-executive-blue/5 text-executive-blue'
                     )}>
                       {isCrisis ? '🚨 KRİZ' : isWarning ? '⚠ UYARI' : 'ℹ BİLGİ'}

@@ -202,7 +202,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
       {/* ── Header ───────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-executive-blue/[0.04]">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-[#C5A059] flex items-center justify-center shadow-lg">
+          <div className="w-8 h-8 rounded-xl bg-executive-gold flex items-center justify-center shadow-lg">
             <Building className="w-4 h-4 text-white stroke-[1.5]" />
           </div>
           <div>
@@ -237,7 +237,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
           {isAdmin && (
             <button
               onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 h-9 rounded-full bg-[#C5A059] text-white text-[9px] font-medium uppercase tracking-[0.3em] shadow-lg shadow-[#C5A059]/20 hover:shadow-xl hover:bg-[#B38F46] hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
+              className="flex items-center gap-1.5 px-4 h-9 rounded-full bg-executive-gold text-white text-[9px] font-medium uppercase tracking-[0.3em] shadow-lg shadow-executive-gold/20 hover:shadow-xl hover:bg-executive-gold-hover hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
             >
               <UserPlus className="w-3.5 h-3.5 stroke-[2]" />
               <span className="hidden sm:block">Yeni Kadro</span>
@@ -530,7 +530,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
               {modalTab === 'tasks' ? (
                 <div>
                   <div className="flex items-center gap-2 mb-3 mt-1">
-                    <Target className="w-3.5 h-3.5 text-[#C5A059]" />
+                    <Target className="w-3.5 h-3.5 text-executive-gold" />
                     <span className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.35em]">
                       Sorumluluk Alanı — {userAllTasks.length} Talimat
                     </span>
@@ -584,7 +584,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
               ) : (
                 <div>
                   <div className="flex items-center gap-2 mb-3 mt-1">
-                    <History className="w-3.5 h-3.5 text-[#C5A059]" />
+                    <History className="w-3.5 h-3.5 text-executive-gold" />
                     <span className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.35em]">
                       Denetim İzi — {userLogs.length} Kayıt
                     </span>

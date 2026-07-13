@@ -106,7 +106,7 @@ export const TaskBoard = ({
           {/* Add task button */}
           <button
             onClick={onAddTask}
-            className="flex items-center gap-1.5 px-4 h-9 rounded-full bg-[#C5A059] text-white text-[9px] font-semibold uppercase tracking-[0.16em] shadow-lg shadow-[#C5A059]/15 hover:shadow-xl hover:bg-[#B38F46] hover:scale-[1.01] active:scale-[0.98] transition-all duration-300"
+            className="flex items-center gap-1.5 px-4 h-9 rounded-full bg-executive-gold text-white text-[9px] font-semibold uppercase tracking-[0.16em] shadow-lg shadow-executive-gold/15 hover:shadow-xl hover:bg-executive-gold-hover hover:scale-[1.01] active:scale-[0.98] transition-all duration-300"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2]" />
             <span className="hidden sm:block">Yeni Operasyon</span>
@@ -235,7 +235,7 @@ export const TaskBoard = ({
                     'w-2 h-2 rounded-full mt-1.5 flex-shrink-0',
                     task.status === 'COMPLETED'       ? 'bg-emerald-500' :
                     task.status === 'BLOCKED'         ? 'bg-red-500' :
-                    task.status === 'AWAITING_APPROVAL'? 'bg-[#C5A059]' :
+                    task.status === 'AWAITING_APPROVAL'? 'bg-executive-gold' :
                     task.status === 'IN_PROGRESS'     ? 'bg-executive-blue' :
                     'bg-slate-300'
                   )} />
@@ -389,7 +389,7 @@ export const TaskBoard = ({
 
                       {/* Arrow */}
                       <td className="px-4 py-3 text-right">
-                        <button className="w-7 h-7 rounded-full bg-makam-glass border border-executive-blue/[0.05] flex items-center justify-center text-text-tertiary group-hover:bg-[#C5A059] group-hover:text-white group-hover:border-transparent transition-all duration-300 shadow-sm ml-auto">
+                        <button className="w-7 h-7 rounded-full bg-makam-glass border border-executive-blue/[0.05] flex items-center justify-center text-text-tertiary group-hover:bg-executive-gold group-hover:text-white group-hover:border-transparent transition-all duration-300 shadow-sm ml-auto">
                           <ArrowRight className="w-3 h-3 stroke-[2]" />
                         </button>
                       </td>

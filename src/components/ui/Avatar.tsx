@@ -31,7 +31,7 @@ export const Avatar = ({ name, photoURL, size = 'md', className, ring = false }:
         container,
         'rounded-full flex-shrink-0 overflow-hidden',
         'border border-executive-blue/[0.06] shadow-inner',
-        ring && 'ring-2 ring-white ring-offset-1',
+        ring && 'ring-2 ring-surface-elevated ring-offset-1',
         className
       )}
     >

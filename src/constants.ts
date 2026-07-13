@@ -28,10 +28,10 @@ export const IDLE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export const STATUS_COLORS: Record<TaskStatus, string> = {
   ASSIGNED: 'bg-executive-blue/[0.03] text-executive-blue border-executive-blue/[0.08]',
-  PENDING_DELEGATION: 'bg-[#C5A059]/[0.05] text-[#C5A059] border-[#C5A059]/[0.15]',
+  PENDING_DELEGATION: 'bg-executive-gold/[0.05] text-executive-gold border-executive-gold/[0.15]',
   IN_PROGRESS: 'bg-executive-blue/[0.06] text-executive-blue border-executive-blue/[0.15]',
   BLOCKED: 'bg-red-500/[0.03] text-red-500 border-red-500/10',
-  AWAITING_APPROVAL: 'bg-[#C5A059]/[0.08] text-[#C5A059] border-[#C5A059]/0.25',
+  AWAITING_APPROVAL: 'bg-executive-gold/[0.08] text-executive-gold border-executive-gold/25',
   COMPLETED: 'bg-emerald-500/[0.03] text-emerald-600 border-emerald-500/10',
   CANCELLED: 'bg-gray-400/[0.04] text-text-muted border-surface-border/50',
   CRISIS: 'bg-red-500/[0.06] text-red-600 border-red-500/15',
@@ -40,6 +40,6 @@ export const STATUS_COLORS: Record<TaskStatus, string> = {
 export const PRIORITY_COLORS: Record<TaskPriority, string> = {
   Low: 'bg-gray-400/[0.04] text-slate-400 border-surface-border/50',
   Medium: 'bg-executive-blue/[0.04] text-executive-blue/80 border-executive-blue/[0.08]',
-  High: 'bg-[#C5A059]/[0.05] text-[#C5A059] border-[#C5A059]/0.15',
+  High: 'bg-executive-gold/[0.05] text-executive-gold border-executive-gold/15',
   Urgent: 'bg-red-500/[0.05] text-red-600 border-red-500/10',
 };

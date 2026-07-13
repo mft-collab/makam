@@ -77,7 +77,7 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
           'flex flex-col gap-3 p-3.5 rounded-2xl border cursor-pointer group transition-all duration-300',
           !blocker.isResolved
             ? cn(
-                'bg-red-50/30 border-red-100/60 hover:bg-red-500/10/50 hover:shadow-sm',
+                'bg-red-50/30 border-red-100/60 hover:bg-red-500/10 hover:shadow-sm',
                 isUrgentOrHigh ? 'animate-makam-flash border-red-300/80 hover:border-red-400' : 'border-red-200/50 hover:border-red-300/50'
               )
             : 'bg-makam-glass border-surface-border opacity-60 grayscale hover:grayscale-0 hover:opacity-100 hover:bg-makam-glass'

@@ -56,7 +56,7 @@ export function ReloadPrompt() {
              {needRefresh && (
                  <button 
                    onClick={() => updateServiceWorker(true)}
-                   className="w-full h-11 bg-[#C5A059] text-white rounded-xl text-[13px] font-semibold uppercase tracking-widest hover:bg-[#B38F46] transition-all shadow-lg shadow-[#C5A059]/20 active:scale-95"
+                   className="w-full h-11 bg-executive-gold text-white rounded-xl text-[13px] font-semibold uppercase tracking-widest hover:bg-executive-gold-hover transition-all shadow-lg shadow-executive-gold/20 active:scale-95"
                  >
                  Güncelle ve Yeniden Başlat
                </button>

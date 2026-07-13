@@ -18,8 +18,8 @@ export const SettingsCard = ({ title, description, icon: Icon, accentColor = 'sl
   const colors = {
     slate: { icon: 'bg-executive-blue/5 text-executive-blue', border: 'border-surface-border' },
     red:   { icon: 'bg-red-50 text-red-600',         border: 'border-red-100/60 bg-red-50/20' },
-    amber: { icon: 'bg-[#C5A059]/10 text-[#C5A059]', border: 'border-[#C5A059]/20 bg-[#C5A059]/[0.03]' },
-    gold:  { icon: 'bg-[#C5A059]/10 text-[#C5A059]', border: 'border-[#C5A059]/20' },
+    amber: { icon: 'bg-executive-gold/10 text-executive-gold', border: 'border-executive-gold/20 bg-executive-gold/[0.03]' },
+    gold:  { icon: 'bg-executive-gold/10 text-executive-gold', border: 'border-executive-gold/20' },
   }[accentColor];
 
   return (
@@ -70,10 +70,10 @@ export interface ActionButtonProps {
 
 export const ActionButton = ({ onClick, label, htmlFor, variant = 'primary', disabled, className }: ActionButtonProps) => {
   const styles = {
-    primary:   'bg-[#C5A059] text-white hover:bg-[#B38F46] shadow-lg shadow-[#C5A059]/20',
-    secondary: 'bg-makam-glass text-[#C5A059] border border-[#C5A059]/[0.15] hover:bg-surface-elevated hover:shadow-sm',
+    primary:   'bg-executive-gold text-white hover:bg-executive-gold-hover shadow-lg shadow-executive-gold/20',
+    secondary: 'bg-makam-glass text-executive-gold border border-executive-gold/[0.15] hover:bg-surface-elevated hover:shadow-sm',
     danger:    'bg-surface-elevated text-red-600 border border-red-100 hover:bg-red-500/10',
-    warning:   'bg-[#C5A059]/10 text-[#C5A059] border border-[#C5A059]/20 hover:bg-[#C5A059]/20',
+    warning:   'bg-executive-gold/10 text-executive-gold border border-executive-gold/20 hover:bg-executive-gold/20',
   }[variant];
 
   const cls = cn(

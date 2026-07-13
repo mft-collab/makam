@@ -50,6 +50,15 @@ function isActive(task: Task) {
   return task.status !== 'COMPLETED' && task.status !== 'CANCELLED';
 }
 
+/**
+ * Görev kriz (SLA ihlali) durumunda mı: hâlâ aktif (icra edilmemiş ve
+ * lağvedilmemiş) olduğu hâlde mühleti geçmiş görevler.
+ * Dashboard'daki tüm "gecikme/kriz" sayımları için tek otoriter tanım.
+ */
+export function isTaskInCrisis(task: Task, now: number): boolean {
+  return isActive(task) && now > task.deadline;
+}
+
 export function calculateTaskRisk(task: Task, allTasks: Task[], now = Date.now()): TaskRiskProfile {
   if (!isActive(task)) {
     return { task, score: 0, level: 'low', reasons: ['Operasyon sonlanmış'] };
@@ -133,7 +142,7 @@ export function getInterventionQueue(tasks: Task[], users: User[], now = Date.no
       let lane: InterventionItem['lane'] = 'deadline';
       let action = 'Yakından takip et';
 
-      if (task.status === 'CRISIS' || msToDeadline < 0) {
+      if (task.status === 'CRISIS' || isTaskInCrisis(task, now)) {
         lane = 'crisis';
         action = 'Kriz müdahalesi başlat';
       } else if (task.status === 'BLOCKED') {
@@ -168,7 +177,7 @@ export function getUserPerformanceProfiles(tasks: Task[], users: User[], now = D
     const onTime = completed.filter(t => (t.completedAt ?? t.updatedAt) <= t.deadline).length;
 
     const activeCount = active.length;
-    const overdueCount = active.filter(t => t.deadline < now || t.status === 'CRISIS').length;
+    const overdueCount = active.filter(t => isTaskInCrisis(t, now) || t.status === 'CRISIS').length;
     const blockedCount = active.filter(t => t.status === 'BLOCKED').length;
     const reviewCount = active.filter(t => t.status === 'AWAITING_APPROVAL').length;
     const onTimeCompletionRate = completed.length === 0 ? 100 : Math.round((onTime / completed.length) * 100);

@@ -146,13 +146,13 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
                   >
                     {/* Icon */}
                     <div className="relative mt-2">
-                      <div className="w-16 h-16 bg-[#C5A059] rounded-2xl flex items-center justify-center shadow-lg shadow-[#C5A059]/20">
+                      <div className="w-16 h-16 bg-executive-gold rounded-2xl flex items-center justify-center shadow-lg shadow-executive-gold/20">
                         <Bell className="w-8 h-8 text-white stroke-[1.5]" />
                       </div>
                       <motion.div
                         animate={{ scale: [1, 1.4, 1], opacity: [0.6, 0, 0.6] }}
                         transition={{ duration: 2, repeat: Infinity }}
-                        className="absolute inset-0 bg-[#C5A059]/10 rounded-2xl"
+                        className="absolute inset-0 bg-executive-gold/10 rounded-2xl"
                       />
                     </div>
 
@@ -186,7 +186,7 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
                     <div className="flex flex-col gap-2 w-full">
                       <button
                         onClick={handleActivate}
-                        className="w-full h-11 bg-[#C5A059] text-white text-[11px] font-medium uppercase tracking-[0.3em] rounded-xl hover:bg-[#B38F46] active:scale-[0.98] transition-all shadow-lg shadow-[#C5A059]/20"
+                        className="w-full h-11 bg-executive-gold text-white text-[11px] font-medium uppercase tracking-[0.3em] rounded-xl hover:bg-executive-gold-hover active:scale-[0.98] transition-all shadow-lg shadow-executive-gold/20"
                       >
                         Bildirimlere İzin Ver
                       </button>

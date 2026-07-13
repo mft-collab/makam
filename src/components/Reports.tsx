@@ -313,7 +313,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
               <h3 className="text-[13px] font-medium text-executive-blue font-serif tracking-tight">SLA Uyum Trendi</h3>
               <p className="text-[9px] text-text-tertiary uppercase tracking-[0.3em] mt-0.5">Son 14 Gün</p>
             </div>
-            <TrendingUp className="w-4 h-4 text-[#C5A059] stroke-[1.5]" />
+            <TrendingUp className="w-4 h-4 text-executive-gold stroke-[1.5]" />
           </div>
           <div className="h-[180px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -483,7 +483,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                     <span className={cn(
                       'text-[9px] font-bold px-1.5 py-0.5 rounded border',
                       m.slaRate > 80 ? 'text-emerald-600 border-emerald-100 bg-emerald-50/30' :
-                      m.slaRate > 50 ? 'text-[#C5A059] border-[#C5A059]/20 bg-[#C5A059]/10' :
+                      m.slaRate > 50 ? 'text-executive-gold border-executive-gold/20 bg-executive-gold/10' :
                       'text-red-500 border-red-100 bg-red-50/30'
                     )}>SLA %{m.slaRate}</span>
                   </div>
@@ -496,14 +496,14 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                         className={cn(
                           'h-full rounded-full',
                           m.completionRate > 70 ? 'bg-emerald-500' :
-                          m.completionRate > 40 ? 'bg-[#C5A059]' : 'bg-red-500'
+                          m.completionRate > 40 ? 'bg-executive-gold' : 'bg-red-500'
                         )}
                       />
                     </div>
                     <span className={cn(
                       'text-[10px] font-medium tabular-nums w-8 text-right',
                       m.completionRate > 70 ? 'text-emerald-600' :
-                      m.completionRate > 40 ? 'text-[#C5A059]' : 'text-red-500'
+                      m.completionRate > 40 ? 'text-executive-gold' : 'text-red-500'
                     )}>%{m.completionRate}</span>
                   </div>
                 </div>
@@ -602,7 +602,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                       <span className={cn(
                         'text-[12px] font-medium px-3 py-1 rounded-lg border tabular-nums',
                         m.slaRate > 80 ? 'text-emerald-600 bg-emerald-50 border-emerald-100/60' :
-                        m.slaRate > 50 ? 'text-[#C5A059] bg-[#C5A059]/10 border-[#C5A059]/20' :
+                        m.slaRate > 50 ? 'text-executive-gold bg-executive-gold/10 border-executive-gold/20' :
                         'text-red-600 bg-red-50 border-red-100/60'
                       )}>
                         %{m.slaRate}
@@ -616,7 +616,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                           <span className={cn(
                             'text-[18px] font-light tabular-nums tracking-tight font-serif',
                             m.completionRate > 70 ? 'text-emerald-600' :
-                            m.completionRate > 40 ? 'text-[#C5A059]' : 'text-red-600'
+                            m.completionRate > 40 ? 'text-executive-gold' : 'text-red-600'
                           )}>
                             %{m.completionRate}
                           </span>
@@ -628,7 +628,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                               className={cn(
                                 'h-full rounded-full',
                                 m.completionRate > 70 ? 'bg-emerald-500' :
-                                m.completionRate > 40 ? 'bg-[#C5A059]' : 'bg-red-500'
+                                m.completionRate > 40 ? 'bg-executive-gold' : 'bg-red-500'
                               )}
                             />
                           </div>
