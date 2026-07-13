@@ -141,7 +141,7 @@ export function AppHeader({
             </div>
           )}
 
-          <Tooltip content="Çalışma kuralları, mühlet disiplinleri ve belge koşulları">
+          <Tooltip content="Çalışma kuralları, mühlet disiplinleri ve belge koşulları" side="bottom">
             <button
               onClick={() => setIsGuideOpen(true)}
               aria-label="Kılavuzu aç"

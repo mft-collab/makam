@@ -140,29 +140,57 @@ export async function exportTasksToPDF(
     </div>
   `;
 
+  // NOT: jsPDF'in .html() API'si verilen kaynağı kendi içinde cloneNode ile
+  // kopyalayıp kendi -100000px'lik ekran-dışı sarmalayıcısına yerleştirir
+  // (html2pdf.js ile aynı, kanıtlanmış yöntem). cloneNode inline style'ları
+  // da kopyaladığından, kaynağa `position: fixed` verilirse KLON da bu
+  // sarmalayıcının normal akışından kaçıp kendi `left` değerine göre
+  // (gerçek sayfa üzerinde) konumlanıyor — bu da jsPDF'in kırptığı alanın
+  // boş çıkmasına yol açan asıl sebepti. Çözüm: `container`'a hiçbir
+  // konumlandırma stili vermemek (klon jsPDF'in sarmalayıcısı içinde normal
+  // akışta kalsın), ekrana yansımasını önlemek için de onu ayrı, konumlu bir
+  // `hiddenHost`un içine koymak — cloneNode yalnızca `container`ı kopyaladığı
+  // için `hiddenHost`un stilleri klona hiç taşınmıyor.
+  const hiddenHost = document.createElement('div');
+  hiddenHost.style.position = 'fixed';
+  hiddenHost.style.top = '0';
+  hiddenHost.style.left = '-99999px';
+  document.body.appendChild(hiddenHost);
+
   const container = document.createElement('div');
-  container.style.position = 'fixed';
-  container.style.top = '0';
-  container.style.left = '-10000px';
   container.innerHTML = reportHtml;
-  document.body.appendChild(container);
+  hiddenHost.appendChild(container);
 
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+  // jsPDF'in .html() API'si html2canvas'a `scale: width/windowWidth` (burada
+  // 277/1360 ≈ 0,2) hesaplayıp iletiyor ki üretilen görüntü tam 277mm'e
+  // otursun. Bu oranı ezip sabit bir `scale` versek (ör. yalnızca 2), oturma
+  // hesabı bozulup içerik ~10 kat büyük ve sayfalara bölünmüş çıkıyordu; hiç
+  // `scale` vermezsek de görüntü ~25 DPI gibi çok düşük çözünürlükte üretilip
+  // Türkçe'ye özgü harfler (İ, Ş, Ğ) okunaksız çıkıyordu. Çözüm: aynı oranı
+  // korurken bir "kalite çarpanı" ile ölçekliyoruz.
+  const PDF_WIDTH_MM = 277;
+  const WINDOW_WIDTH_PX = 1360;
+  const RASTER_QUALITY_MULTIPLIER = 2;
 
   try {
     await new Promise<void>((resolve, reject) => {
       doc.html(container, {
         x: 10,
         y: 10,
-        width: 277,
-        windowWidth: 1360,
+        width: PDF_WIDTH_MM,
+        windowWidth: WINDOW_WIDTH_PX,
         autoPaging: 'text',
-        html2canvas: { scale: 2, backgroundColor: '#FFFFFF' },
+        html2canvas: {
+          scale: (PDF_WIDTH_MM / WINDOW_WIDTH_PX) * RASTER_QUALITY_MULTIPLIER,
+          backgroundColor: '#FFFFFF',
+        },
         callback: () => resolve(),
       }).catch(reject);
     });
   } finally {
-    document.body.removeChild(container);
+    document.body.removeChild(hiddenHost);
   }
 
   // Sayfa altbilgisi — yerleşik helvetica yeterlidir (yalnızca Latin-1
