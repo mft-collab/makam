@@ -63,9 +63,9 @@ export const ExecutiveToast: React.FC<ExecutiveToastProps> = ({ toast, onClose, 
 
   const typeStyles = {
     info: "text-executive-blue bg-executive-blue/5 border-executive-blue/10",
-    success: "text-emerald-600 bg-emerald-50/50 border-emerald-100/50",
-    warning: "text-amber-600 bg-amber-50/50 border-amber-100/50",
-    danger: "text-red-600 bg-red-50/50 border-red-100/50",
+    success: "text-status-success bg-status-success/[0.06] border-status-success/20",
+    warning: "text-status-warning bg-status-warning/[0.06] border-status-warning/20",
+    danger: "text-status-danger bg-status-danger/[0.06] border-status-danger/20",
   };
 
   return (
@@ -106,7 +106,7 @@ export const ExecutiveToast: React.FC<ExecutiveToastProps> = ({ toast, onClose, 
               onClose(toast.id);
             }}
             aria-label="Bildirimi kapat"
-            className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-xl text-text-muted/30 hover:text-red-500 hover:bg-red-500/10 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+            className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-xl text-text-muted/30 hover:text-status-danger hover:bg-status-danger/10 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger"
           >
             <X className="h-5 w-5 stroke-[1.2]" aria-hidden="true" />
           </button>
@@ -119,7 +119,7 @@ export const ExecutiveToast: React.FC<ExecutiveToastProps> = ({ toast, onClose, 
           transition={{ duration: 6, ease: "linear" }}
           className={cn(
             "h-full bg-gradient-to-r",
-            toast.type === 'danger' ? "from-red-500 to-red-300" : "from-executive-blue to-executive-gold"
+            toast.type === 'danger' ? "from-status-danger to-status-danger/40" : "from-executive-blue to-executive-gold"
           )}
         />
       </div>

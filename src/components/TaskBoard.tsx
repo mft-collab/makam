@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Plus, Search, Layers, Clock, ArrowRight, CheckCircle2, AlertTriangle, AlertCircle, ShieldCheck, Zap, Info, Filter, X } from 'lucide-react';
 import { Task, User, TaskStatus } from '../types';
 import { cn } from '../lib/utils';
-import { STATUS_LABELS, PRIORITY_LABELS } from '../constants';
+import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_BADGE_VARIANT } from '../constants';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { motion } from 'motion/react';
@@ -10,6 +10,7 @@ import { Avatar } from './ui/Avatar';
 import { TaskCardSkeleton } from './ui/Skeleton';
 import { Badge } from './ui/Badge';
 import { useDataStore } from '../store/dataStore';
+import { isTaskInCrisis } from '../lib/executiveMetrics';
 
 interface TaskBoardProps {
   tasks: Task[];
@@ -93,7 +94,7 @@ export const TaskBoard = ({
               onClick={() => setShowSubtasks(!showSubtasks)}
               className={cn(
                 'relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300',
-                showSubtasks ? 'bg-executive-blue' : 'bg-slate-200'
+                showSubtasks ? 'bg-executive-blue' : 'bg-surface-border'
               )}
             >
               <span className={cn(
@@ -174,7 +175,7 @@ export const TaskBoard = ({
         {hasActiveFilter && (
           <button
             onClick={() => { setPriorityFilter('All'); setAssigneeFilter('All'); setStatusFilter('All'); setSearch(''); }}
-            className="text-[9px] font-medium text-red-400 hover:text-red-600 px-3 uppercase tracking-[0.12em] sm:tracking-[0.25em] transition-colors h-8 flex items-center justify-center gap-1 flex-1 sm:flex-none"
+            className="text-[9px] font-medium text-status-danger/70 hover:text-status-danger px-3 uppercase tracking-[0.12em] sm:tracking-[0.25em] transition-colors h-8 flex items-center justify-center gap-1 flex-1 sm:flex-none"
           >
             <X className="w-3 h-3" /> Sıfırla
           </button>
@@ -189,7 +190,7 @@ export const TaskBoard = ({
         className="bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl overflow-hidden shadow-[0_1px_8px_rgba(22,21,19,0.02)]"
       >
         {/* Mobile card list for xs screens */}
-        <div className="sm:hidden divide-y divide-[#161513]/[0.03]">
+        <div className="sm:hidden divide-y divide-makam-border/30">
           {isLoading ? (
             <div className="flex flex-col gap-3 p-3">
               {[...Array(5)].map((_, i) => <TaskCardSkeleton key={i} />)}
@@ -201,7 +202,7 @@ export const TaskBoard = ({
           ) : (
             filteredTasks.map((task, i) => {
               const assignee = users.find(u => u.uid === task.assigneeId || u.email === task.assigneeId);
-              const isCrisis = task.status !== 'COMPLETED' && task.status !== 'CANCELLED' && Date.now() > task.deadline;
+              const isCrisis = isTaskInCrisis(task, Date.now());
               return (
                 // #9 — Swipe gesture: sola = Tamamlandı, sağa = Engellendi
                 <motion.div
@@ -222,22 +223,22 @@ export const TaskBoard = ({
                   onClick={() => onViewTask(task)}
                   className={cn(
                     'flex items-start gap-3 p-3.5 cursor-pointer hover:bg-makam-glass transition-all group relative overflow-hidden',
-                    isCrisis && 'bg-red-50/30'
+                    isCrisis && 'bg-status-danger/[0.04]'
                   )}
                 >
                   {/* Swipe hint bg */}
                   <div className="absolute inset-0 -z-10 flex">
-                    <div className="flex-1 bg-emerald-50 opacity-0 group-active:opacity-100 transition-opacity" />
-                    <div className="flex-1 bg-red-50 opacity-0 group-active:opacity-100 transition-opacity" />
+                    <div className="flex-1 bg-status-success/10 opacity-0 group-active:opacity-100 transition-opacity" />
+                    <div className="flex-1 bg-status-danger/10 opacity-0 group-active:opacity-100 transition-opacity" />
                   </div>
                   {/* Status dot */}
                   <div className={cn(
                     'w-2 h-2 rounded-full mt-1.5 flex-shrink-0',
-                    task.status === 'COMPLETED'       ? 'bg-emerald-500' :
-                    task.status === 'BLOCKED'         ? 'bg-red-500' :
+                    task.status === 'COMPLETED'       ? 'bg-status-success' :
+                    task.status === 'BLOCKED'         ? 'bg-status-danger' :
                     task.status === 'AWAITING_APPROVAL'? 'bg-executive-gold' :
                     task.status === 'IN_PROGRESS'     ? 'bg-executive-blue' :
-                    'bg-slate-300'
+                    'bg-surface-border'
                   )} />
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-medium text-executive-blue line-clamp-1 tracking-tight font-serif group-hover:text-executive-blue">
@@ -247,7 +248,7 @@ export const TaskBoard = ({
                       <span className="text-[9px] text-text-tertiary truncate min-w-0">{assignee?.fullName || 'Atanmamış'}</span>
                       <span className={cn(
                         'text-[8px] font-medium uppercase tracking-[0.12em] px-1.5 py-0.5 rounded-md whitespace-nowrap flex-shrink-0',
-                        isCrisis ? 'bg-red-50 text-red-500' : 'bg-[#F5F3EF] text-text-tertiary'
+                        isCrisis ? 'bg-status-danger/10 text-status-danger' : 'bg-surface-glass text-text-tertiary'
                       )}>
                         {isCrisis ? 'SLA İhlali' : format(task.deadline, 'd MMM', { locale: tr })}
                       </span>
@@ -264,7 +265,7 @@ export const TaskBoard = ({
         <div className="hidden sm:block overflow-x-auto custom-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-[#F5F3EF]/50 border-b border-executive-blue/[0.04]">
+              <tr className="bg-surface-glass border-b border-executive-blue/[0.04]">
                 {['Durum', 'Operasyon Tanımı', 'Sorumlu', 'Önem', 'Mühlet', ''].map(h => (
                   <th key={h} className={cn(
                     'px-4 py-3 text-[8px] font-semibold text-text-tertiary uppercase tracking-[0.18em]',
@@ -275,7 +276,7 @@ export const TaskBoard = ({
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#161513]/[0.03]">
+            <tbody className="divide-y divide-makam-border/30">
               {isLoading ? (
                 [...Array(7)].map((_, i) => (
                   <tr key={i} className="animate-pulse">
@@ -295,7 +296,7 @@ export const TaskBoard = ({
               ) : (
                 filteredTasks.map((task, i) => {
                   const assignee = users.find(u => u.uid === task.assigneeId || u.email === task.assigneeId);
-                  const isCrisis = task.status !== 'COMPLETED' && task.status !== 'CANCELLED' && Date.now() > task.deadline;
+                  const isCrisis = isTaskInCrisis(task, Date.now());
                   return (
                     <motion.tr
                       layoutId={`task-card-${task.id}`}
@@ -305,7 +306,7 @@ export const TaskBoard = ({
                       transition={{ delay: i * 0.025 }}
                       className={cn(
                         'group cursor-pointer transition-all duration-300 hover:bg-makam-glass',
-                        isCrisis && 'bg-red-50/20'
+                        isCrisis && 'bg-status-danger/[0.03]'
                       )}
                       onClick={() => onViewTask(task)}
                     >
@@ -359,11 +360,7 @@ export const TaskBoard = ({
                       {/* Priority */}
                       <td className="px-4 py-3">
                         <Badge
-                          variant={
-                            task.priority === 'Urgent' ? 'danger' :
-                            task.priority === 'High' ? 'warning' :
-                            task.priority === 'Medium' ? 'primary' : 'default'
-                          }
+                          variant={PRIORITY_BADGE_VARIANT[task.priority]}
                           icon={
                             task.priority === 'Urgent' ? <AlertCircle className="w-2.5 h-2.5 stroke-[1.5]" /> :
                             task.priority === 'High' ? <AlertTriangle className="w-2.5 h-2.5 stroke-[1.5]" /> :
@@ -378,12 +375,12 @@ export const TaskBoard = ({
                       <td className="px-4 py-3">
                         <div className="flex flex-col gap-0.5">
                           <div className="flex items-center gap-1.5">
-                            <Clock className={cn('w-3 h-3 stroke-[1.2]', isCrisis ? 'text-red-500 animate-pulse' : 'text-text-tertiary')} />
-                            <span className={cn('text-[11px] font-light tabular-nums tracking-tight', isCrisis ? 'text-red-600' : 'text-executive-blue')}>
+                            <Clock className={cn('w-3 h-3 stroke-[1.2]', isCrisis ? 'text-status-danger animate-pulse' : 'text-text-tertiary')} />
+                            <span className={cn('text-[11px] font-light tabular-nums tracking-tight', isCrisis ? 'text-status-danger' : 'text-executive-blue')}>
                               {format(task.deadline, 'd MMM yyyy', { locale: tr })}
                             </span>
                           </div>
-                          {isCrisis && <span className="text-[8px] font-medium text-red-500 uppercase tracking-[0.2em]">SLA İhlali</span>}
+                          {isCrisis && <span className="text-[8px] font-medium text-status-danger uppercase tracking-[0.2em]">SLA İhlali</span>}
                         </div>
                       </td>
 

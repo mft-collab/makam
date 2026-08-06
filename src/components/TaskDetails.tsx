@@ -3,10 +3,10 @@ import {
   Calendar, CheckCircle2, AlertTriangle, FileText,
   ChevronRight, Award, Zap, Activity, Info,
   Edit2, Trash2, ArrowRight, MessageSquare, History, ListChecks, Send, Plus,
-  GitCommit, Loader2, Hourglass, Clock, Building2, Tag, Flag, ExternalLink, Upload
+  GitCommit, Loader2, Hourglass, Clock, Building2, Tag, Flag, ExternalLink
 } from 'lucide-react';
 import { Task, User as UserType, TaskBlocker, AuditLog, TaskStatus } from '../types';
-import { STATUS_LABELS, PRIORITY_LABELS } from '../constants';
+import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_BADGE_VARIANT } from '../constants';
 import { format, formatDistanceToNow } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { cn } from '../lib/utils';
@@ -16,259 +16,20 @@ import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { EmptyState } from './ui/EmptyState';
 import { Tooltip } from './ui/Tooltip';
-import { db, collection, query, where, getDocs, storage, ref, uploadBytes, getDownloadURL } from '../firebase';
+import { db, collection, query, where, getDocs } from '../firebase';
+import { getTimeLeft, getSLAColor, computeChecklistStats } from './taskDetails/helpers';
+import { AUDIT_FIELD_LABELS } from '../lib/auditLabels';
 
-// Öncelik → Badge varyantı eşlemesi (İvedi=kırmızı, Öncelikli=altın, Normal=mavi, Rutin=nötr)
-const PRIORITY_BADGE_VARIANTS: Record<Task['priority'], 'default' | 'info' | 'warning' | 'danger'> = {
-  Low: 'default',
-  Medium: 'info',
-  High: 'warning',
-  Urgent: 'danger',
-};
-
-/* ── Birincil Aksiyon ─────────────────────────────────────────────────────
-   Mevcut duruma ve role göre tek bir birincil durum geçişi. Modal footer'ında
-   tüm sekmelerde sabit gösterilir. */
-export interface PrimaryAction {
-  label: string;
-  next: TaskStatus;
-  variant: 'gold' | 'success';
-  /** Tamamlama ile sonuçlanan geçiş — kanıt formu gösterilir (opsiyonel). */
-  collectsEvidence: boolean;
-  /** Terminal/geri dönüşü zor geçiş — yerinde onay (confirm-in-place) ister. */
-  needsConfirm: boolean;
-  /** Butonun ne yaptığını açıklayan kısa ipucu metni. */
-  hint: string;
-}
-
-export const getPrimaryAction = (task: Task, currentUser: UserType | null): PrimaryAction | null => {
-  const isAdmin = currentUser?.role === 'Admin';
-  if (task.status === 'ASSIGNED') {
-    return { label: 'SÜRECİ BAŞLAT', next: 'IN_PROGRESS', variant: 'gold', collectsEvidence: false, needsConfirm: false, hint: 'Talimatı icraya alır; mühlet sayacı bu andan itibaren işlemeye başlar.' };
-  }
-  if (task.status === 'PENDING_DELEGATION') {
-    return { label: 'DEVRİ KABUL ET VE BAŞLAT', next: 'IN_PROGRESS', variant: 'gold', collectsEvidence: false, needsConfirm: false, hint: 'Devredilen talimatı üstlenir ve doğrudan icraya alır.' };
-  }
-  if (task.status === 'IN_PROGRESS' || task.status === 'CRISIS') {
-    return isAdmin
-      ? { label: 'KESİN TAMAMLA', next: 'COMPLETED', variant: 'success', collectsEvidence: true, needsConfirm: true, hint: 'Talimatı doğrudan tamamlanmış sayıp kapatır — onay süreci atlanır, geri alınamaz.' }
-      : { label: 'TAMAMLA VE ONAYA SUN', next: 'AWAITING_APPROVAL', variant: 'success', collectsEvidence: true, needsConfirm: false, hint: 'İşi bitirdiğinizi bildirir ve Makam onayına sunar — talimat bu adımda henüz kapanmaz.' };
-  }
-  if (task.status === 'AWAITING_APPROVAL' && isAdmin) {
-    return { label: 'TALİMATI ONAYLA VE KAPAT', next: 'COMPLETED', variant: 'gold', collectsEvidence: true, needsConfirm: true, hint: 'Onay bekleyen talimatı inceleyip kesin olarak kapatır — geri alınamaz.' };
-  }
-  return null;
-};
-
-const EVIDENCE_TYPE_OPTIONS: { value: NonNullable<Task['evidenceType']>; label: string }[] = [
-  { value: 'Link', label: 'Bağlantı' },
-  { value: 'Image', label: 'Görsel' },
-  { value: 'PDF', label: 'PDF' },
-];
-
-const MAX_EVIDENCE_FILE_BYTES = 5 * 1024 * 1024; // storage.rules ile aynı sınır
-
-/* ── Modal Footer — Kalıcı Birincil Aksiyon + Kanıt Formu ─────────────────
-   Tamamlama ile sonuçlanan geçişlerde (AWAITING_APPROVAL/COMPLETED) opsiyonel
-   bir kanıt girişi (Bağlantı / Görsel / PDF) sunar; dosyalar storage.rules'un
-   izin verdiği evidence/{taskId}/ yoluna yüklenir. Terminal aksiyonlarda
-   "confirm-in-place" (ilk tıklamada onay isteyen buton) uygulanır. */
-export const TaskDetailsFooter = ({ task, currentUser, onStatusChange }: {
-  task: Task;
-  currentUser: UserType | null;
-  onStatusChange: (status: TaskStatus, evidence?: string, type?: Task['evidenceType']) => void;
-}) => {
-  const action = getPrimaryAction(task, currentUser);
-
-  const [evidenceType, setEvidenceType] = useState<NonNullable<Task['evidenceType']>>('Link');
-  const [evidenceUrl, setEvidenceUrl] = useState('');
-  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
-  const [evidenceError, setEvidenceError] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [confirmArmed, setConfirmArmed] = useState(false);
-  const confirmTimerRef = useRef<number | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Görev veya durum değişince formu sıfırla
-  useEffect(() => {
-    setEvidenceType('Link');
-    setEvidenceUrl('');
-    setEvidenceFile(null);
-    setEvidenceError('');
-    setConfirmArmed(false);
-  }, [task.id, task.status]);
-
-  useEffect(() => () => {
-    if (confirmTimerRef.current) window.clearTimeout(confirmTimerRef.current);
-  }, []);
-
-  if (!action) return null;
-
-  const switchEvidenceType = (type: NonNullable<Task['evidenceType']>) => {
-    setEvidenceType(type);
-    setEvidenceFile(null);
-    setEvidenceError('');
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] ?? null;
-    setEvidenceError('');
-    if (!file) { setEvidenceFile(null); return; }
-    const validType = evidenceType === 'PDF'
-      ? file.type === 'application/pdf'
-      : file.type.startsWith('image/');
-    if (!validType) {
-      setEvidenceFile(null);
-      setEvidenceError(evidenceType === 'PDF' ? 'Yalnızca PDF dosyası yüklenebilir.' : 'Yalnızca görsel dosyası yüklenebilir.');
-      e.target.value = '';
-      return;
-    }
-    if (file.size >= MAX_EVIDENCE_FILE_BYTES) {
-      setEvidenceFile(null);
-      setEvidenceError('Dosya boyutu 5MB sınırını aşıyor.');
-      e.target.value = '';
-      return;
-    }
-    setEvidenceFile(file);
-  };
-
-  const execute = async () => {
-    setIsSubmitting(true);
-    setEvidenceError('');
-    try {
-      let evidence: string | undefined;
-      let type: Task['evidenceType'] | undefined;
-      if (action.collectsEvidence) {
-        if (evidenceType === 'Link') {
-          let url = evidenceUrl.trim();
-          if (url && !/^\w+:\/\//.test(url)) url = `https://${url}`;
-          if (url) { evidence = url; type = 'Link'; }
-        } else if (evidenceFile) {
-          const safeName = `${Date.now()}_${evidenceFile.name.replace(/[^\w.\-]+/g, '_')}`;
-          const storageRef = ref(storage, `evidence/${task.id}/${safeName}`);
-          await uploadBytes(storageRef, evidenceFile);
-          evidence = await getDownloadURL(storageRef);
-          type = evidenceType;
-        }
-      }
-      await Promise.resolve(onStatusChange(action.next, evidence, type));
-    } catch (err) {
-      console.error('Evidence upload failed:', err);
-      setEvidenceError('Kanıt yüklenemedi. Bağlantınızı kontrol edip tekrar deneyin.');
-    } finally {
-      setIsSubmitting(false);
-      setConfirmArmed(false);
-    }
-  };
-
-  const handleClick = () => {
-    if (isSubmitting) return;
-    if (action.needsConfirm && !confirmArmed) {
-      setConfirmArmed(true);
-      confirmTimerRef.current = window.setTimeout(() => setConfirmArmed(false), 4000);
-      return;
-    }
-    if (confirmTimerRef.current) window.clearTimeout(confirmTimerRef.current);
-    execute();
-  };
-
-  return (
-    <div className="flex flex-col md:flex-row md:items-end gap-4">
-      {action.collectsEvidence && (
-        <div className="flex flex-col gap-2 flex-1 min-w-0">
-          <span className="text-[9px] font-medium text-text-muted uppercase tracking-[0.18em] inline-flex items-center gap-1.5">
-            İcra Kanıtı <span className="normal-case tracking-normal font-light">(isteğe bağlı)</span>
-            <Tooltip content="İşin nasıl tamamlandığını belgeler — denetim izlerinde ve olası itirazlarda referans olarak kullanılır.">
-              <Info className="w-3 h-3 text-text-tertiary cursor-help" aria-label="Kanıt neden önemli" />
-            </Tooltip>
-          </span>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center bg-makam-glass border border-surface-border rounded-full p-0.5 shrink-0" role="group" aria-label="Kanıt türü">
-              {EVIDENCE_TYPE_OPTIONS.map(opt => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => switchEvidenceType(opt.value)}
-                  aria-pressed={evidenceType === opt.value}
-                  disabled={isSubmitting}
-                  className={cn(
-                    'px-3 py-1.5 rounded-full text-[10px] font-medium uppercase tracking-widest transition-colors',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue disabled:opacity-60',
-                    evidenceType === opt.value
-                      ? 'bg-executive-blue text-white shadow-sm'
-                      : 'text-text-muted hover:text-executive-blue'
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            {evidenceType === 'Link' ? (
-              <input
-                type="url"
-                value={evidenceUrl}
-                onChange={(e) => setEvidenceUrl(e.target.value)}
-                placeholder="https://... kanıt bağlantısı"
-                aria-label="Kanıt bağlantısı"
-                disabled={isSubmitting}
-                className="flex-1 min-w-[180px] bg-makam-glass border border-makam-border/10 rounded-full px-4 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-executive-blue/15 disabled:opacity-60"
-              />
-            ) : (
-              <>
-                <input
-                  ref={fileInputRef}
-                  id="evidence-file-input"
-                  type="file"
-                  accept={evidenceType === 'PDF' ? 'application/pdf' : 'image/*'}
-                  onChange={handleFileSelect}
-                  disabled={isSubmitting}
-                  className="sr-only"
-                />
-                <label
-                  htmlFor="evidence-file-input"
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-2 bg-makam-glass border border-makam-border/10 rounded-full text-[11px] font-medium text-text-muted cursor-pointer',
-                    'hover:text-executive-blue hover:border-executive-blue/20 transition-colors',
-                    isSubmitting && 'opacity-60 pointer-events-none'
-                  )}
-                >
-                  <Upload className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                  <span className="truncate max-w-[220px]">
-                    {evidenceFile ? evidenceFile.name : 'Dosya Seç (maks. 5MB)'}
-                  </span>
-                </label>
-              </>
-            )}
-          </div>
-          {evidenceError && (
-            <span role="alert" className="text-[11px] text-red-600 font-medium">{evidenceError}</span>
-          )}
-        </div>
-      )}
-      <Tooltip content={action.hint} className="w-full md:w-auto md:ml-auto shrink-0">
-        <Button
-          variant={action.variant}
-          onClick={handleClick}
-          isLoading={isSubmitting}
-          className={cn(
-            'h-12 text-[10px] tracking-widest w-full md:w-auto md:min-w-[240px]',
-            confirmArmed && 'ring-2 ring-offset-2 ring-executive-gold animate-pulse'
-          )}
-        >
-          {isSubmitting ? 'İŞLENİYOR…' : confirmArmed ? 'EMİN MİSİNİZ? ONAYLA' : action.label}
-        </Button>
-      </Tooltip>
-    </div>
-  );
-};
+export type { PrimaryAction } from './taskDetails/helpers';
+export { getPrimaryAction } from './taskDetails/helpers';
+export { TaskDetailsFooter } from './taskDetails/Footer';
 
 export const TaskDetails = ({
   task, tasks, users, currentUser, blockers,
   onAddBlocker, onResolveBlocker,
   onAddSubTask, onAddComment, onViewTask, onEdit, onDelete,
   onClearCoordinator, onShowCertificate, onShowWarning,
-  onUpdateTask
+  onUpdateTask, onDelegateTask
 }: {
   task: Task;
   tasks: Task[];
@@ -286,6 +47,7 @@ export const TaskDetails = ({
   onShowCertificate?: (task: Task) => void;
   onShowWarning?: (task: Task) => void;
   onUpdateTask?: (data: Partial<Task>) => void;
+  onDelegateTask?: (newAssigneeId: string) => void;
 }) => {
   const [activeTab, setActiveTab] = useState<'info' | 'checklist' | 'blockers' | 'subtasks' | 'history' | 'comments'>('info');
   const [newComment, setNewComment] = useState('');
@@ -332,16 +94,7 @@ export const TaskDetails = ({
     onUpdateTask({ checklist: updatedChecklist });
   };
 
-  const checklistStats = useMemo(() => {
-    const list = task.checklist || [];
-    if (list.length === 0) return { total: 0, completed: 0, percent: 0 };
-    const completed = list.filter(item => item.isCompleted).length;
-    return {
-      total: list.length,
-      completed,
-      percent: Math.round((completed / list.length) * 100)
-    };
-  }, [task.checklist]);
+  const checklistStats = useMemo(() => computeChecklistStats(task.checklist), [task.checklist]);
 
   // #4 - Gerçek zamanlı SLA sayacı
   const [now, setNow] = useState(Date.now());
@@ -405,56 +158,35 @@ export const TaskDetails = ({
   const isAdmin = currentUser?.role === 'Admin';
   const isManager = currentUser?.role === 'Manager';
 
+  // İzin/mazeret devri: yalnızca görevin mevcut sorumlusu olan Müdür,
+  // henüz başlamamış/devam eden bir görevi başka bir Müdür'e devredebilir.
+  const canDelegate = isManager
+    && currentUser?.uid === task.assigneeId
+    && (task.status === 'ASSIGNED' || task.status === 'IN_PROGRESS');
+  const delegateCandidates = useMemo(
+    () => users.filter(u => u.role === 'Manager' && u.uid !== currentUser?.uid),
+    [users, currentUser?.uid]
+  );
+  const [isDelegateModalOpen, setIsDelegateModalOpen] = useState(false);
+  const [delegateTargetId, setDelegateTargetId] = useState('');
+  const [isSubmittingDelegate, setIsSubmittingDelegate] = useState(false);
+
+  const handleDelegate = async () => {
+    if (!delegateTargetId || !onDelegateTask || isSubmittingDelegate) return;
+    setIsSubmittingDelegate(true);
+    try {
+      await Promise.resolve(onDelegateTask(delegateTargetId));
+      setIsDelegateModalOpen(false);
+      setDelegateTargetId('');
+    } finally {
+      setIsSubmittingDelegate(false);
+    }
+  };
+
   const subtasks = useMemo(() => tasks.filter(t => t.parentId === task.id), [tasks, task.id]);
   
   // #4 - Canlı SLA hesaplama (totalPausedTime ve pausedAt dahil)
-  const getTimeLeft = () => {
-    if (task.status === 'COMPLETED' || task.status === 'CANCELLED') return null;
-    
-    // Efektif deadline: orijinal deadline + toplam duraklatma süresi
-    const totalPaused = task.totalPausedTime || 0;
-    const effectiveDeadline = task.deadline + totalPaused;
-    
-    // Eğer görev şu an duraklatılmış ise (BLOCKED/AWAITING_APPROVAL)
-    // kalan süreyi pause anından hesapla
-    const pausedAt = task.pausedAt ?? null;
-    const referenceTime = pausedAt ? pausedAt : now;
-    
-    const timeLeftMs = effectiveDeadline - referenceTime;
-    const absMs = Math.abs(timeLeftMs);
-    const absDays = Math.floor(absMs / 86400000);
-    const absHours = Math.floor((absMs % 86400000) / 3600000);
-    const absMins = Math.floor((absMs % 3600000) / 60000);
-    
-    let label: string;
-    if (timeLeftMs < 0) {
-      label = absDays > 0 ? `${absDays}g ${absHours}s geçti` : absHours > 0 ? `${absHours}s ${absMins}dk geçti` : `${absMins}dk geçti`;
-    } else if (absDays > 0) {
-      label = `${absDays}g ${absHours}s kaldı`;
-    } else if (absHours > 0) {
-      label = `${absHours}s ${absMins}dk kaldı`;
-    } else {
-      label = `${absMins}dk kaldı`;
-    }
-    
-    const isPaused = Boolean(pausedAt);
-    return {
-      timeLeftMs,
-      label: isPaused ? `${label} (Duraklatıldı)` : label,
-      status: isPaused ? 'paused' : timeLeftMs < 0 ? 'expired' : timeLeftMs < 86400000 ? 'warning' : 'safe'
-    };
-  };
-
-  const timeLeft = getTimeLeft();
-
-  const getSLAColor = (status: string) => {
-    switch (status) {
-      case 'expired': return 'text-red-600';
-      case 'warning': return 'text-amber-600';
-      case 'paused':  return 'text-text-muted';
-      default: return 'text-emerald-600';
-    }
-  };
+  const timeLeft = getTimeLeft(task, now);
 
   // #5 - Durum akış pipeline sırası
   const STATUS_PIPELINE: TaskStatus[] = useMemo(() => {
@@ -516,7 +248,7 @@ export const TaskDetails = ({
             </Badge>
             {/* #2 - Öncelik göstergesi */}
             <Badge
-              variant={PRIORITY_BADGE_VARIANTS[task.priority]}
+              variant={PRIORITY_BADGE_VARIANT[task.priority]}
               icon={<Flag className="w-3 h-3" />}
             >
               {PRIORITY_LABELS[task.priority]}
@@ -531,7 +263,7 @@ export const TaskDetails = ({
                   Düzenle
                 </button>
                 <div className="w-[1px] h-3 bg-makam-border/10 mx-1" />
-                <button onClick={() => setIsDeleteConfirmOpen(true)} className="px-4 py-2 rounded-full text-[10px] font-medium text-text-muted hover:text-red-600 transition-colors uppercase tracking-[0.2em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2">
+                <button onClick={() => setIsDeleteConfirmOpen(true)} className="px-4 py-2 rounded-full text-[10px] font-medium text-text-muted hover:text-status-danger transition-colors uppercase tracking-[0.2em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger focus-visible:ring-offset-2">
                   <Trash2 className="w-3.5 h-3.5 inline mr-2" />
                   Sil
                 </button>
@@ -564,8 +296,8 @@ export const TaskDetails = ({
                 <div className="flex flex-col items-center gap-1">
                   <div className={cn(
                     'w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all duration-500',
-                    isCompleted ? 'bg-emerald-500 border-emerald-500 text-white' :
-                    isActive && isInterruption ? 'bg-red-500 border-red-500 text-white animate-pulse shadow-lg shadow-red-500/15' :
+                    isCompleted ? 'bg-status-success border-status-success text-white' :
+                    isActive && isInterruption ? 'bg-status-danger border-status-danger text-white animate-pulse shadow-lg shadow-status-danger/15' :
                     isActive && isDelegation ? 'bg-executive-gold border-executive-gold text-white shadow-lg shadow-executive-gold/20' :
                     isActive ? 'bg-executive-blue border-executive-blue text-white shadow-lg shadow-executive-blue/20' :
                     'bg-surface-elevated border-text-muted/25 text-text-tertiary'
@@ -578,8 +310,8 @@ export const TaskDetails = ({
                   </div>
                   <span className={cn(
                     'text-[10px] font-medium uppercase tracking-[0.18em] whitespace-nowrap',
-                    isCompleted ? 'text-emerald-600' :
-                    isActive && isInterruption ? 'text-red-600' :
+                    isCompleted ? 'text-status-success' :
+                    isActive && isInterruption ? 'text-status-danger' :
                     isActive && isDelegation ? 'text-executive-gold' :
                     isActive ? 'text-executive-blue' : 'text-text-tertiary'
                   )}>{labels[status]}</span>
@@ -587,7 +319,7 @@ export const TaskDetails = ({
                 {idx < STATUS_PIPELINE.length - 1 && (
                   <div className={cn(
                     'flex-1 h-[2px] mx-1 mt-[-10px] rounded-full transition-all duration-500',
-                    isCompleted ? 'bg-emerald-400' : 'bg-text-muted/15'
+                    isCompleted ? 'bg-status-success' : 'bg-text-muted/15'
                   )} />
                 )}
               </React.Fragment>
@@ -678,7 +410,7 @@ export const TaskDetails = ({
                     {[
                       { u: creator,     l: 'Oluşturan',   ring: 'ring-executive-gold/30' },
                       { u: assignee,    l: 'Sorumlu',     ring: 'ring-executive-blue/20' },
-                      { u: coordinator, l: 'İrtibatlı',   ring: coordinatorIsAdmin ? 'ring-red-300' : 'ring-emerald-300' }
+                      { u: coordinator, l: 'İrtibatlı',   ring: coordinatorIsAdmin ? 'ring-status-danger/40' : 'ring-status-success/40' }
                     ].filter(x => x.u).map((item, idx) => (
                       <div key={idx} className="flex items-center gap-2.5 p-2.5 bg-makam-glass backdrop-blur-xl rounded-xl border border-surface-border shadow-sm">
                         {/* #10 - Avatar bileşeni */}
@@ -701,11 +433,20 @@ export const TaskDetails = ({
                             </Badge>
                             <button
                               onClick={onClearCoordinator}
-                              className="text-[11px] px-2 py-1 -mr-2 rounded-md text-red-500 hover:text-red-700 uppercase tracking-widest font-medium underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                              className="text-[11px] px-2 py-1 -mr-2 rounded-md text-status-danger hover:text-status-danger uppercase tracking-widest font-medium underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger"
                             >
                               Temizle
                             </button>
                           </div>
+                        )}
+                        {/* İzin/mazeret devri: sorumlu Müdür başka bir Müdür'e devredebilir */}
+                        {item.l === 'Sorumlu' && canDelegate && onDelegateTask && (
+                          <button
+                            onClick={() => setIsDelegateModalOpen(true)}
+                            className="text-[11px] px-2 py-1 -mr-2 rounded-md text-executive-blue hover:text-executive-gold uppercase tracking-widest font-medium underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue"
+                          >
+                            Devret
+                          </button>
                         )}
                       </div>
                     ))}
@@ -796,9 +537,9 @@ export const TaskDetails = ({
                     )}
 
                     {task.status === 'BLOCKED' && (
-                      <div className="flex flex-col items-center gap-3 py-4 px-2 bg-red-500/5 border border-dashed border-red-500/20 rounded-2xl">
-                        <AlertTriangle className="w-5 h-5 text-red-500 animate-pulse" />
-                        <span className="text-[10px] text-red-600 font-medium uppercase tracking-widest text-center">İşlem Engellendi</span>
+                      <div className="flex flex-col items-center gap-3 py-4 px-2 bg-status-danger/5 border border-dashed border-status-danger/20 rounded-2xl">
+                        <AlertTriangle className="w-5 h-5 text-status-danger animate-pulse" />
+                        <span className="text-[10px] text-status-danger font-medium uppercase tracking-widest text-center">İşlem Engellendi</span>
                         <button
                           onClick={() => setActiveTab('blockers')}
                           className="text-[10px] px-2 py-1 rounded-md text-executive-blue font-bold uppercase tracking-widest hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue"
@@ -810,7 +551,7 @@ export const TaskDetails = ({
 
                     {(task.status === 'COMPLETED' || task.status === 'CANCELLED') && (
                       <div className="flex flex-col items-center gap-3 py-4 px-2 bg-surface-border/30 border border-dashed border-surface-border/50 rounded-2xl">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                        <CheckCircle2 className="w-5 h-5 text-status-success" />
                         <span className="text-[10px] text-text-muted font-medium uppercase tracking-widest">Operasyon Sonlandı</span>
                       </div>
                     )}
@@ -838,7 +579,7 @@ export const TaskDetails = ({
                       <Tooltip content="Mühleti aşıldıktan sonra tamamlanan talimatlar için otomatik olarak hazırlanır." side="bottom" className="w-full">
                         <button
                           onClick={() => onShowWarning?.(task)}
-                          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[11px] font-medium text-red-600 uppercase tracking-widest hover:bg-red-500/10 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[11px] font-medium text-status-danger uppercase tracking-widest hover:bg-status-danger/10 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger"
                         >
                           <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
                           İkaz Belgesi
@@ -922,10 +663,10 @@ export const TaskDetails = ({
                   blockers.map(blocker => (
                     <div key={blocker.id} className={cn(
                       "flex items-center justify-between p-3 rounded-xl border transition-all",
-                      blocker.isResolved ? "opacity-50 grayscale bg-makam-glass border-surface-border" : "bg-red-500/5 border-red-500/15"
+                      blocker.isResolved ? "opacity-50 grayscale bg-makam-glass border-surface-border" : "bg-status-danger/5 border-status-danger/15"
                     )}>
                       <div className="flex items-center gap-4">
-                        <AlertTriangle className={cn("w-5 h-5", blocker.isResolved ? "text-text-muted" : "text-red-500")} />
+                        <AlertTriangle className={cn("w-5 h-5", blocker.isResolved ? "text-text-muted" : "text-status-danger")} />
                         <div className="flex flex-col">
                           <span className="text-[14px] font-medium text-text-heading">{blocker.reason}</span>
                           <span className="text-[9px] text-text-muted uppercase tracking-widest">
@@ -958,12 +699,12 @@ export const TaskDetails = ({
                   onChange={(e) => setBlockerReason(e.target.value)}
                   placeholder="Engeli tanımlayın..."
                   disabled={isSubmittingBlocker}
-                  className="flex-1 bg-makam-glass border border-makam-border/10 rounded-full px-5 py-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-red-500/10 disabled:opacity-60"
+                  className="flex-1 bg-makam-glass border border-makam-border/10 rounded-full px-5 py-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-status-danger/10 disabled:opacity-60"
                 />
                 <button
                   onClick={handleAddBlocker}
                   disabled={!blockerReason.trim() || isSubmittingBlocker}
-                  className="px-6 py-3 bg-red-600 text-white rounded-full text-[10px] uppercase tracking-widest shadow-lg shadow-red-600/10 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+                  className="px-6 py-3 bg-status-danger text-white rounded-full text-[10px] uppercase tracking-widest shadow-lg shadow-status-danger/10 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger focus-visible:ring-offset-2"
                 >
                   {isSubmittingBlocker ? 'EKLENİYOR…' : 'ENGEL EKLE'}
                 </button>
@@ -981,9 +722,9 @@ export const TaskDetails = ({
                   <Loader2 className="w-6 h-6 animate-spin text-executive-blue" />
                 </div>
               ) : logsError ? (
-                <div className="py-12 px-4 flex flex-col items-center justify-center gap-3 bg-red-500/5 border border-dashed border-red-500/20 rounded-2xl text-center">
-                  <AlertTriangle className="w-5 h-5 text-red-500" aria-hidden="true" />
-                  <span className="text-[10px] text-red-600 font-medium uppercase tracking-[0.18em]">
+                <div className="py-12 px-4 flex flex-col items-center justify-center gap-3 bg-status-danger/5 border border-dashed border-status-danger/20 rounded-2xl text-center">
+                  <AlertTriangle className="w-5 h-5 text-status-danger" aria-hidden="true" />
+                  <span className="text-[10px] text-status-danger font-medium uppercase tracking-[0.18em]">
                     Denetim izleri yüklenemedi
                   </span>
                   <button
@@ -998,26 +739,21 @@ export const TaskDetails = ({
               ) : (
                 localLogs.map(log => {
                   const actor = users.find(u => u.uid === log.changedBy || u.email === log.changedBy);
-                  // #7 - Audit diff görselleştirmesi
-                  const FIELD_LABELS: Record<string, string> = {
-                    status: 'Durum', title: 'Başlık', description: 'Açıklama',
-                    assigneeId: 'Sorumlu', coordinatorId: 'İrtibatlı',
-                    priority: 'Öncelik', deadline: 'Son Tarih', evidence: 'Kanıt'
-                  };
+                  const isSystemActor = log.changedBy?.startsWith('system:');
                   const hasChanges = log.changes && Object.keys(log.changes).length > 0;
                   return (
                     <div key={log.id} className="flex gap-3 p-3 bg-makam-glass border border-surface-border rounded-xl">
                       <div className="flex-shrink-0 pt-0.5">
                         <Avatar
-                          name={actor?.fullName ?? log.changedBy ?? 'Sistem'}
-                          photoURL={(actor as any)?.photoURL}
+                          name={actor?.fullName ?? (isSystemActor ? 'Sistem' : log.changedBy) ?? 'Sistem'}
+                          photoURL={actor?.photoURL}
                           size="sm"
                         />
                       </div>
                       <div className="flex flex-col gap-1.5 flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[12px] font-medium text-text-heading">
-                            {actor?.fullName || log.changedBy || 'Sistem'}
+                            {actor?.fullName || (isSystemActor ? 'Sistem' : log.changedBy) || 'Sistem'}
                           </span>
                           <span className="text-[9px] text-text-muted tabular-nums">
                             {format(log.timestamp, 'd MMM HH:mm', { locale: tr })}
@@ -1027,12 +763,13 @@ export const TaskDetails = ({
                         {hasChanges ? (
                           <div className="flex flex-col gap-1">
                             {Object.entries(log.changes!).map(([field, change]) => {
-                              const oldVal = String((change as any).old ?? '-');
-                              const newVal = String((change as any).new ?? '-');
-                              const label = FIELD_LABELS[field] ?? field;
-                              // Durum alanı için STATUS_LABELS kullan
+                              const oldVal = String(change.old ?? '-');
+                              const newVal = String(change.new ?? '-');
+                              const label = AUDIT_FIELD_LABELS[field] ?? field;
+                              // Durum alanı için STATUS_LABELS, silindi alanı için Evet/Hayır kullan
                               const fmtVal = (v: string) =>
-                                field === 'status' ? (STATUS_LABELS[v as TaskStatus] ?? v) : v;
+                                field === 'status' ? (STATUS_LABELS[v as TaskStatus] ?? v) :
+                                field === 'deleted' ? (v === 'true' ? 'Evet' : 'Hayır') : v;
                               return (
                                 <div key={field} className="flex items-center gap-1.5 flex-wrap">
                                   <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-[0.2em] bg-surface-glass px-1.5 py-0.5 rounded border border-surface-border">
@@ -1081,7 +818,7 @@ export const TaskDetails = ({
               </div>
               <div className="w-full h-2 bg-executive-blue/5 rounded-full overflow-hidden">
                 <div 
-                  className="h-full bg-emerald-500 transition-all duration-300 rounded-full" 
+                  className="h-full bg-status-success transition-all duration-300 rounded-full" 
                   style={{ width: `${checklistStats.percent}%` }} 
                 />
               </div>
@@ -1102,7 +839,7 @@ export const TaskDetails = ({
                         type="checkbox"
                         checked={item.isCompleted}
                         onChange={() => handleToggleChecklistItem(item.id)}
-                        className="w-4 h-4 rounded accent-emerald-600 cursor-pointer"
+                        className="w-4 h-4 rounded accent-status-success cursor-pointer"
                       />
                       <span className={cn(
                         "text-[12px] font-medium leading-snug tracking-tight truncate",
@@ -1115,7 +852,7 @@ export const TaskDetails = ({
                     {onUpdateTask && (
                       <button
                         onClick={() => handleDeleteChecklistItem(item.id)}
-                        className="w-7 h-7 flex items-center justify-center text-text-tertiary hover:text-red-600 hover:bg-red-500/10 rounded-md opacity-0 group-hover/item:opacity-100 focus-visible:opacity-100 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                        className="w-7 h-7 flex items-center justify-center text-text-tertiary hover:text-status-danger hover:bg-status-danger/10 rounded-md opacity-0 group-hover/item:opacity-100 focus-visible:opacity-100 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger"
                         title="Alt İşlemi Sil"
                         aria-label="Alt işlemi sil"
                       >
@@ -1222,12 +959,12 @@ export const TaskDetails = ({
     <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)} title="Talimatı Sil">
       <div className="flex flex-col gap-4">
         <p className="text-[13px] text-text-muted font-light leading-relaxed">
-          <strong className="text-red-600 font-medium">{task.title}</strong> talimatını kalıcı olarak silmek istediğinize emin misiniz? Bu işlem geri alınamaz.
+          <strong className="text-status-danger font-medium">{task.title}</strong> talimatını kalıcı olarak silmek istediğinize emin misiniz? Bu işlem geri alınamaz.
         </p>
         {subtasks.length > 0 && (
-          <div className="flex items-start gap-2 p-2.5 bg-red-500/10 border border-red-500/20 rounded-xl">
-            <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
-            <p className="text-[10px] text-red-600 font-semibold uppercase tracking-[0.1em] leading-relaxed">
+          <div className="flex items-start gap-2 p-2.5 bg-status-danger/10 border border-status-danger/20 rounded-xl">
+            <AlertTriangle className="w-3.5 h-3.5 text-status-danger flex-shrink-0 mt-0.5" />
+            <p className="text-[10px] text-status-danger font-semibold uppercase tracking-[0.1em] leading-relaxed">
               Bu talimatın {subtasks.length} alt talimatı var. Bu işlem hepsini kademeli olarak silecektir.
             </p>
           </div>
@@ -1235,6 +972,36 @@ export const TaskDetails = ({
         <div className="flex justify-end gap-2.5 pt-4 border-t border-executive-blue/[0.04]">
           <Button variant="secondary" onClick={() => setIsDeleteConfirmOpen(false)}>İptal</Button>
           <Button variant="danger" onClick={() => { setIsDeleteConfirmOpen(false); onDelete(); }}>Kalıcı Olarak Sil</Button>
+        </div>
+      </div>
+    </Modal>
+
+    <Modal isOpen={isDelegateModalOpen} onClose={() => setIsDelegateModalOpen(false)} title="Talimatı Devret">
+      <div className="flex flex-col gap-4">
+        <p className="text-[13px] text-text-muted font-light leading-relaxed">
+          <strong className="text-text-heading font-medium">{task.title}</strong> talimatını izin/mazeret durumunuz için başka bir müdüre devredin. Devredilen müdür kabul edip icraya alana kadar talimat "Yetki Devri Bekleniyor" durumunda kalır ve mühlet sayacı duraklar.
+        </p>
+        <select
+          value={delegateTargetId}
+          onChange={(e) => setDelegateTargetId(e.target.value)}
+          aria-label="Devredilecek müdür"
+          className="w-full bg-surface-elevated border border-makam-border/10 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5"
+        >
+          <option value="">Müdür Seçiniz</option>
+          {delegateCandidates.map(m => (
+            <option key={m.uid} value={m.uid}>{m.fullName}</option>
+          ))}
+        </select>
+        <div className="flex justify-end gap-2.5 pt-4 border-t border-executive-blue/[0.04]">
+          <Button variant="secondary" onClick={() => setIsDelegateModalOpen(false)}>İptal</Button>
+          <Button
+            variant="gold"
+            disabled={!delegateTargetId}
+            isLoading={isSubmittingDelegate}
+            onClick={handleDelegate}
+          >
+            Devret
+          </Button>
         </div>
       </div>
     </Modal>

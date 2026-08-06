@@ -10,8 +10,24 @@ import {
   onSnapshot, 
   db 
 } from '../firebase';
-import { Task, User, TaskBlocker, AuditLog } from '../types';
+import { Task, User, TaskBlocker, AuditLog, TaskSchema, UserSchema } from '../types';
 import { useDataStore } from '../store/dataStore';
+import { logger } from '../lib/logger';
+
+/**
+ * Firestore'dan gelen ham veriyi zod şemasıyla doğrular. Şema uyumsuzluğu
+ * (ör. bozuk/eksik alan) veriyi listeden düşürmez — yalnızca konsola uyarı
+ * yazar — aksi halde tek bir hatalı doküman tüm listeyi görünmez yapardı.
+ * Doğrulama başarılıysa şemanın .default(...) doldurduğu alanlarla döner.
+ */
+function validateOrPassthrough<T>(schema: { safeParse: (data: unknown) => { success: boolean; data?: T; error?: unknown } }, raw: T, docId: string, collectionName: string): T {
+  const result = schema.safeParse(raw);
+  if (!result.success) {
+    logger.warn(`[useFirestoreData] Şema doğrulama uyarısı (${collectionName}/${docId}):`, result.error);
+    return raw;
+  }
+  return result.data as T;
+}
 
 export function useFirestoreData(user: User | null, onError: (err: any, type: string, path: string) => void) {
   const { tasks, users, blockers, isHydrated, taskLimit, setTasks, setUsers, setBlockers, setStats } = useDataStore();
@@ -68,7 +84,10 @@ export function useFirestoreData(user: User | null, onError: (err: any, type: st
     const unsubTasks = onSnapshot(
       tasksQuery,
       (s) => {
-        const list = s.docs.map(d => ({ id: d.id, ...d.data() } as Task));
+        const list = s.docs.map(d => {
+          const raw = { id: d.id, ...d.data() } as Task;
+          return validateOrPassthrough(TaskSchema, raw, d.id, 'tasks');
+        });
         list.sort((a, b) => b.updatedAt - a.updatedAt);
         setTasks(list);
         setIsLoading(false);
@@ -79,7 +98,10 @@ export function useFirestoreData(user: User | null, onError: (err: any, type: st
     const unsubUsers = onSnapshot(
       collection(db, 'users'),
       (s) => {
-        const rawUsers = s.docs.map(d => ({ ...d.data(), uid: d.data().uid || d.id } as User));
+        const rawUsers = s.docs.map(d => {
+          const raw = { ...d.data(), uid: d.data().uid || d.id } as User;
+          return validateOrPassthrough(UserSchema, raw, d.id, 'users');
+        });
         const dedupedMap = new Map<string, User>();
         rawUsers.forEach(u => {
           const emailKey = u.email.toLowerCase().trim();

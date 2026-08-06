@@ -63,17 +63,17 @@ service cloud.firestore {
       // Herhangi bir durumdan iptal edilebilir (Admin/Manager yetkisi kuralda kontrol edilir)
       let cancelAllowed = newStatus == 'CANCELLED';
 
-      // ASSIGNED → IN_PROGRESS, BLOCKED, CANCELLED
-      let fromAssigned = oldStatus == 'ASSIGNED' && 
-        newStatus in ['IN_PROGRESS', 'BLOCKED', 'CANCELLED'];
+      // ASSIGNED → IN_PROGRESS, BLOCKED, CANCELLED, PENDING_DELEGATION (izin/mazeret devri)
+      let fromAssigned = oldStatus == 'ASSIGNED' &&
+        newStatus in ['IN_PROGRESS', 'BLOCKED', 'CANCELLED', 'PENDING_DELEGATION'];
 
       // PENDING_DELEGATION → IN_PROGRESS, BLOCKED, CANCELLED
-      let fromPending = oldStatus == 'PENDING_DELEGATION' && 
+      let fromPending = oldStatus == 'PENDING_DELEGATION' &&
         newStatus in ['IN_PROGRESS', 'BLOCKED', 'CANCELLED'];
 
-      // IN_PROGRESS → BLOCKED, AWAITING_APPROVAL, COMPLETED, CANCELLED, CRISIS
-      let fromInProgress = oldStatus == 'IN_PROGRESS' && 
-        newStatus in ['BLOCKED', 'AWAITING_APPROVAL', 'COMPLETED', 'CANCELLED', 'CRISIS'];
+      // IN_PROGRESS → BLOCKED, AWAITING_APPROVAL, COMPLETED, CANCELLED, CRISIS, PENDING_DELEGATION (izin/mazeret devri)
+      let fromInProgress = oldStatus == 'IN_PROGRESS' &&
+        newStatus in ['BLOCKED', 'AWAITING_APPROVAL', 'COMPLETED', 'CANCELLED', 'CRISIS', 'PENDING_DELEGATION'];
 
       // BLOCKED → IN_PROGRESS, CANCELLED
       let fromBlocked = oldStatus == 'BLOCKED' && 
@@ -221,13 +221,20 @@ service cloud.firestore {
                                   !exists(/databases/$(database)/documents/users/$(data.coordinatorId)) ||
                                   get(/databases/$(database)/documents/users/$(data.coordinatorId)).data.role != 'Admin';
                                   
-      let hasValidSubtaskAssignee = !('parentId' in data) || 
-                                    data.parentId == null || 
-                                    data.parentId == "" || 
+      let hasValidSubtaskAssignee = !('parentId' in data) ||
+                                    data.parentId == null ||
+                                    data.parentId == "" ||
                                     (exists(/databases/$(database)/documents/users/$(data.assigneeId)) &&
                                      get(/databases/$(database)/documents/users/$(data.assigneeId)).data.role == 'Staff');
-      
-      return hasNoAdminCoordinator && hasValidSubtaskAssignee;
+
+      // İzin/mazeret devri yalnızca Müdür → Müdür yapılabilir — devredilen
+      // görev PENDING_DELEGATION'a girerken yeni sorumlu Müdür olmalı.
+      let hasValidDelegationTarget = !('status' in data) ||
+                                      data.status != 'PENDING_DELEGATION' ||
+                                      (exists(/databases/$(database)/documents/users/$(data.assigneeId)) &&
+                                       get(/databases/$(database)/documents/users/$(data.assigneeId)).data.role == 'Manager');
+
+      return hasNoAdminCoordinator && hasValidSubtaskAssignee && hasValidDelegationTarget;
     }
 
     // ===============================================================

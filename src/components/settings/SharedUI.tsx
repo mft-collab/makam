@@ -17,7 +17,7 @@ export interface SettingsCardProps {
 export const SettingsCard = ({ title, description, icon: Icon, accentColor = 'slate', children, index = 0, fullWidth }: SettingsCardProps) => {
   const colors = {
     slate: { icon: 'bg-executive-blue/5 text-executive-blue', border: 'border-surface-border' },
-    red:   { icon: 'bg-red-50 text-red-600',         border: 'border-red-100/60 bg-red-50/20' },
+    red:   { icon: 'bg-status-danger/10 text-status-danger', border: 'border-status-danger/20 bg-status-danger/[0.03]' },
     amber: { icon: 'bg-executive-gold/10 text-executive-gold', border: 'border-executive-gold/20 bg-executive-gold/[0.03]' },
     gold:  { icon: 'bg-executive-gold/10 text-executive-gold', border: 'border-executive-gold/20' },
   }[accentColor];
@@ -72,7 +72,7 @@ export const ActionButton = ({ onClick, label, htmlFor, variant = 'primary', dis
   const styles = {
     primary:   'bg-executive-gold text-white hover:bg-executive-gold-hover shadow-lg shadow-executive-gold/20',
     secondary: 'bg-makam-glass text-executive-gold border border-executive-gold/[0.15] hover:bg-surface-elevated hover:shadow-sm',
-    danger:    'bg-surface-elevated text-red-600 border border-red-100 hover:bg-red-500/10',
+    danger:    'bg-surface-elevated text-status-danger border border-status-danger/20 hover:bg-status-danger/10',
     warning:   'bg-executive-gold/10 text-executive-gold border border-executive-gold/20 hover:bg-executive-gold/20',
   }[variant];
 
@@ -103,8 +103,8 @@ export const StatusBanner = ({ status }: { status: { type: 'success' | 'error' |
       className={cn(
         'flex items-center gap-3 p-3 rounded-xl border text-[11px] font-medium',
         status.type === 'loading' ? 'bg-executive-blue/[0.03] border-executive-blue/10 text-executive-blue' :
-        status.type === 'success' ? 'bg-emerald-50/60 border-emerald-100/60 text-emerald-700' :
-        'bg-red-50/60 border-red-100/60 text-red-700'
+        status.type === 'success' ? 'bg-status-success/10 border-status-success/20 text-status-success' :
+        'bg-status-danger/10 border-status-danger/20 text-status-danger'
       )}
     >
       {status.type === 'loading' ? (

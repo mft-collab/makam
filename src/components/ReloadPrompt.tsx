@@ -31,11 +31,11 @@ export function ReloadPrompt() {
           exit={{ opacity: 0, y: 50, scale: 0.95 }}
           className="fixed bottom-6 right-6 z-[100] max-w-[400px]"
         >
-          <div className="bg-surface-elevated rounded-2xl p-6 shadow-[0_20px_50px_rgba(0,0,0,0.12)] border border-gray-100 flex flex-col gap-4">
+          <div className="bg-surface-elevated rounded-2xl p-6 shadow-[0_20px_50px_rgba(0,0,0,0.12)] border border-surface-border flex flex-col gap-4">
              <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                   <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
-                      <RefreshCw className="w-5 h-5 text-blue-600 animate-spin-slow" />
+                   <div className="w-10 h-10 rounded-xl bg-status-info/10 flex items-center justify-center">
+                      <RefreshCw className="w-5 h-5 text-status-info animate-spin-slow" />
                    </div>
                    <div className="flex flex-col">
                       <h4 className="text-[15px] font-semibold text-text-heading tracking-tight">

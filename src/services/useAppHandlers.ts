@@ -14,7 +14,7 @@ import { blockerService } from './blockerService';
 import { offlineQueue } from '../lib/offlineQueue';
 import { getSLAConfigForPriority, calculateDeadline } from '../lib/sla';
 import { useUIStore } from '../store/uiStore';
-import type { Task, TaskStatus, TaskBlocker, User } from '../types';
+import type { Task, TaskStatus, TaskBlocker, User, UserRole } from '../types';
 
 // ─── Statü emoji + etiket haritaları ─────────────────────────────────────────
 const STATUS_EMOJI: Partial<Record<TaskStatus, string>> = {
@@ -89,17 +89,23 @@ export function useAppHandlers({
         const hasBlocker = blockers.some(b => b.taskId === taskId && !b.isResolved);
         if (!hasBlocker) {
           const bid = 'temp_blocker_' + Math.random().toString(36).substring(2, 9);
-          offlineQueue.enqueue('blockers', 'create', { id: bid, taskId, reason: 'Hızlı kaydırma ile kriz bildirimi.', isResolved: false, createdAt: now });
-          offlineQueue.enqueue('tasks', 'update', { status: 'BLOCKED', pausedAt: now, updatedAt: now }, taskId);
+          // Engel oluşturma + görevi BLOCKED'a alma tek mutasyonda birleştirilir —
+          // sync sırasında blockerService.addBlocker ile aynı transaction'da uygulanır.
+          offlineQueue.enqueue(
+            'blockers', 'create',
+            { id: bid, taskId, reason: 'Hızlı kaydırma ile kriz bildirimi.', isResolved: false, createdAt: now },
+            undefined, undefined,
+            { taskId, newStatus: 'BLOCKED', userId: user.uid, expectedVersion: oldTask?.lockVersion }
+          );
         } else {
-          offlineQueue.enqueue('tasks', 'update', { status: 'BLOCKED', pausedAt: now, evidence, evidenceType, updatedAt: now }, taskId);
+          offlineQueue.enqueue('tasks', 'update', { status: 'BLOCKED', pausedAt: now, evidence, evidenceType, updatedAt: now }, taskId, oldTask?.lockVersion);
         }
       } else {
         const updateData: Partial<Task> = { status: newStatus, evidence, evidenceType, updatedAt: now };
         if (oldTask) {
           let totalPausedTime = oldTask.totalPausedTime || 0;
           let pausedAt = oldTask.pausedAt ?? null;
-          if ((oldTask.status === 'BLOCKED' || oldTask.status === 'AWAITING_APPROVAL') && oldTask.pausedAt) {
+          if ((oldTask.status === 'BLOCKED' || oldTask.status === 'AWAITING_APPROVAL' || oldTask.status === 'PENDING_DELEGATION') && oldTask.pausedAt) {
             totalPausedTime += now - oldTask.pausedAt;
             pausedAt = null;
           }
@@ -107,7 +113,7 @@ export function useAppHandlers({
           updateData.totalPausedTime = totalPausedTime;
           updateData.pausedAt = pausedAt;
         }
-        offlineQueue.enqueue('tasks', 'update', updateData, taskId);
+        offlineQueue.enqueue('tasks', 'update', updateData, taskId, oldTask?.lockVersion);
       }
       toast('🔄 Çevrimdışı Güncelleme', `Durum lokal kuyrukta güncellendi: ${newStatus}`, 'warning', taskId);
       return;
@@ -117,7 +123,7 @@ export function useAppHandlers({
       if (newStatus === 'BLOCKED') {
         const hasBlocker = blockers.some(b => b.taskId === taskId && !b.isResolved);
         if (!hasBlocker) {
-          await blockerService.addBlocker(taskId, 'Hızlı kaydırma ile kriz bildirimi.', user.uid, oldTask?.status ?? 'IN_PROGRESS');
+          await blockerService.addBlocker(taskId, 'Hızlı kaydırma ile kriz bildirimi.', user.uid, oldTask?.status ?? 'IN_PROGRESS', oldTask?.lockVersion);
         } else {
           await taskService.updateTaskStatus(taskId, newStatus, oldTask?.status, user.uid, evidence, evidenceType, oldTask?.lockVersion);
         }
@@ -136,12 +142,12 @@ export function useAppHandlers({
   }, [user, tasks, blockers, toast, addToast, onError]);
 
   // ─── createTask ──────────────────────────────────────────────────────────
-  const createTask = useCallback(async (data: any) => {
+  const createTask = useCallback(async (data: Partial<Task>) => {
     if (!user) return;
 
     if (isOfflineNow()) {
       const id = tempId();
-      const slaConfig = getSLAConfigForPriority(data.priority);
+      const slaConfig = getSLAConfigForPriority(data.priority ?? 'Medium');
       const deadline = calculateDeadline(new Date(), slaConfig);
       offlineQueue.enqueue('tasks', 'create', {
         ...data, id, status: 'ASSIGNED', deadline,
@@ -163,18 +169,18 @@ export function useAppHandlers({
   }, [user, setIsCreateModalOpen, toast, onError]);
 
   // ─── updateTask ──────────────────────────────────────────────────────────
-  const updateTask = useCallback(async (taskId: string, data: any) => {
+  const updateTask = useCallback(async (taskId: string, data: Partial<Task>) => {
     if (!user) return;
+    const oldTask = tasks.find(t => t.id === taskId);
 
     if (isOfflineNow()) {
-      offlineQueue.enqueue('tasks', 'update', { ...data, updatedAt: Date.now() }, taskId);
+      offlineQueue.enqueue('tasks', 'update', { ...data, updatedAt: Date.now() }, taskId, oldTask?.lockVersion);
       setIsEditModalOpen(false);
       toast('🔄 Çevrimdışı Güncelleme', 'Talimat düzenlemesi lokal sıraya alındı.', 'warning', taskId);
       return;
     }
 
     try {
-      const oldTask = tasks.find(t => t.id === taskId);
       if (!oldTask) throw new Error('Güncellenecek talimat bulunamadı.');
       await taskService.updateTask(taskId, data, oldTask, user.uid);
       setIsEditModalOpen(false);
@@ -213,14 +219,20 @@ export function useAppHandlers({
     if (isOfflineNow()) {
       const bid = 'temp_blocker_' + Math.random().toString(36).substring(2, 9);
       const now = Date.now();
-      offlineQueue.enqueue('blockers', 'create', { id: bid, taskId, reason, isResolved: false, createdAt: now });
-      offlineQueue.enqueue('tasks', 'update', { status: 'BLOCKED', pausedAt: now, updatedAt: now }, taskId);
+      // Engel oluşturma + görevi BLOCKED'a alma tek mutasyonda birleştirilir —
+      // sync sırasında blockerService.addBlocker ile aynı transaction'da uygulanır.
+      offlineQueue.enqueue(
+        'blockers', 'create',
+        { id: bid, taskId, reason, isResolved: false, createdAt: now },
+        undefined, undefined,
+        { taskId, newStatus: 'BLOCKED', userId: user.uid, expectedVersion: task.lockVersion }
+      );
       toast('🚫 Çevrimdışı Risk Bildirimi', 'Gelişen kriz lokal sıraya eklendi.', 'warning', taskId);
       return;
     }
 
     try {
-      await blockerService.addBlocker(taskId, reason, user.uid, task.status);
+      await blockerService.addBlocker(taskId, reason, user.uid, task.status, task.lockVersion);
     } catch (err) {
       onError(err, 'create', 'blockers');
     }
@@ -234,50 +246,93 @@ export function useAppHandlers({
 
     if (isOfflineNow()) {
       const now = Date.now();
-      offlineQueue.enqueue('blockers', 'update', { isResolved: true, resolvedAt: now }, blockerId);
       const remaining = blockers.filter(b => b.taskId === blocker.taskId && b.id !== blockerId && !b.isResolved);
-      if (remaining.length === 0) offlineQueue.enqueue('tasks', 'update', { status: 'IN_PROGRESS', updatedAt: now }, blocker.taskId);
+      if (remaining.length === 0) {
+        // Son aktif engel çözülüyor: engel dokümanı + görevin IN_PROGRESS'e dönüşü
+        // tek mutasyonda birleştirilir — sync sırasında aynı transaction'da uygulanır.
+        const task = tasks.find(t => t.id === blocker.taskId);
+        offlineQueue.enqueue(
+          'blockers', 'update',
+          { isResolved: true, resolvedAt: now },
+          blockerId, undefined,
+          { taskId: blocker.taskId, newStatus: 'IN_PROGRESS', userId: user.uid, expectedVersion: task?.lockVersion }
+        );
+      } else {
+        offlineQueue.enqueue('blockers', 'update', { isResolved: true, resolvedAt: now }, blockerId);
+      }
       toast('✅ Çevrimdışı Risk Çözüldü', 'Engel çözümü lokal sıraya alındı.', 'warning', blocker.taskId);
       return;
     }
 
     try {
       const taskBlockers = blockers.filter(b => b.taskId === blocker.taskId && !b.isResolved);
-      await blockerService.resolveBlocker(blockerId, blocker.taskId, taskBlockers.length - 1, user.uid);
+      const task = tasks.find(t => t.id === blocker.taskId);
+      await blockerService.resolveBlocker(blockerId, blocker.taskId, taskBlockers.length - 1, user.uid, task?.lockVersion);
     } catch (err) {
       onError(err, 'update', `blockers/${blockerId}`);
     }
-  }, [user, blockers, toast, onError]);
+  }, [user, blockers, tasks, toast, onError]);
 
   // ─── addComment ──────────────────────────────────────────────────────────
   const addComment = useCallback(async (taskId: string, text: string) => {
     if (!user) return;
+    const task = tasks.find(t => t.id === taskId);
 
     if (isOfflineNow()) {
-      const task = tasks.find(t => t.id === taskId);
       if (task) {
         const tempComments = [...(task.comments || []), { userId: user.uid, text, timestamp: Date.now() }];
-        offlineQueue.enqueue('tasks', 'update', { comments: tempComments, updatedAt: Date.now() }, taskId);
+        offlineQueue.enqueue('tasks', 'update', { comments: tempComments, updatedAt: Date.now() }, taskId, task.lockVersion);
         toast('💬 Çevrimdışı Yorum', 'Şerh/yorum lokal sıraya eklendi.', 'warning', taskId);
       }
       return;
     }
 
     try {
-      await taskService.addComment(taskId, user.uid, text);
+      await taskService.addComment(taskId, user.uid, text, task?.lockVersion);
     } catch (err) {
       onError(err, 'update', `tasks/${taskId}/comments`);
     }
   }, [user, tasks, toast, onError]);
 
+  // ─── delegateTask (izin/mazeret devri, Müdür → Müdür) ───────────────────
+  const delegateTask = useCallback(async (taskId: string, newAssigneeId: string) => {
+    if (!user) return;
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    const now = Date.now();
+
+    if (isOfflineNow()) {
+      let totalPausedTime = task.totalPausedTime || 0;
+      if ((task.status === 'BLOCKED' || task.status === 'AWAITING_APPROVAL' || task.status === 'PENDING_DELEGATION') && task.pausedAt) {
+        totalPausedTime += now - task.pausedAt;
+      }
+      offlineQueue.enqueue('tasks', 'update', {
+        assigneeId: newAssigneeId,
+        status: 'PENDING_DELEGATION',
+        pausedAt: now,
+        totalPausedTime,
+        updatedAt: now,
+      }, taskId, task.lockVersion);
+      toast('🔄 Çevrimdışı Devir', 'Talimat devri lokal sıraya alındı.', 'warning', taskId);
+      return;
+    }
+
+    try {
+      await taskService.delegateTask(taskId, newAssigneeId, user.uid, task.lockVersion);
+      toast('🔄 Talimat Devredildi', 'Görev başka bir müdüre devredildi.', 'info', taskId);
+    } catch (err) {
+      onError(err, 'update', `tasks/${taskId}`);
+    }
+  }, [user, tasks, toast, onError]);
+
   // ─── Kullanıcı yönetimi ──────────────────────────────────────────────────
-  const addUser = useCallback(async (data: any) => {
+  const addUser = useCallback(async (data: { email: string; fullName: string; role: UserRole; departmentId?: string }) => {
     if (!user) return;
     try { await userService.addUser(data); }
     catch (err) { onError(err, 'create', 'users'); }
   }, [user, onError]);
 
-  const updateUserRole = useCallback(async (userId: string, data: any) => {
+  const updateUserRole = useCallback(async (userId: string, data: Partial<User>) => {
     if (!user) return;
     try { await userService.updateUser(userId, data); }
     catch (err) { onError(err, 'update', `users/${userId}`); }
@@ -306,7 +361,7 @@ export function useAppHandlers({
       const others = blockers.filter(b => b.taskId === blocker.taskId && b.id !== blockerId && !b.isResolved);
       if (others.length === 0) {
         const task = tasks.find(t => t.id === blocker.taskId);
-        if (task?.status === 'BLOCKED') offlineQueue.enqueue('tasks', 'update', { status: 'IN_PROGRESS', updatedAt: Date.now() }, blocker.taskId);
+        if (task?.status === 'BLOCKED') offlineQueue.enqueue('tasks', 'update', { status: 'IN_PROGRESS', updatedAt: Date.now() }, blocker.taskId, task.lockVersion);
       }
       toast('🗑 Çevrimdışı Risk Silindi', 'Risk unsuru kaldırılması lokal sıraya eklendi.', 'warning', blocker.taskId);
       return;
@@ -317,7 +372,7 @@ export function useAppHandlers({
       const others = blockers.filter(b => b.taskId === blocker.taskId && b.id !== blockerId && !b.isResolved);
       if (others.length === 0) {
         const task = tasks.find(t => t.id === blocker.taskId);
-        if (task?.status === 'BLOCKED') await taskService.updateTaskStatus(blocker.taskId, 'IN_PROGRESS', 'BLOCKED', user.uid);
+        if (task?.status === 'BLOCKED') await taskService.updateTaskStatus(blocker.taskId, 'IN_PROGRESS', 'BLOCKED', user.uid, undefined, undefined, task.lockVersion);
       }
     } catch (err) {
       onError(err, 'delete', `blockers/${blockerId}`);
@@ -332,6 +387,7 @@ export function useAppHandlers({
     addBlocker,
     resolveBlocker,
     addComment,
+    delegateTask,
     addUser,
     updateUserRole,
     deleteUser,

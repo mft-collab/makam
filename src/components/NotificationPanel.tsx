@@ -41,8 +41,8 @@ export function NotificationPanel({
       {/* Panel header */}
       <div className="px-4 py-3 border-b border-executive-blue/[0.04] flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <AlertCircle className="w-3.5 h-3.5 text-red-500" />
-          <span className="text-[9px] font-medium text-red-600 uppercase tracking-[0.35em]">
+          <AlertCircle className="w-3.5 h-3.5 text-status-danger" />
+          <span className="text-[9px] font-medium text-status-danger uppercase tracking-[0.35em]">
             Bekleyen Kurumsal Talimatlar
           </span>
         </div>
@@ -52,28 +52,28 @@ export function NotificationPanel({
             try {
               await notificationService.markAllAsRead(userUid);
               setShowNotifications(false);
-            } catch (error: any) {
-              handleSuccess('Hata', 'İşlem başarısız: ' + error.message);
+            } catch (error) {
+              handleSuccess('Hata', 'İşlem başarısız: ' + (error instanceof Error ? error.message : String(error)));
             }
           }}
-          className="text-[8px] text-text-tertiary hover:text-executive-blue uppercase tracking-[0.25em] font-medium transition-colors px-2 py-1 rounded-lg hover:bg-[#F5F3EF]"
+          className="text-[8px] text-text-tertiary hover:text-executive-blue uppercase tracking-[0.25em] font-medium transition-colors px-2 py-1 rounded-lg hover:bg-surface-glass"
         >
           Tamamını Okundu Say
         </button>
       </div>
 
       {/* Notification list */}
-      <div className="max-h-[60vh] lg:max-h-80 overflow-y-auto divide-y divide-[#161513]/[0.03]">
+      <div className="max-h-[60vh] lg:max-h-80 overflow-y-auto divide-y divide-makam-border/30">
         {notifications.map(n => {
           const isCrisis  = n.type === 'Crisis';
           const isWarning = n.type === 'Warning';
           const hasTask   = Boolean(n.taskId);
           return (
-            <div key={n.id} className="flex flex-col gap-2 px-4 py-3 hover:bg-[#F5F3EF]/60 transition-colors">
+            <div key={n.id} className="flex flex-col gap-2 px-4 py-3 hover:bg-surface-glass transition-colors">
               <div className="flex items-start gap-2.5">
                 <div className={cn(
                   'w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5',
-                  isCrisis  ? 'bg-red-50 text-red-500' :
+                  isCrisis  ? 'bg-status-danger/10 text-status-danger' :
                   isWarning ? 'bg-executive-gold/10 text-executive-gold' :
                   'bg-executive-blue/5 text-executive-blue'
                 )}>
@@ -83,7 +83,7 @@ export function NotificationPanel({
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className={cn(
                       'text-[7px] font-bold uppercase tracking-[0.3em] px-1.5 py-0.5 rounded-full',
-                      isCrisis  ? 'bg-red-100 text-red-700' :
+                      isCrisis  ? 'bg-status-danger/20 text-status-danger' :
                       isWarning ? 'bg-executive-gold/10 text-executive-gold' :
                       'bg-executive-blue/5 text-executive-blue'
                     )}>
@@ -116,11 +116,11 @@ export function NotificationPanel({
                           setActiveTab('tasks');
                           await notificationService.markAsRead(n.id);
                           setShowNotifications(false);
-                        } catch (error: any) {
-                          handleSuccess('Hata', 'İşlem başarısız: ' + error.message);
+                        } catch (error) {
+                          handleSuccess('Hata', 'İşlem başarısız: ' + (error instanceof Error ? error.message : String(error)));
                         }
                       }}
-                      className="px-2.5 py-1 text-[8px] font-medium text-white bg-executive-blue rounded-lg uppercase tracking-[0.2em] hover:bg-[#1E293B] transition-colors"
+                      className="px-2.5 py-1 text-[8px] font-medium text-white bg-executive-blue rounded-lg uppercase tracking-[0.2em] hover:opacity-85 transition-opacity"
                     >
                       Talimata Git
                     </button>
@@ -128,7 +128,7 @@ export function NotificationPanel({
                   {isCrisis && !hasTask && (
                     <button
                       onClick={(e) => { e.stopPropagation(); setActiveTab('tasks'); setShowNotifications(false); }}
-                      className="px-2.5 py-1 text-[8px] font-medium text-white bg-red-600 rounded-lg uppercase tracking-[0.2em] hover:bg-red-700 transition-colors"
+                      className="px-2.5 py-1 text-[8px] font-medium text-white bg-status-danger rounded-lg uppercase tracking-[0.2em] hover:opacity-85 transition-opacity"
                     >
                       İcra Havuzuna Git
                     </button>
@@ -138,11 +138,11 @@ export function NotificationPanel({
                       e.stopPropagation();
                       try {
                         await notificationService.markAsRead(n.id);
-                      } catch (error: any) {
-                        handleSuccess('Hata', 'İşlem başarısız: ' + error.message);
+                      } catch (error) {
+                        handleSuccess('Hata', 'İşlem başarısız: ' + (error instanceof Error ? error.message : String(error)));
                       }
                     }}
-                    className="px-2.5 py-1 text-[8px] font-medium text-text-tertiary bg-[#F5F3EF] border border-slate-200/60 rounded-lg uppercase tracking-[0.2em] hover:text-executive-blue hover:bg-surface-elevated transition-colors"
+                    className="px-2.5 py-1 text-[8px] font-medium text-text-tertiary bg-surface-glass border border-surface-border rounded-lg uppercase tracking-[0.2em] hover:text-executive-blue hover:bg-surface-elevated transition-colors"
                   >
                     Okundu
                   </button>
@@ -154,7 +154,7 @@ export function NotificationPanel({
       </div>
 
       {/* Panel footer */}
-      <div className="px-4 py-2.5 border-t border-executive-blue/[0.04] bg-[#F5F3EF]/40">
+      <div className="px-4 py-2.5 border-t border-executive-blue/[0.04] bg-surface-glass">
         <p className="text-[8px] text-text-tertiary uppercase tracking-[0.25em] text-center">
           Okundu sayılan talimatlar listeden kaldırılır
         </p>

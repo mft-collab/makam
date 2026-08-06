@@ -58,7 +58,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="max-w-lg w-full makam-card !p-12 flex flex-col items-center text-center gap-10 bg-makam-glass border-surface-border shadow-2xl backdrop-blur-[40px]">
             <Logo size="lg" withText={false} />
             
-            <div className="w-20 h-20 bg-red-50/50 text-red-600 rounded-2xl flex items-center justify-center border border-red-100/50 shadow-inner">
+            <div className="w-20 h-20 bg-status-danger/10 text-status-danger rounded-2xl flex items-center justify-center border border-status-danger/20 shadow-inner">
               <ShieldAlert className="w-10 h-10 stroke-[1.2]" />
             </div>
             
@@ -68,8 +68,8 @@ export class ErrorBoundary extends Component<Props, State> {
                 {errorMessage}
               </p>
               {isFirebaseError && (
-                <div className="inline-flex mx-auto mt-4 px-6 py-2 bg-red-600/5 border border-red-100/50 rounded-full">
-                  <p className="text-[10px] text-red-600 font-medium uppercase tracking-[0.16em]">
+                <div className="inline-flex mx-auto mt-4 px-6 py-2 bg-status-danger/10 border border-status-danger/20 rounded-full">
+                  <p className="text-[10px] text-status-danger font-medium uppercase tracking-[0.16em]">
                     Yetki Doğrulama Hatası (RBAC Protocol)
                   </p>
                 </div>

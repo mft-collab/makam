@@ -81,7 +81,7 @@ export function AppHeader({
                {Boolean(activeTab === 'settings') && 'Sistem Ayarları'}
              </h1>
              <div className="flex items-center gap-3">
-               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]" />
+               <span className="w-1.5 h-1.5 rounded-full bg-status-success shadow-[0_0_10px_var(--color-status-success)]" />
                <LocalTime />
              </div>
            </div>
@@ -94,10 +94,10 @@ export function AppHeader({
               aria-label={`${notifications.length} bekleyen bildirim. Bildirimleri ${showNotifications ? 'gizle' : 'göster'}.`}
               aria-expanded={showNotifications}
               aria-haspopup="true"
-              className="flex items-center gap-3 px-4 py-2 bg-red-50/40 border border-red-100/60 rounded-full animate-makam-flash shadow-sm hover:bg-red-500/10 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+              className="flex items-center gap-3 px-4 py-2 bg-status-danger/[0.06] border border-status-danger/20 rounded-full animate-makam-flash shadow-sm hover:bg-status-danger/10 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger"
             >
-              <AlertCircle className="w-3.5 h-3.5 text-red-500 stroke-[1.5]" aria-hidden="true" />
-              <span className="text-[9px] font-medium text-red-600 uppercase tracking-[0.18em]">
+              <AlertCircle className="w-3.5 h-3.5 text-status-danger stroke-[1.5]" aria-hidden="true" />
+              <span className="text-[9px] font-medium text-status-danger uppercase tracking-[0.18em]">
                 {notifications.length} Bekleyen Talimat
               </span>
             </button>
@@ -106,26 +106,26 @@ export function AppHeader({
           {/* Live Network Status Indicator */}
           {isOnline ? (
             <div 
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/[0.04] border border-emerald-500/10 rounded-full cursor-help group relative"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-status-success/[0.04] border border-status-success/10 rounded-full cursor-help group relative"
               title="Sistem Güvenli & Senkronize"
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse" />
-              <span className="text-[8px] font-bold text-emerald-700 uppercase tracking-widest hidden sm:inline">ONLINE</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-status-success shadow-[0_0_8px_var(--color-status-success)] animate-pulse" />
+              <span className="text-[8px] font-bold text-status-success uppercase tracking-widest hidden sm:inline">ONLINE</span>
             </div>
           ) : (
-            <div 
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/[0.04] border border-amber-500/10 rounded-full animate-pulse cursor-help relative group"
+            <div
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-status-warning/[0.04] border border-status-warning/10 rounded-full animate-pulse cursor-help relative group"
               title={`Çevrimdışı İcra Modu — ${queueCount} işlem kuyrukta bekliyor.`}
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-              <span className="text-[8px] font-bold text-amber-600 uppercase tracking-widest">
+              <span className="w-1.5 h-1.5 rounded-full bg-status-warning shadow-[0_0_8px_var(--color-status-warning)]" />
+              <span className="text-[8px] font-bold text-status-warning uppercase tracking-widest">
                 OFFLINE {queueCount > 0 && `(${queueCount})`}
               </span>
             </div>
           )}
           {/* Global Focus Filter Selector — Staff panosu kişisel kapsamlıdır, birim odağı anlamsız */}
           {user.role !== 'Staff' && (
-            <div className="flex items-center gap-2 bg-[#F5F3EF]/60 p-1.5 rounded-full border border-executive-blue/[0.04] shadow-sm select-none">
+            <div className="flex items-center gap-2 bg-surface-base/60 p-1.5 rounded-full border border-executive-blue/[0.04] shadow-sm select-none">
               <Building className="w-3.5 h-3.5 text-executive-blue stroke-[1.5] flex-shrink-0" />
               <select
                 value={globalFocusDept}
@@ -190,9 +190,9 @@ export function AppHeader({
           {/* Mobile Network Indicator */}
           <div className="flex items-center">
             {isOnline ? (
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-status-success shadow-[0_0_8px_var(--color-status-success)] animate-pulse" />
             ) : (
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)] animate-ping" />
+              <span className="w-1.5 h-1.5 rounded-full bg-status-warning shadow-[0_0_8px_var(--color-status-warning)] animate-ping" />
             )}
           </div>
 
@@ -217,9 +217,9 @@ export function AppHeader({
           {Boolean(notifications.length > 0) && (
             <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-red-50/60 border border-red-100/60 rounded-full animate-makam-flash text-[9px] font-medium text-red-600 uppercase tracking-[0.25em]"
+              className="flex items-center gap-2 px-3 py-1.5 bg-status-danger/10 border border-status-danger/20 rounded-full animate-makam-flash text-[9px] font-medium text-status-danger uppercase tracking-[0.25em]"
             >
-              <AlertCircle className="w-3.5 h-3.5 text-red-500 stroke-[1.5]" />
+              <AlertCircle className="w-3.5 h-3.5 text-status-danger stroke-[1.5]" />
               <span>{notifications.length} Talimat</span>
             </button>
           )}

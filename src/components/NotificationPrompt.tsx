@@ -130,7 +130,7 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
               {/* Dismiss butonu */}
               <button
                 onClick={handleDismiss}
-                className="absolute top-4 right-4 w-7 h-7 rounded-full bg-slate-100/80 hover:bg-slate-200 flex items-center justify-center transition-all"
+                className="absolute top-4 right-4 w-7 h-7 rounded-full bg-surface-glass hover:bg-surface-border flex items-center justify-center transition-all"
               >
                 <X className="w-3.5 h-3.5 text-text-tertiary" />
               </button>
@@ -174,8 +174,8 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
                         'Onay süreci ve yetki devri bildirimleri',
                       ].map((item, i) => (
                         <div key={i} className="flex items-center gap-2.5">
-                          <div className="w-5 h-5 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center flex-shrink-0">
-                            <Zap className="w-2.5 h-2.5 text-emerald-600 stroke-[2]" />
+                          <div className="w-5 h-5 rounded-full bg-status-success/10 border border-status-success/20 flex items-center justify-center flex-shrink-0">
+                            <Zap className="w-2.5 h-2.5 text-status-success stroke-[2]" />
                           </div>
                           <span className="text-[11px] text-text-muted">{item}</span>
                         </div>
@@ -209,7 +209,7 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
                       transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-                      className="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20"
+                      className="w-16 h-16 bg-status-success rounded-2xl flex items-center justify-center shadow-lg shadow-status-success/20"
                     >
                       <ShieldCheck className="w-8 h-8 text-white stroke-[1.5]" />
                     </motion.div>
@@ -232,16 +232,16 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
                       animate={{ scale: 1 }}
                       transition={{ type: 'spring', stiffness: 400, damping: 20 }}
                       className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg ${
-                        errorReason === 'denied' ? 'bg-amber-50' : 'bg-red-50'
+                        errorReason === 'denied' ? 'bg-status-warning/10' : 'bg-status-danger/10'
                       }`}
                     >
                       <X className={`w-8 h-8 stroke-[1.5] ${
-                        errorReason === 'denied' ? 'text-amber-500' : 'text-red-500'
+                        errorReason === 'denied' ? 'text-status-warning' : 'text-status-danger'
                       }`} />
                     </motion.div>
                     <div className="flex flex-col gap-2">
                       <h3 className={`text-[16px] font-medium font-serif ${
-                        errorReason === 'denied' ? 'text-amber-700' : 'text-red-600'
+                        errorReason === 'denied' ? 'text-status-warning' : 'text-status-danger'
                       }`}>
                         {errorReason === 'denied' ? 'Bildirimler Engellendi' : 'Aktifleştirilemedi'}
                       </h3>
@@ -249,7 +249,7 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
                         {errorReason === 'denied' ? (
                           <>
                             Tarayıcı bildirim iznini reddetmiş. Düzeltmek için:<br />
-                            <span className="font-medium text-text-muted">URL çubuğundaki kilit ikonuna</span> tıklayın → <span className="font-medium text-text-muted">Bildirimler</span>'i <span className="font-medium text-emerald-600">İzin Ver</span> olarak değiştirip sayfayı yenileyin.
+                            <span className="font-medium text-text-muted">URL çubuğundaki kilit ikonuna</span> tıklayın → <span className="font-medium text-text-muted">Bildirimler</span>'i <span className="font-medium text-status-success">İzin Ver</span> olarak değiştirip sayfayı yenileyin.
                           </>
                         ) : (
                           <>

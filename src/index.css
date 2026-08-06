@@ -42,6 +42,7 @@
   --status-success: #047857;
   --status-warning: #B45309;
   --status-danger: #DC2626;
+  --status-info: #2563EB;
 
   /* Dashboard "Son 7 Gün" grafiği seri renkleri — dataviz validatöründen
      geçirilmiş (lightness bandı, chroma tabanı, CVD ayrımı, zemin kontrastı).
@@ -77,6 +78,7 @@
   --status-success: #34D399; /* emerald-400 */
   --status-warning: #FCD34D; /* amber-300 */
   --status-danger: #F87171; /* red-400 */
+  --status-info: #60A5FA; /* blue-400 */
 
   /* Karanlık zemin (#0A0A09) için grafik seri adımları — aynı ton aileleri,
      karanlık mod lightness bandına (L 0.48–0.67) çekilmiş adımlar. */
@@ -145,6 +147,7 @@
   --color-status-success: var(--status-success);
   --color-status-warning: var(--status-warning);
   --color-status-danger:  var(--status-danger);
+  --color-status-info:    var(--status-info);
 
   /* Functional Mapping */
   --color-surface-base: var(--color-makam-bg);

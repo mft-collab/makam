@@ -7,6 +7,7 @@ import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
 import { STATUS_LABELS, ROLE_LABELS, PRIORITY_LABELS } from '../constants';
 import { db, collection, getDocs, query, where, orderBy, limit, startAfter } from '../firebase';
+import { useUIStore } from '../store/uiStore';
 
 interface AuditLogListProps {
   tasks: Task[];
@@ -14,6 +15,7 @@ interface AuditLogListProps {
 }
 
 export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
+  const addToast = useUIStore(state => state.addToast);
   const [logsState, setLogsState] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -60,6 +62,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
       }
     } catch (error) {
       console.error('Error fetching audit logs:', error);
+      addToast({ title: '⚠️ Denetim İzi Yüklenemedi', body: 'Kayıtlar getirilirken bir hata oluştu. Lütfen tekrar deneyin.', type: 'danger' });
     } finally {
       setLoading(false);
     }
@@ -188,7 +191,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center gap-2">
                       <span className="text-[12px] font-medium text-executive-blue tracking-tight group-hover:text-executive-blue transition-colors">{user?.fullName || 'Sistem'}</span>
-                      <span className="text-[8px] text-text-tertiary font-medium uppercase tracking-[0.15em] px-1.5 py-0.5 bg-[#F5F3EF] border border-slate-200/60 rounded-md">{user ? ROLE_LABELS[user.role as keyof typeof ROLE_LABELS] : ''}</span>
+                      <span className="text-[8px] text-text-tertiary font-medium uppercase tracking-[0.15em] px-1.5 py-0.5 bg-surface-glass border border-surface-border rounded-md">{user ? ROLE_LABELS[user.role as keyof typeof ROLE_LABELS] : ''}</span>
                     </div>
                     <span className="text-[9px] text-text-tertiary uppercase tracking-[0.2em]">{new Date(log.timestamp).toLocaleString('tr-TR')}</span>
                   </div>
@@ -203,7 +206,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
                   <span className="text-[8px] text-text-tertiary font-medium uppercase tracking-[0.25em]">Durum Değişimi / Değer Detayı</span>
                   {log.changes ? (
                     <div className="flex flex-col gap-1.5 w-full max-w-[340px]">
-                      {Object.entries(log.changes).map(([field, diff]: [string, any]) => {
+                      {Object.entries(log.changes).map(([field, diff]) => {
                         const fieldLabel = {
                           title: 'Başlık',
                           description: 'Açıklama',
@@ -213,15 +216,23 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
                           deadline: 'Son Tarih',
                           evidence: 'Kanıt',
                           tags: 'Etiketler',
-                          estimatedHours: 'Tahmini Süre'
+                          estimatedHours: 'Tahmini Süre',
+                          status: 'Durum',
+                          deleted: 'Silindi'
                         }[field] || field;
 
-                        const truncateValue = (val: any) => {
+                        const truncateValue = (val: unknown) => {
                           if (val === null || val === undefined) return '-';
-                          // Ham enum değerleri (ör. öncelik) İngilizce saklanır — denetim
-                          // izinde okunabilir olması için Türkçe etikete çevrilir.
+                          // Ham enum değerleri (ör. öncelik/durum) İngilizce saklanır —
+                          // denetim izinde okunabilir olması için Türkçe etikete çevrilir.
                           if (field === 'priority' && typeof val === 'string' && val in PRIORITY_LABELS) {
                             return PRIORITY_LABELS[val as keyof typeof PRIORITY_LABELS];
+                          }
+                          if (field === 'status' && typeof val === 'string' && val in STATUS_LABELS) {
+                            return STATUS_LABELS[val as TaskStatus];
+                          }
+                          if (field === 'deleted' && typeof val === 'boolean') {
+                            return val ? 'Evet' : 'Hayır';
                           }
                           if (typeof val === 'object') return JSON.stringify(val).slice(0, 30);
                           const str = String(val);
@@ -269,7 +280,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
           })
         ) : (
           !loading && (
-            <div className="py-16 flex flex-col items-center justify-center bg-[#F5F3EF]/50 border border-dashed border-executive-blue/[0.05] rounded-2xl gap-4">
+            <div className="py-16 flex flex-col items-center justify-center bg-surface-glass border border-dashed border-executive-blue/[0.05] rounded-2xl gap-4">
               <ShieldCheck className="w-10 h-10 text-surface-border/50 stroke-[1]" />
               <span className="text-[9px] text-text-tertiary uppercase tracking-[0.4em]">Kayıt Bulunamadı</span>
             </div>
@@ -283,7 +294,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
             variant="secondary"
             onClick={() => fetchLogs(false, lastVisibleDoc)}
             disabled={loading}
-            className="flex items-center gap-2 px-6 py-2 uppercase tracking-[0.2em] text-[10px] font-medium rounded-xl border border-slate-200 bg-surface-elevated hover:bg-slate-50 transition-all"
+            className="flex items-center gap-2 px-6 py-2 uppercase tracking-[0.2em] text-[10px] font-medium rounded-xl border border-surface-border bg-surface-elevated hover:bg-surface-glass transition-all"
           >
             {loading && <Loader2 className="w-3 h-3 animate-spin" />}
             Daha Fazla Yükle

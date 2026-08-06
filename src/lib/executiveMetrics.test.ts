@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateTaskRisk, getInterventionQueue, getUserPerformanceProfiles } from './executiveMetrics';
+import { calculateTaskRisk, getInterventionQueue, getUserPerformanceProfiles, isTaskInCrisis } from './executiveMetrics';
 import type { Task, User } from '../types';
 
 const now = new Date('2026-07-02T09:00:00.000Z').getTime();
@@ -63,6 +63,33 @@ describe('executiveMetrics', () => {
     expect(queue[0]?.task.id).toBe('crisis');
     expect(queue.some(item => item.task.id === 'approval')).toBe(true);
     expect(queue.every(item => item.task.id !== 'normal')).toBe(true);
+  });
+
+  it('isTaskInCrisis, orijinal deadline geçmiş ama duraklatma süresiyle uzatılmış efektif deadline içindeki BLOCKED görevi kriz saymaz', () => {
+    // Deadline 12:00'da idi (now'dan 2 saat önce), ama görev 3 saat önce
+    // BLOCKED'a girdi ve o zamandan beri duraklatılmış durumda — efektif
+    // deadline (deadline + duraklatma süresi) hâlâ gelecekte.
+    const blockedTask = task({
+      status: 'BLOCKED',
+      deadline: now - 2 * 60 * 60 * 1000,
+      pausedAt: now - 3 * 60 * 60 * 1000,
+      totalPausedTime: 0,
+    });
+
+    expect(isTaskInCrisis(blockedTask, now)).toBe(false);
+  });
+
+  it('isTaskInCrisis, duraklatma süresi eklenince de efektif deadline geçmişse kriz sayar', () => {
+    // Deadline 12:00'da idi (now'dan 5 saat önce). Görev 1 saat önce BLOCKED'a
+    // girdi (yalnızca 1 saat duraklatıldı) — efektif deadline hâlâ geçmişte.
+    const blockedTask = task({
+      status: 'BLOCKED',
+      deadline: now - 5 * 60 * 60 * 1000,
+      pausedAt: now - 1 * 60 * 60 * 1000,
+      totalPausedTime: 0,
+    });
+
+    expect(isTaskInCrisis(blockedTask, now)).toBe(true);
   });
 
   it('builds user performance load profiles', () => {

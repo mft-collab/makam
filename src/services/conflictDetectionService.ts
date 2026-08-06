@@ -33,22 +33,24 @@ class ConflictDetectionService {
    * Firestore güncelleme hatasından çakışma tespiti.
    * taskService.ts içinde çağrılır.
    */
-  detectConflict(error: unknown, taskId: string, taskTitle: string, expectedVersion: number): boolean {
+  detectConflict(error: unknown, taskId: string, taskTitle: string, expectedVersion: number, serverVersion?: number): boolean {
     const msg = error instanceof Error ? error.message : String(error);
-    
-    // Firestore transaction çakışması veya permission denied (version mismatch simülasyonu)
-    const isConflict = 
+
+    // Firestore transaction çakışması veya versiyon uyuşmazlığı — VERSION_MISMATCH
+    // formatı taskService.ts'te büyük harfle atılıyor, önceki 'version' (küçük harf)
+    // kontrolü hiçbir zaman eşleşmiyordu ve bu bildirim asla tetiklenmiyordu.
+    const isConflict =
+      msg.includes('VERSION_MISMATCH') ||
       msg.includes('ABORTED') ||
       msg.includes('contention') ||
-      msg.includes('lock') ||
-      msg.includes('version');
+      msg.includes('lock');
 
     if (isConflict) {
       this.notify({
         taskId,
         taskTitle,
         expectedVersion,
-        serverVersion: expectedVersion + 1, // Gerçek değer Firestore'dan gelmeli
+        serverVersion: serverVersion ?? expectedVersion + 1, // Hata mesajından parse edilemezse tahmini yedek
       });
       return true;
     }

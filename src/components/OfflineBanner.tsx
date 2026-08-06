@@ -26,7 +26,7 @@ export function OfflineBanner({ isOffline, queueLength }: Props) {
     >
       <div className="flex items-center gap-3.5 mx-auto max-w-[1440px] w-full">
         <span
-          className="w-2 h-2 rounded-full bg-amber-500 animate-ping flex-shrink-0"
+          className="w-2 h-2 rounded-full bg-executive-gold animate-ping flex-shrink-0"
           aria-hidden="true"
         />
         <span className="text-[10px] font-medium text-executive-gold uppercase tracking-[0.25em] font-sans">

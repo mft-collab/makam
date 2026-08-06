@@ -1,38 +1,55 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
+import {
+  collection,
+  doc,
+  updateDoc,
   deleteDoc,
-  db 
+  runTransaction,
+  db
 } from '../firebase';
-import { taskService } from './taskService';
+import { transitionTaskInTransaction } from './taskService';
+import { runWithRetry } from '../lib/retry';
 import { TaskStatus } from '../types';
 
 export const blockerService = {
-  async addBlocker(taskId: string, reason: string, userId: string, oldStatus: TaskStatus) {
-    const blockerRef = await addDoc(collection(db, 'blockers'), {
-      taskId,
-      reason,
-      isResolved: false,
-      createdAt: Date.now()
+  // Engel dokümanı ve görevin BLOCKED'a alınması AYNI transaction'da yapılır —
+  // biri başarısız olursa diğeri de uygulanmaz (ör. sahipsiz bir engel kaydı
+  // kalıp görevin durumu güncellenmemiş olması engellenir).
+  async addBlocker(taskId: string, reason: string, userId: string, _oldStatus: TaskStatus, expectedVersion?: number) {
+    const blockerRef = doc(collection(db, 'blockers'));
+    await runWithRetry(async () => {
+      await runTransaction(db, async (transaction) => {
+        // Firestore kuralı: tüm okumalar yazmalardan önce olmalı — bu yüzden
+        // transitionTaskInTransaction (kendi transaction.get'ini yapar) ÖNCE çağrılır.
+        await transitionTaskInTransaction(transaction, taskId, 'BLOCKED', userId, { expectedVersion });
+        transaction.set(blockerRef, {
+          id: blockerRef.id,
+          taskId,
+          reason,
+          isResolved: false,
+          createdAt: Date.now()
+        });
+      });
     });
-    await updateDoc(blockerRef, { id: blockerRef.id });
-    
-    // Update task status to Blocked
-    await taskService.updateTaskStatus(taskId, 'BLOCKED', oldStatus, userId);
     return blockerRef.id;
   },
 
-  async resolveBlocker(blockerId: string, taskId: string, otherActiveCount: number, userId: string) {
-    await updateDoc(doc(db, 'blockers', blockerId), {
-      isResolved: true,
-      resolvedAt: Date.now()
-    });
+  async resolveBlocker(blockerId: string, taskId: string, otherActiveCount: number, userId: string, expectedVersion?: number) {
+    const blockerRef = doc(db, 'blockers', blockerId);
 
-    // If no more active blockers for this task, set back to In_Progress
     if (otherActiveCount === 0) {
-      await taskService.updateTaskStatus(taskId, 'IN_PROGRESS', 'BLOCKED', userId);
+      // Son aktif engel çözülüyorsa: engel dokümanı + görevin IN_PROGRESS'e
+      // dönmesi tek transaction'da — biri başarısız olursa diğeri de olmaz.
+      await runWithRetry(async () => {
+        await runTransaction(db, async (transaction) => {
+          await transitionTaskInTransaction(transaction, taskId, 'IN_PROGRESS', userId, { expectedVersion });
+          transaction.update(blockerRef, { isResolved: true, resolvedAt: Date.now() });
+        });
+      });
+    } else {
+      await updateDoc(blockerRef, {
+        isResolved: true,
+        resolvedAt: Date.now()
+      });
     }
   },
 

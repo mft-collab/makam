@@ -51,12 +51,25 @@ function isActive(task: Task) {
 }
 
 /**
+ * Efektif kalan süre: orijinal deadline + toplam duraklatma süresi - referans an.
+ * Duraklatılmış (BLOCKED/AWAITING_APPROVAL/PENDING_DELEGATION) bir görevde referans
+ * an pausedAt'tır — "now" değil, aksi halde duraklatma süresi boyunca mühlet
+ * hesapları yanlışlıkla ilerlemeye devam eder. TaskDetails.tsx'in canlı SLA
+ * sayacıyla aynı formül — dashboard/kriz/risk hesapları burada tek noktadan türer.
+ */
+function effectiveMsToDeadline(task: Task, now: number): number {
+  const effectiveDeadline = task.deadline + (task.totalPausedTime || 0);
+  const referenceTime = task.pausedAt ?? now;
+  return effectiveDeadline - referenceTime;
+}
+
+/**
  * Görev kriz (SLA ihlali) durumunda mı: hâlâ aktif (icra edilmemiş ve
- * lağvedilmemiş) olduğu hâlde mühleti geçmiş görevler.
+ * lağvedilmemiş) olduğu hâlde efektif mühleti geçmiş görevler.
  * Dashboard'daki tüm "gecikme/kriz" sayımları için tek otoriter tanım.
  */
 export function isTaskInCrisis(task: Task, now: number): boolean {
-  return isActive(task) && now > task.deadline;
+  return isActive(task) && effectiveMsToDeadline(task, now) < 0;
 }
 
 export function calculateTaskRisk(task: Task, allTasks: Task[], now = Date.now()): TaskRiskProfile {
@@ -66,7 +79,7 @@ export function calculateTaskRisk(task: Task, allTasks: Task[], now = Date.now()
 
   let score = PRIORITY_WEIGHT[task.priority] ?? 0;
   const reasons: string[] = [];
-  const msToDeadline = task.deadline - now;
+  const msToDeadline = effectiveMsToDeadline(task, now);
   const ageSinceUpdate = now - task.updatedAt;
   const subtasks = allTasks.filter(t => t.parentId === task.id);
   const overdueSubtasks = subtasks.filter(t => isActive(t) && t.deadline < now).length;
@@ -137,7 +150,7 @@ export function getInterventionQueue(tasks: Task[], users: User[], now = Date.no
       const profile = calculateTaskRisk(task, tasks, now);
       const assignee = users.find(u => u.uid === task.assigneeId || u.email === task.assigneeId);
       const load = activeLoadByUser.get(task.assigneeId) ?? 0;
-      const msToDeadline = task.deadline - now;
+      const msToDeadline = effectiveMsToDeadline(task, now);
 
       let lane: InterventionItem['lane'] = 'deadline';
       let action = 'Yakından takip et';

@@ -121,10 +121,10 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
             {...register('title')}
             className={cn(
               "text-[28px] font-light text-text-heading font-serif tracking-tight outline-none bg-transparent placeholder:text-text-muted/30 w-full",
-              errors.title && "border-b border-red-500/50"
+              errors.title && "border-b border-status-danger/50"
             )}
           />
-          {errors.title && <span className="text-red-500 text-[10px] px-1 uppercase tracking-wider">{errors.title.message}</span>}
+          {errors.title && <span className="text-status-danger text-[10px] px-1 uppercase tracking-wider">{errors.title.message}</span>}
         </div>
         
         {/* Açıklama */}
@@ -136,12 +136,12 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
           <textarea 
             className={cn(
               "makam-input min-h-[140px] resize-none bg-makam-glass border-makam-border/5 text-text-heading placeholder:text-text-muted/30 rounded-2xl p-5 text-[14px] font-light leading-relaxed transition-all outline-none focus:border-executive-blue/20 focus:ring-8 focus:ring-executive-blue/5 shadow-inner",
-              errors.description && "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/5"
+              errors.description && "border-status-danger/50 focus:border-status-danger/50 focus:ring-status-danger/5"
             )}
             placeholder="İşin detaylarını ve başarı kriterlerini tanımlayın..."
             {...register('description')}
           />
-          {errors.description && <span className="text-red-500 text-[10px] px-1 uppercase tracking-wider">{errors.description.message}</span>}
+          {errors.description && <span className="text-status-danger text-[10px] px-1 uppercase tracking-wider">{errors.description.message}</span>}
         </div>
 
         {/* Görevlendirmeler */}
@@ -152,7 +152,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
                İcra Makamı
              </label>
              {isSubTask && (
-               <p className="text-[9px] text-amber-600/80 px-1 tracking-wide flex items-center gap-1.5">
+               <p className="text-[9px] text-status-warning/80 px-1 tracking-wide flex items-center gap-1.5">
                  <AlertCircle className="w-3 h-3 flex-shrink-0" />
                  Alt talimatlar yalnızca memurlara atanabilir.
                </p>
@@ -161,7 +161,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
               {...register('assigneeId')}
               className={cn(
                 "w-full bg-surface-elevated border border-makam-border/10 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
-                errors.assigneeId && "border-red-500/50"
+                errors.assigneeId && "border-status-danger/50"
               )}
             >
               <option value="">Sorumlu Seçiniz</option>
@@ -169,7 +169,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
                 <option key={m.uid} value={m.uid}>{m.fullName}</option>
               ))}
             </select>
-            {errors.assigneeId && <span className="text-red-500 text-[10px] px-1 uppercase tracking-wider">{errors.assigneeId.message}</span>}
+            {errors.assigneeId && <span className="text-status-danger text-[10px] px-1 uppercase tracking-wider">{errors.assigneeId.message}</span>}
           </div>
 
           <div className="flex flex-col gap-3">
@@ -181,7 +181,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
               {...register('coordinatorId')}
               className={cn(
                 "w-full bg-surface-elevated border border-makam-border/10 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
-                errors.coordinatorId && "border-red-500/50"
+                errors.coordinatorId && "border-status-danger/50"
               )}
             >
               <option value="">İrtibatlı Seçiniz (İsteğe Bağlı)</option>
@@ -190,7 +190,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
               ))}
             </select>
              {errors.coordinatorId ? (
-                <span className="text-red-500 text-[10px] px-1 uppercase tracking-wider">{errors.coordinatorId.message}</span>
+                <span className="text-status-danger text-[10px] px-1 uppercase tracking-wider">{errors.coordinatorId.message}</span>
              ) : (
                 <p className="text-[9px] text-text-muted/40 px-1 tracking-wide">
                   Sorumludan farklı biri seçilmelidir.
@@ -211,7 +211,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
-            {errors.priority && <span className="text-red-500 text-[10px] px-1 uppercase tracking-wider">{errors.priority.message}</span>}
+            {errors.priority && <span className="text-status-danger text-[10px] px-1 uppercase tracking-wider">{errors.priority.message}</span>}
           </div>
         </div>
 
@@ -226,10 +226,10 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
             {...register('deadline')}
             className={cn(
               "w-full bg-surface-elevated border border-makam-border/10 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
-              errors.deadline && "border-red-500/50"
+              errors.deadline && "border-status-danger/50"
             )}
           />
-          {errors.deadline && <span className="text-red-500 text-[10px] px-1 uppercase tracking-wider">{errors.deadline.message}</span>}
+          {errors.deadline && <span className="text-status-danger text-[10px] px-1 uppercase tracking-wider">{errors.deadline.message}</span>}
         </div>
       </div>
 

@@ -37,11 +37,10 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
       setPendingMutations(queue);
     };
 
-    window.addEventListener('online', updateNetworkStatus);
     window.addEventListener('offline', updateNetworkStatus);
     window.addEventListener('makam_queue_changed', updateQueue);
 
-    // Bağlantı geri gelince otomatik sync
+    // Bağlantı geri gelince ağ durumunu güncelle ve kuyruğu otomatik senkronize et
     const handleOnline = async () => {
       updateNetworkStatus();
       if (offlineQueue.getQueue().length > 0) {
@@ -58,7 +57,6 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
     updateQueue();
 
     return () => {
-      window.removeEventListener('online', updateNetworkStatus);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', updateNetworkStatus);
       window.removeEventListener('makam_queue_changed', updateQueue);

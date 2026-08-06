@@ -123,7 +123,7 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout }: MobileDo
                 <button
                   onClick={onLogout}
                   className="flex items-center gap-3 w-full px-4 py-3.5 transition-all duration-200
-                             text-status-danger/70 hover:text-status-danger hover:bg-red-500/10"
+                             text-status-danger/70 hover:text-status-danger hover:bg-status-danger/10"
                 >
                   <LogOut className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
                   <span className="text-[12px] font-medium tracking-wide min-w-0 truncate">Oturumu Kapat</span>

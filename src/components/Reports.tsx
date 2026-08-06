@@ -8,6 +8,7 @@ import {
 } from 'recharts';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 import { tr } from 'date-fns/locale';
+import { useUIStore } from '../store/uiStore';
 
 interface ReportsProps {
   tasks: Task[];
@@ -27,9 +28,9 @@ interface KpiCardProps {
 
 const KpiCard = ({ label, value, icon: Icon, color, index = 0 }: KpiCardProps) => {
   const palette = {
-    blue:  { bg: 'bg-executive-blue/5',  icon: 'text-executive-blue',  bar: 'bg-executive-blue' },
-    red:   { bg: 'bg-red-50',       icon: 'text-red-500',     bar: 'bg-red-500' },
-    green: { bg: 'bg-emerald-50',   icon: 'text-emerald-500', bar: 'bg-emerald-500' },
+    blue:  { bg: 'bg-executive-blue/5',   icon: 'text-executive-blue',  bar: 'bg-executive-blue' },
+    red:   { bg: 'bg-status-danger/10',   icon: 'text-status-danger',   bar: 'bg-status-danger' },
+    green: { bg: 'bg-status-success/10',  icon: 'text-status-success',  bar: 'bg-status-success' },
   }[color];
 
   return (
@@ -54,6 +55,7 @@ const KpiCard = ({ label, value, icon: Icon, color, index = 0 }: KpiCardProps) =
 
 // ─── Reports ──────────────────────────────────────────────────────────────────
 export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, setActiveTab }: ReportsProps) => {
+  const addToast = useUIStore(state => state.addToast);
   const tasks = propsTasks;
   const blockers = propsBlockers;
 
@@ -106,6 +108,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
       });
     } catch (err) {
       console.error('PDF export hatası:', err);
+      addToast({ title: '⚠️ Dışa Aktarma Başarısız', body: 'PDF raporu oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.', type: 'danger' });
     } finally {
       setIsExporting(false);
     }
@@ -137,7 +140,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
   const averageCompletionTime = useMemo(() => {
     const completed = filteredTasks.filter(t => t.status === 'COMPLETED');
     if (completed.length === 0) return 0;
-    // Bekleme sürelerini (örn. BLOCKED durumu) hariyet tutarak gerçek aktif çalışma süresini hesapla
+    // Bekleme sürelerini (örn. BLOCKED durumu) hariç tutarak gerçek aktif çalışma süresini hesapla
     return completed.reduce((acc, t) => {
       const elapsed = (t.completedAt || t.updatedAt) - t.createdAt;
       const paused = t.totalPausedTime ?? 0;
@@ -352,7 +355,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
               <h3 className="text-[13px] font-medium text-executive-blue font-serif tracking-tight">Talimat Dağılımı</h3>
               <p className="text-[9px] text-text-tertiary uppercase tracking-[0.3em] mt-0.5">Durum Matrisi</p>
             </div>
-            <CheckCircle2 className="w-4 h-4 text-emerald-500 stroke-[1.5]" />
+            <CheckCircle2 className="w-4 h-4 text-status-success stroke-[1.5]" />
           </div>
           <div className="h-[180px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -457,7 +460,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
         </div>
 
         {/* Mobile cards */}
-        <div className="sm:hidden divide-y divide-[#161513]/[0.03]">
+        <div className="sm:hidden divide-y divide-makam-border/30">
           {managerPerformance.length === 0 ? (
             <div className="py-12 text-center text-[10px] text-text-tertiary uppercase tracking-[0.4em]">
               Veri bulunamadı
@@ -478,32 +481,32 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                   <p className="text-[12px] font-medium text-executive-blue font-serif line-clamp-1">{m.fullName}</p>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-[9px] text-text-tertiary">{m.total} talimat</span>
-                    <span className="text-[9px] text-emerald-500">{m.completed} tamamlandı</span>
-                    {m.blocked > 0 && <span className="text-[9px] text-red-500">{m.blocked} engel</span>}
+                    <span className="text-[9px] text-status-success">{m.completed} tamamlandı</span>
+                    {m.blocked > 0 && <span className="text-[9px] text-status-danger">{m.blocked} engel</span>}
                     <span className={cn(
                       'text-[9px] font-bold px-1.5 py-0.5 rounded border',
-                      m.slaRate > 80 ? 'text-emerald-600 border-emerald-100 bg-emerald-50/30' :
+                      m.slaRate > 80 ? 'text-status-success border-status-success/20 bg-status-success/10' :
                       m.slaRate > 50 ? 'text-executive-gold border-executive-gold/20 bg-executive-gold/10' :
-                      'text-red-500 border-red-100 bg-red-50/30'
+                      'text-status-danger border-status-danger/20 bg-status-danger/10'
                     )}>SLA %{m.slaRate}</span>
                   </div>
                   <div className="flex items-center gap-2 mt-1.5">
-                    <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="flex-1 h-1 bg-surface-border rounded-full overflow-hidden">
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${m.completionRate}%` }}
                         transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1], delay: i * 0.05 }}
                         className={cn(
                           'h-full rounded-full',
-                          m.completionRate > 70 ? 'bg-emerald-500' :
-                          m.completionRate > 40 ? 'bg-executive-gold' : 'bg-red-500'
+                          m.completionRate > 70 ? 'bg-status-success' :
+                          m.completionRate > 40 ? 'bg-executive-gold' : 'bg-status-danger'
                         )}
                       />
                     </div>
                     <span className={cn(
                       'text-[10px] font-medium tabular-nums w-8 text-right',
-                      m.completionRate > 70 ? 'text-emerald-600' :
-                      m.completionRate > 40 ? 'text-executive-gold' : 'text-red-500'
+                      m.completionRate > 70 ? 'text-status-success' :
+                      m.completionRate > 40 ? 'text-executive-gold' : 'text-status-danger'
                     )}>%{m.completionRate}</span>
                   </div>
                 </div>
@@ -516,7 +519,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
         <div className="hidden sm:block overflow-x-auto custom-scrollbar">
           <table className="w-full border-collapse">
             <thead>
-              <tr className="bg-[#F5F3EF]/50">
+              <tr className="bg-surface-glass">
                 {[
                   { label: 'Yetkili Makam', align: 'left' },
                   { label: 'İş Yükü',       align: 'center' },
@@ -538,7 +541,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#161513]/[0.03]">
+            <tbody className="divide-y divide-makam-border/30">
               {managerPerformance.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center text-[10px] text-text-tertiary uppercase tracking-[0.4em]">
@@ -580,7 +583,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
 
                     {/* Completed */}
                     <td className="px-4 py-3 text-center">
-                      <span className="text-[12px] font-medium text-emerald-600 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-100/60 tabular-nums">
+                      <span className="text-[12px] font-medium text-status-success bg-status-success/10 px-3 py-1 rounded-lg border border-status-success/20 tabular-nums">
                         {m.completed}
                       </span>
                     </td>
@@ -590,8 +593,8 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                       <span className={cn(
                         'text-[12px] font-medium px-3 py-1 rounded-lg border tabular-nums',
                         m.blocked > 0
-                          ? 'text-red-600 bg-red-50 border-red-100/60'
-                          : 'text-text-tertiary bg-[#F5F3EF] border-slate-100/60'
+                          ? 'text-status-danger bg-status-danger/10 border-status-danger/20'
+                          : 'text-text-tertiary bg-surface-glass border-surface-border'
                       )}>
                         {m.blocked}
                       </span>
@@ -601,9 +604,9 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                     <td className="px-4 py-3 text-center">
                       <span className={cn(
                         'text-[12px] font-medium px-3 py-1 rounded-lg border tabular-nums',
-                        m.slaRate > 80 ? 'text-emerald-600 bg-emerald-50 border-emerald-100/60' :
+                        m.slaRate > 80 ? 'text-status-success bg-status-success/10 border-status-success/20' :
                         m.slaRate > 50 ? 'text-executive-gold bg-executive-gold/10 border-executive-gold/20' :
-                        'text-red-600 bg-red-50 border-red-100/60'
+                        'text-status-danger bg-status-danger/10 border-status-danger/20'
                       )}>
                         %{m.slaRate}
                       </span>
@@ -615,20 +618,20 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                         <div className="flex flex-col items-end gap-1.5">
                           <span className={cn(
                             'text-[18px] font-light tabular-nums tracking-tight font-serif',
-                            m.completionRate > 70 ? 'text-emerald-600' :
-                            m.completionRate > 40 ? 'text-executive-gold' : 'text-red-600'
+                            m.completionRate > 70 ? 'text-status-success' :
+                            m.completionRate > 40 ? 'text-executive-gold' : 'text-status-danger'
                           )}>
                             %{m.completionRate}
                           </span>
-                          <div className="w-24 h-1 bg-slate-100/80 rounded-full overflow-hidden">
+                          <div className="w-24 h-1 bg-surface-border/80 rounded-full overflow-hidden">
                             <motion.div
                               initial={{ width: 0 }}
                               animate={{ width: `${m.completionRate}%` }}
                               transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1], delay: i * 0.06 }}
                               className={cn(
                                 'h-full rounded-full',
-                                m.completionRate > 70 ? 'bg-emerald-500' :
-                                m.completionRate > 40 ? 'bg-executive-gold' : 'bg-red-500'
+                                m.completionRate > 70 ? 'bg-status-success' :
+                                m.completionRate > 40 ? 'bg-executive-gold' : 'bg-status-danger'
                               )}
                             />
                           </div>

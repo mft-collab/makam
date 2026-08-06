@@ -27,7 +27,7 @@ export const Skeleton = ({ className, style, rounded = 'md' }: SkeletonProps) =>
   return (
     <div
       className={cn(
-        'bg-gradient-to-r from-[#161513]/[0.04] via-[#161513]/[0.08] to-[#161513]/[0.04]',
+        'bg-gradient-to-r from-text-heading/[0.04] via-text-heading/[0.08] to-text-heading/[0.04]',
         'bg-[length:200%_100%] animate-skeleton',
         roundedMap[rounded],
         className

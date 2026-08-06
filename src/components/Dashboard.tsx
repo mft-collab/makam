@@ -4,14 +4,19 @@ import { CheckCircle2, Clock, AlertTriangle, AlertCircle, TrendingUp, Activity, 
 import { Task, User } from '../types';
 import { motion } from 'motion/react';
 import { Modal } from './ui/Modal';
-import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
 import { cn, formatTimeAgo } from '../lib/utils';
 import { STATUS_LABELS } from '../constants';
-import { RollingNumber } from './ui/RollingNumber';
 import { DashboardSkeleton } from './ui/Skeleton';
 import { useDataStore } from '../store/dataStore';
-import { getInterventionQueue, getUserPerformanceProfiles, isTaskInCrisis, type InterventionItem, type UserPerformanceProfile } from '../lib/executiveMetrics';
+import { getInterventionQueue, getUserPerformanceProfiles } from '../lib/executiveMetrics';
+import {
+  computeDeltas, computeStats, computeLast7DaysData, filterStatTasks,
+  computeCompletionRatePercent, computeSlaCompliancePercent, computeHealthScore,
+  computeExecutiveSignals, SIGNAL_MATCHERS,
+  type QueueSignalKey, type StatCategory
+} from './dashboard/helpers';
+import { StatCard, InterventionRow, PerformanceRow, CustomTooltip } from './dashboard/subcomponents';
 
 interface DashboardProps {
   tasks: Task[];
@@ -25,221 +30,9 @@ interface DashboardProps {
   isFiltered?: boolean;
 }
 
-// ─── Compact Stat Card ────────────────────────────────────────────────────────
-interface StatCardProps {
-  label: string;
-  value: number;
-  max: number;
-  icon: React.ElementType;
-  color: 'blue' | 'green' | 'orange' | 'red' | 'gray';
-  onClick?: () => void;
-  index?: number;
-  delta?: number;
-}
-
-const StatCard = ({ label, value, max, icon: Icon, color, onClick, index = 0, delta = 0 }: StatCardProps) => {
-  const accentColor = {
-    blue:   { bg: 'bg-executive-blue/5',   text: 'text-executive-blue' },
-    green:  { bg: 'bg-status-success/10',  text: 'text-status-success' },
-    orange: { bg: 'bg-executive-gold/10',  text: 'text-executive-gold' },
-    red:    { bg: 'bg-status-danger/10',   text: 'text-status-danger' },
-    gray:   { bg: 'bg-surface-glass',      text: 'text-text-muted' },
-  }[color];
-
-  return (
-    <motion.button
-      type="button"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 260, damping: 28, delay: index * 0.06 }}
-      whileHover={{ y: -3, scale: 1.01 }}
-      whileTap={{ scale: 0.98 }}
-      onClick={onClick}
-      className={cn(
-        'group w-full text-left flex items-center gap-2.5 sm:gap-3 p-3 sm:p-3.5 min-h-[74px]',
-        'bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl',
-        'shadow-[0_1px_8px_rgba(22,21,19,0.02)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)]',
-        'transition-all duration-300 hover:bg-surface-elevated hover:border-surface-border',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
-        onClick && 'cursor-pointer'
-      )}
-    >
-      {/* Icon */}
-      <div className={cn(
-        'w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center transition-all duration-300',
-        accentColor.bg,
-        'group-hover:scale-105'
-      )}>
-        <Icon className={cn('w-4 h-4 stroke-[1.5]', accentColor.text)} />
-      </div>
-
-      {/* Label + Value */}
-      <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-        <span className="text-[9px] font-semibold text-text-tertiary uppercase tracking-[0.16em] truncate">{label}</span>
-        <div className="flex items-baseline gap-1 min-w-0">
-          <RollingNumber value={value} className="text-[20px] sm:text-[22px] font-light text-executive-blue tracking-tight tabular-nums leading-none shrink-0" />
-          {max > 0 && <span className="text-[10px] text-text-tertiary font-light truncate min-w-0">/ {max}</span>}
-          {delta !== 0 && (
-            <span className={cn(
-              "text-[10px] font-bold px-1 py-0.5 rounded-md ml-1 flex items-center gap-0.5 shrink-0",
-              delta > 0
-                ? (color === 'red' || color === 'orange' ? "bg-status-danger/10 text-status-danger" : "bg-status-success/10 text-status-success")
-                : (color === 'red' || color === 'orange' ? "bg-status-success/10 text-status-success" : "bg-status-danger/10 text-status-danger")
-            )}>
-              {delta > 0 ? `+${delta}` : delta}
-            </span>
-          )}
-        </div>
-      </div>
-    </motion.button>
-  );
-};
-
-const riskTone = {
-  low: 'bg-surface-glass text-text-muted border-surface-border',
-  medium: 'bg-status-warning/10 text-status-warning border-status-warning/20',
-  high: 'bg-status-danger/10 text-status-danger border-status-danger/20',
-  // Kritik risk: dolgu rengi solid kalır (görsel ağırlık korunur); metin,
-  // her iki temada da zeminle yüksek kontrast veren surface-base tonudur.
-  critical: 'bg-status-danger text-surface-base border-status-danger',
-};
-
-const laneLabel: Record<InterventionItem['lane'], string> = {
-  crisis: 'Kriz',
-  blocked: 'Engel',
-  approval: 'Onay',
-  stalled: 'Atalet',
-  deadline: 'Mühlet',
-  workload: 'Yük',
-};
-
-// ─── Müdahale kuyruğu sinyal filtreleri ───────────────────────────────────────
-type QueueSignalKey = 'critical' | 'approval' | 'workload' | 'stalled';
-
-const SIGNAL_MATCHERS: Record<QueueSignalKey, (item: InterventionItem) => boolean> = {
-  critical: item => item.level === 'critical',
-  approval: item => item.lane === 'approval',
-  workload: item => item.lane === 'workload',
-  stalled:  item => item.lane === 'stalled',
-};
-
-interface InterventionRowProps {
-  item: InterventionItem;
-  users: User[];
-  onView?: () => void;
-  index?: number;
-}
-
-const InterventionRow = ({ item, users, onView, index = 0 }: InterventionRowProps) => {
-  const assignee = users.find(u => u.uid === item.task.assigneeId || u.email === item.task.assigneeId);
-
-  return (
-    <motion.button
-      type="button"
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 260, damping: 28, delay: index * 0.04 }}
-      onClick={onView}
-      className="group w-full text-left grid grid-cols-[auto_1fr_auto] gap-3 p-3 rounded-xl border border-surface-border bg-surface-elevated/70 hover:bg-makam-glass hover:border-executive-blue/10 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
-    >
-      <div className="flex flex-col items-center gap-1">
-        <div className={cn('w-11 h-11 rounded-xl border flex items-center justify-center font-display text-[16px] tabular-nums', riskTone[item.level])}>
-          {item.score}
-        </div>
-        <span className="text-[10px] text-text-tertiary uppercase tracking-[0.2em]">Risk</span>
-      </div>
-
-      <div className="min-w-0 flex flex-col gap-1.5">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant={item.level === 'critical' || item.level === 'high' ? 'danger' : item.level === 'medium' ? 'warning' : 'default'}>
-            {laneLabel[item.lane]}
-          </Badge>
-          <span className="text-[12px] font-medium text-executive-blue line-clamp-1 font-display">{item.task.title}</span>
-        </div>
-        <div className="flex items-center gap-2 min-w-0">
-          <Avatar name={assignee?.fullName ?? '?'} photoURL={assignee?.photoURL} size="sm" />
-          <span className="text-[9px] text-text-muted truncate">{assignee?.fullName ?? 'Sorumlu bulunamadı'}</span>
-          <span className="text-[9px] text-text-tertiary truncate">· {item.reasons.join(' · ')}</span>
-        </div>
-        <span className="text-[9px] font-medium text-text-heading uppercase tracking-[0.18em]">{item.action}</span>
-      </div>
-
-      <div className="flex items-center justify-center">
-        <ArrowRight className="w-4 h-4 text-text-tertiary group-hover:text-executive-blue group-hover:translate-x-0.5 transition-all" />
-      </div>
-    </motion.button>
-  );
-};
-
-interface PerformanceRowProps {
-  profile: UserPerformanceProfile;
-  index?: number;
-}
-
-const PerformanceRow = ({ profile, index = 0 }: PerformanceRowProps) => {
-  const loadTone = profile.loadScore >= 75
-    ? 'text-status-danger bg-status-danger/10 border-status-danger/20'
-    : profile.loadScore >= 45
-      ? 'text-status-warning bg-status-warning/10 border-status-warning/20'
-      : 'text-status-success bg-status-success/10 border-status-success/20';
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 260, damping: 28, delay: index * 0.04 }}
-      className="grid grid-cols-[auto_1fr_auto] gap-3 p-3 rounded-xl border border-surface-border bg-surface-elevated/70"
-    >
-      <Avatar name={profile.user.fullName} photoURL={profile.user.photoURL} size="md" />
-      <div className="min-w-0 flex flex-col gap-1">
-        <span className="text-[12px] font-medium text-executive-blue truncate font-display">{profile.user.fullName}</span>
-        <div className="flex flex-wrap gap-2 text-[10px] text-text-tertiary uppercase tracking-[0.15em]">
-          <span>{profile.activeCount} aktif</span>
-          <span>{profile.completedCount} icra</span>
-          <span>{profile.overdueCount} gecikmiş</span>
-          <span>{profile.blockedCount} engelli</span>
-          <span>SLA %{profile.onTimeCompletionRate}</span>
-        </div>
-      </div>
-      <div className={cn('w-12 h-10 rounded-xl border flex flex-col items-center justify-center', loadTone)}>
-        <span className="text-[13px] font-semibold tabular-nums leading-none">{profile.loadScore}</span>
-        <span className="text-[10px] uppercase tracking-[0.16em]">Yük</span>
-      </div>
-    </motion.div>
-  );
-};
-
-
-// ─── Custom Tooltip for Recharts (Frosted Glass) ──────────────────────────────
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-makam-glass backdrop-blur-xl border border-surface-border p-3 rounded-2xl shadow-xl flex flex-col gap-1.5 min-w-[120px] text-left">
-        <span className="text-[9px] font-bold text-text-tertiary uppercase tracking-wider">{label}</span>
-        <div className="h-px bg-executive-blue/[0.05]" />
-        <div className="flex flex-col gap-1 text-[11px] font-medium">
-          {payload.map((entry: any) => (
-            <div key={entry.name} className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: entry.color }} />
-                <span className="text-text-muted">{entry.name}:</span>
-              </div>
-              <span className="font-bold text-text-heading">{entry.value}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-  return null;
-};
-
-
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoading = false, isFiltered = false }: DashboardProps) => {
-  const [selectedStatCategory, setSelectedStatCategory] = useState<
-    'total' | 'waiting' | 'inProgress' | 'blocked' | 'inReview' | 'completed' | 'crisis' | null
-  >(null);
+  const [selectedStatCategory, setSelectedStatCategory] = useState<StatCategory | null>(null);
   // Müdahale kuyruğu sinyal filtresi (chip'e tıklayınca aç/kapa)
   const [queueFilter, setQueueFilter] = useState<QueueSignalKey | null>(null);
   // Canlı SLA sayacı — her dakika güncellenir
@@ -260,72 +53,12 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
   );
   const scopeTasks = isPersonalView ? myTasks : tasks;
 
-  const deltas = useMemo(() => {
-    // Takvim günü bazlı pencereler (rolling 24h yerine)
-    const now = new Date(tick);
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const yesterdayStart = todayStart - 24 * 60 * 60 * 1000;
-    const yesterdayEnd = todayStart - 1;
+  const deltas = useMemo(() => computeDeltas(scopeTasks, tick), [scopeTasks, tick]);
 
-    const todayInProgress = scopeTasks.filter(t => t.status === 'IN_PROGRESS' && t.updatedAt >= todayStart).length;
-    const yesterdayInProgress = scopeTasks.filter(t => t.status === 'IN_PROGRESS' && t.updatedAt >= yesterdayStart && t.updatedAt <= yesterdayEnd).length;
-    const inProgressDelta = todayInProgress - yesterdayInProgress;
-
-    const todayReview = scopeTasks.filter(t => t.status === 'AWAITING_APPROVAL' && t.updatedAt >= todayStart).length;
-    const yesterdayReview = scopeTasks.filter(t => t.status === 'AWAITING_APPROVAL' && t.updatedAt >= yesterdayStart && t.updatedAt <= yesterdayEnd).length;
-    const reviewDelta = todayReview - yesterdayReview;
-
-    const todayBlocked = scopeTasks.filter(t => t.status === 'BLOCKED' && t.updatedAt >= todayStart).length;
-    const yesterdayBlocked = scopeTasks.filter(t => t.status === 'BLOCKED' && t.updatedAt >= yesterdayStart && t.updatedAt <= yesterdayEnd).length;
-    const blockedDelta = todayBlocked - yesterdayBlocked;
-
-    const todayCrisis = scopeTasks.filter(t => isTaskInCrisis(t, tick) && t.updatedAt >= todayStart).length;
-    const yesterdayCrisis = scopeTasks.filter(t => isTaskInCrisis(t, tick) && t.updatedAt >= yesterdayStart && t.updatedAt <= yesterdayEnd).length;
-    const crisisDelta = todayCrisis - yesterdayCrisis;
-
-    return {
-      inProgress: inProgressDelta,
-      inReview:   reviewDelta,
-      blocked:    blockedDelta,
-      crisis:     crisisDelta
-    };
-  }, [scopeTasks, tick]);
-
-  const stats = useMemo(() => {
-    const crisisCount = scopeTasks.filter(t => isTaskInCrisis(t, tick)).length;
-
-    const isBlocked   = (t: Task) => t.status === 'BLOCKED';
-    const isCompleted = (t: Task) => t.status === 'COMPLETED';
-    const isWaiting   = (t: Task) => t.status === 'ASSIGNED' || t.status === 'PENDING_DELEGATION';
-    const isInReview  = (t: Task) => t.status === 'AWAITING_APPROVAL';
-    const isInProgress= (t: Task) => t.status === 'IN_PROGRESS';
-
-    // globalStats, tüm organizasyona ait Firestore ön-hesap değeridir.
-    // Odak filtresi aktifse (isFiltered) ya da pano kişisel kapsamdaysa,
-    // scopeTasks[] zaten bir alt küme olduğundan globalStats kullanmak
-    // yanıltıcı olur — her zaman lokal hesap yap.
-    if (globalStats && !isFiltered && !isPersonalView) {
-      return {
-        total:      globalStats.totalTasks || scopeTasks.length,
-        waiting:    globalStats.status_ASSIGNED || 0,
-        inProgress: globalStats.status_IN_PROGRESS || 0,
-        blocked:    globalStats.status_BLOCKED || 0,
-        inReview:   globalStats.status_AWAITING_APPROVAL || 0,
-        completed:  globalStats.status_COMPLETED || 0,
-        crisis:     crisisCount,
-      };
-    }
-
-    return {
-      total:      scopeTasks.length,
-      waiting:    scopeTasks.filter(isWaiting).length,
-      inProgress: scopeTasks.filter(isInProgress).length,
-      blocked:    scopeTasks.filter(isBlocked).length,
-      inReview:   scopeTasks.filter(isInReview).length,
-      completed:  scopeTasks.filter(isCompleted).length,
-      crisis:     crisisCount,
-    };
-  }, [scopeTasks, globalStats, isFiltered, isPersonalView, tick]);
+  const stats = useMemo(
+    () => computeStats(scopeTasks, tick, globalStats, isFiltered, isPersonalView),
+    [scopeTasks, globalStats, isFiltered, isPersonalView, tick]
+  );
 
   const executiveQueue = useMemo(
     () => getInterventionQueue(scopeTasks, users, tick, 8),
@@ -341,20 +74,7 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
     return profiles.filter(p => p.activeCount > 0 || p.completedCount > 0).slice(0, 6);
   }, [tasks, users, tick, isPersonalView, user]);
 
-  const executiveSignals = useMemo(() => {
-    const countBy = (key: QueueSignalKey) => executiveQueue.filter(SIGNAL_MATCHERS[key]).length;
-    const criticalCount = countBy('critical');
-    const approvalCount = countBy('approval');
-    const workloadCount = countBy('workload');
-    const stalledCount  = countBy('stalled');
-
-    return [
-      { key: 'critical' as const, label: 'Acil Müdahale', value: criticalCount, tone: criticalCount > 0 ? 'red' : 'green' },
-      { key: 'approval' as const, label: 'Onay Kararı', value: approvalCount, tone: approvalCount > 0 ? 'amber' : 'green' },
-      { key: 'workload' as const, label: 'Yük Aşımı', value: workloadCount, tone: workloadCount > 0 ? 'red' : 'green' },
-      { key: 'stalled' as const, label: 'Atalet', value: stalledCount, tone: stalledCount > 0 ? 'amber' : 'green' },
-    ];
-  }, [executiveQueue]);
+  const executiveSignals = useMemo(() => computeExecutiveSignals(executiveQueue), [executiveQueue]);
 
   // Sinyal filtresi aktifken kuyruğun tamamı (en çok 8 kayıt), değilken ilk 5 kayıt
   const visibleQueue = useMemo(() => {
@@ -368,24 +88,7 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
   // retroaktif olarak değişiyordu. createdAt/completedAt asla değişmediği için
   // "Yeni Talimat" ve "İcra Edilen" metrikleri geçmişe dönük tutarlıdır.
   // Gün sınırı tick'ten türetilir ki gece yarısı geçişinde pencere bayatlamasın.
-  const last7DaysData = useMemo(() => {
-    const todayStart = new Date(tick);
-    todayStart.setHours(0, 0, 0, 0);
-    return Array.from({ length: 7 }).map((_, i) => {
-      const d = new Date(todayStart);
-      d.setDate(d.getDate() - (6 - i));
-      const start = d.getTime();
-      const end = new Date(d);
-      end.setHours(23, 59, 59, 999);
-      const endMs = end.getTime();
-      const completedAtOf = (t: Task) => t.completedAt ?? t.updatedAt;
-      return {
-        name: d.toLocaleDateString('tr-TR', { weekday: 'short' }),
-        'Yeni Talimat': scopeTasks.filter(t => t.createdAt >= start && t.createdAt <= endMs).length,
-        'İcra Edilen':  scopeTasks.filter(t => t.status === 'COMPLETED' && completedAtOf(t) >= start && completedAtOf(t) <= endMs).length,
-      };
-    });
-  }, [scopeTasks, tick]);
+  const last7DaysData = useMemo(() => computeLast7DaysData(scopeTasks, tick), [scopeTasks, tick]);
 
   const chartSummary = useMemo(
     () => last7DaysData
@@ -394,52 +97,21 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
     [last7DaysData]
   );
 
-  const filteredStatTasks = useMemo(() => {
-    let list: Task[] = [];
-    switch (selectedStatCategory) {
-      case 'total':      list = scopeTasks; break;
-      case 'waiting':    list = scopeTasks.filter(t => t.status === 'ASSIGNED' || t.status === 'PENDING_DELEGATION'); break;
-      case 'inProgress': list = scopeTasks.filter(t => t.status === 'IN_PROGRESS'); break;
-      case 'blocked':    list = scopeTasks.filter(t => t.status === 'BLOCKED'); break;
-      case 'inReview':   list = scopeTasks.filter(t => t.status === 'AWAITING_APPROVAL'); break;
-      case 'crisis':     list = scopeTasks.filter(t => isTaskInCrisis(t, tick)); break;
-      case 'completed':  list = scopeTasks.filter(t => t.status === 'COMPLETED'); break;
-      default:           list = [];
-    }
+  const filteredStatTasks = useMemo(
+    () => filterStatTasks(scopeTasks, selectedStatCategory, tick),
+    [scopeTasks, selectedStatCategory, tick]
+  );
 
-    const priorityWeights: Record<string, number> = { Urgent: 3, High: 2, Medium: 1, Low: 0 };
-    return [...list].sort((a, b) => {
-      const weightA = priorityWeights[a.priority] ?? 0;
-      const weightB = priorityWeights[b.priority] ?? 0;
-      if (weightB !== weightA) return weightB - weightA;
-      return b.updatedAt - a.updatedAt;
-    });
-  }, [scopeTasks, selectedStatCategory, tick]);
-
-  const completionRatePercent = useMemo(() => {
-    // Lağvedilen görevler paydaya girmez: ne icra edilmiş ne de icrası
-    // beklenen iştir; skoru yapay olarak düşürmemeli.
-    const considered = scopeTasks.filter(t => t.status !== 'CANCELLED');
-    if (considered.length === 0) return 0;
-    return Math.round((considered.filter(t => t.status === 'COMPLETED').length / considered.length) * 100);
-  }, [scopeTasks]);
+  const completionRatePercent = useMemo(() => computeCompletionRatePercent(scopeTasks), [scopeTasks]);
 
   // SLA standardize edilmiş formul: zamanında tamamlanan / toplam tamamlanan
   // (tüm ekranlarda tutarlı tek tanım)
-  const slaCompliancePercent = useMemo(() => {
-    const completed = scopeTasks.filter(t => t.status === 'COMPLETED');
-    if (completed.length === 0) return 100;
-    const onTime = completed.filter(t => (t.completedAt || t.updatedAt) <= t.deadline).length;
-    return Math.round((onTime / completed.length) * 100);
-  }, [scopeTasks]);
+  const slaCompliancePercent = useMemo(() => computeSlaCompliancePercent(scopeTasks), [scopeTasks]);
 
-  const healthScore = useMemo(() => {
-    const total = scopeTasks.length;
-    if (total === 0) return 100;
-    const completionRate = completionRatePercent / 100;
-    const slaRate = slaCompliancePercent / 100;
-    return Math.round(((completionRate * 0.6) + (slaRate * 0.4)) * 100);
-  }, [scopeTasks, completionRatePercent, slaCompliancePercent]);
+  const healthScore = useMemo(
+    () => computeHealthScore(scopeTasks.length, completionRatePercent, slaCompliancePercent),
+    [scopeTasks, completionRatePercent, slaCompliancePercent]
+  );
 
   const statModalTitle: Record<string, string> = {
     total: 'Toplam Talimatlar', waiting: 'Bekleyen Talimatlar', inProgress: 'İcra Aşamasındakiler',
@@ -683,7 +355,7 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
                 />
               ))
             ) : (
-              <div className="flex flex-col items-center justify-center py-10 gap-2 rounded-xl border border-dashed border-executive-blue/[0.05] bg-[#F5F3EF]/50">
+              <div className="flex flex-col items-center justify-center py-10 gap-2 rounded-xl border border-dashed border-executive-blue/[0.05] bg-surface-glass">
                 <ShieldCheck className="w-7 h-7 text-status-success stroke-[1.2]" />
                 <span className="text-[9px] text-text-tertiary uppercase tracking-[0.16em]">
                   {queueFilter ? 'Bu filtrede müdahale yok' : 'Müdahale Gerektiren Başlık Yok'}
@@ -713,7 +385,7 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
                 <PerformanceRow key={profile.user.uid} profile={profile} index={index} />
               ))
             ) : (
-              <div className="flex flex-col items-center justify-center py-10 gap-2 rounded-xl border border-dashed border-executive-blue/[0.05] bg-[#F5F3EF]/50">
+              <div className="flex flex-col items-center justify-center py-10 gap-2 rounded-xl border border-dashed border-executive-blue/[0.05] bg-surface-glass">
                 <Gauge className="w-7 h-7 text-text-muted/40 stroke-[1.2]" />
                 <span className="text-[9px] text-text-tertiary uppercase tracking-[0.16em]">Yük Verisi Yok</span>
               </div>

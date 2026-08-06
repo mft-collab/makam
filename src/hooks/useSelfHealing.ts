@@ -33,8 +33,11 @@ export function useSelfHealing({ user, tasks, blockers }: UseSelfHealingOptions)
             `[SelfHealing] "${task.title}" — aktif blocker yok, IN_PROGRESS'e döndürülüyor...`
           );
           try {
-            await taskService.updateTaskStatus(task.id, 'IN_PROGRESS', 'BLOCKED', user.uid);
+            await taskService.updateTaskStatus(task.id, 'IN_PROGRESS', 'BLOCKED', user.uid, undefined, undefined, task.lockVersion);
           } catch (e) {
+            // VERSION_MISMATCH burada beklenen bir durumdur (görev bu 5sn içinde
+            // başka bir yerden değişti) — sessizce atlanır, bir sonraki tetiklemede
+            // güncel veriyle yeniden denenir. Diğer hatalar loglanır.
             logger.warn('[SelfHealing] Onarım başarısız:', e);
           }
         }

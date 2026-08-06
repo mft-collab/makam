@@ -30,16 +30,25 @@ export const STATUS_COLORS: Record<TaskStatus, string> = {
   ASSIGNED: 'bg-executive-blue/[0.03] text-executive-blue border-executive-blue/[0.08]',
   PENDING_DELEGATION: 'bg-executive-gold/[0.05] text-executive-gold border-executive-gold/[0.15]',
   IN_PROGRESS: 'bg-executive-blue/[0.06] text-executive-blue border-executive-blue/[0.15]',
-  BLOCKED: 'bg-red-500/[0.03] text-red-500 border-red-500/10',
+  BLOCKED: 'bg-status-danger/[0.03] text-status-danger border-status-danger/10',
   AWAITING_APPROVAL: 'bg-executive-gold/[0.08] text-executive-gold border-executive-gold/25',
-  COMPLETED: 'bg-emerald-500/[0.03] text-emerald-600 border-emerald-500/10',
-  CANCELLED: 'bg-gray-400/[0.04] text-text-muted border-surface-border/50',
-  CRISIS: 'bg-red-500/[0.06] text-red-600 border-red-500/15',
+  COMPLETED: 'bg-status-success/[0.03] text-status-success border-status-success/10',
+  CANCELLED: 'bg-surface-border/[0.04] text-text-muted border-surface-border/50',
+  CRISIS: 'bg-status-danger/[0.06] text-status-danger border-status-danger/15',
 };
 
 export const PRIORITY_COLORS: Record<TaskPriority, string> = {
-  Low: 'bg-gray-400/[0.04] text-slate-400 border-surface-border/50',
+  Low: 'bg-surface-border/[0.04] text-text-muted border-surface-border/50',
   Medium: 'bg-executive-blue/[0.04] text-executive-blue/80 border-executive-blue/[0.08]',
   High: 'bg-executive-gold/[0.05] text-executive-gold border-executive-gold/15',
-  Urgent: 'bg-red-500/[0.05] text-red-600 border-red-500/10',
+  Urgent: 'bg-status-danger/[0.05] text-status-danger border-status-danger/10',
+};
+
+/** Badge bileşeninin `variant` prop'una eşleme — öncelik rozetlerinin tüm
+ *  ekranlarda (BlockerList, TaskBoard, vb.) tutarlı görünmesi için tek kaynak. */
+export const PRIORITY_BADGE_VARIANT: Record<TaskPriority, 'default' | 'success' | 'warning' | 'danger' | 'info' | 'primary'> = {
+  Low: 'default',
+  Medium: 'info',
+  High: 'warning',
+  Urgent: 'danger',
 };

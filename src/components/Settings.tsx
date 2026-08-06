@@ -3,42 +3,12 @@ import { Download, AlertCircle, CheckCircle2, Database, RotateCcw, ShieldCheck, 
 import { Task, User } from '../types';
 import { cn } from '../lib/utils';
 import { db, doc, writeBatch, collection, getDocs, query, setDoc, addDoc } from '../firebase';
-import { z } from 'zod';
 import { taskService } from '../services/taskService';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { getSLAConfigForPriority } from '../lib/sla';
 import { SettingsCard, ActionButton, StatusBanner } from './settings/SharedUI';
-
-// ── Yedek Doğrulama Şemaları (Restore) ──────────────────────────────────────
-const userBackupSchema = z.object({
-  uid: z.string(),
-  fullName: z.string(),
-  email: z.string().email(),
-  role: z.enum(['Admin', 'Manager', 'Staff'])
-});
-
-const taskBackupSchema = z.object({
-  id: z.string(),
-  title: z.string().min(1),
-  description: z.string(),
-  creatorId: z.string(),
-  assigneeId: z.string(),
-  status: z.enum(['ASSIGNED', 'PENDING_DELEGATION', 'IN_PROGRESS', 'BLOCKED', 'AWAITING_APPROVAL', 'COMPLETED', 'CANCELLED', 'CRISIS']),
-  priority: z.enum(['Low', 'Medium', 'High', 'Urgent']),
-  deadline: z.any(),
-  createdAt: z.any(),
-  updatedAt: z.any()
-});
-
-const restoreBackupSchema = z.object({
-  // Eski yedekler 'MAKAM Executive Control' değerini taşıyor — geriye
-  // dönük uyumluluk için ikisi de kabul edilir (bkz. AboutModal/index.html
-  // markasının Türkçeleştirilmesi).
-  system: z.enum(['MAKAM Stratejik Yönetim', 'MAKAM Executive Control']),
-  users: z.array(z.any()).optional(),
-  tasks: z.array(z.any()).optional(),
-  blockers: z.array(z.any()).optional(),
-});
+import { userBackupSchema, taskBackupSchema, restoreBackupSchema } from './settings/constants';
+import { cleanDataObj, toTs, pick } from './settings/helpers';
 
 interface SettingsProps {
   tasks: Task[];
@@ -138,8 +108,8 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
       await addDoc(collection(db, 'audit_logs'), {
         taskId: 'system_settings',
         changedBy: currentUser.uid,
-        oldValue: 'SLA Config Modified',
-        newValue: 'Low: ' + slaLowVal + ' ' + slaLowUnit + ', Medium: ' + slaMediumVal + ' ' + slaMediumUnit + ', High: ' + slaHighVal + ' ' + slaHighUnit + ', Urgent: ' + slaUrgentVal + ' ' + slaUrgentUnit,
+        oldValue: 'SLA Yapılandırması Değiştirildi',
+        newValue: 'Rutin: ' + slaLowVal + ' ' + slaLowUnit + ', Normal: ' + slaMediumVal + ' ' + slaMediumUnit + ', Öncelikli: ' + slaHighVal + ' ' + slaHighUnit + ', İvedi: ' + slaUrgentVal + ' ' + slaUrgentUnit,
         timestamp: Date.now()
       });
       
@@ -147,8 +117,9 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
       if (triggerToast) {
         triggerToast('📋 SLA GÜNCELLENDİ', 'Kurumsal SLA teslim süreleri başarıyla revize edildi.', 'success');
       }
-    } catch (err: any) {
-      setImportStatus({ type: 'error', message: `SLA Kayıt Hatası: ${err.message}` });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setImportStatus({ type: 'error', message: `SLA Kayıt Hatası: ${msg}` });
     } finally {
       setIsSavingSla(false);
     }
@@ -262,9 +233,10 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       setImportStatus({ type: 'success', message: 'Sistem yedeği başarıyla indirildi.' });
-    } catch (err: any) {
+    } catch (err) {
       console.error('Export failed:', err);
-      setImportStatus({ type: 'error', message: `Yedekleme Hatası: ${err.message}` });
+      const msg = err instanceof Error ? err.message : String(err);
+      setImportStatus({ type: 'error', message: `Yedekleme Hatası: ${msg}` });
     }
   };
 
@@ -313,26 +285,6 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
 
         setImportStatus({ type: 'loading', message: 'Sistem Geri Yükleniyor...' });
 
-        const cleanDataObj = (obj: any): any => {
-          if (obj === null || typeof obj !== 'object') return obj;
-          if (Array.isArray(obj)) return obj.map(item => cleanDataObj(item));
-          const n: any = {};
-          Object.keys(obj).forEach(k => { if (obj[k] !== undefined) n[k] = cleanDataObj(obj[k]); });
-          return n;
-        };
-        const toTs = (val: any, fb?: number): number => {
-          if (val == null) return fb ?? Date.now();
-          if (typeof val === 'number') return val;
-          if (typeof val === 'string') return new Date(val).getTime() || (fb ?? Date.now());
-          if (typeof val === 'object' && 'seconds' in val) return val.seconds * 1000;
-          return fb ?? Date.now();
-        };
-        const pick = (obj: any, keys: string[]) => {
-          const r: any = {};
-          keys.forEach(k => { if (k in obj && obj[k] !== undefined) r[k] = obj[k]; });
-          return r;
-        };
-
         const items: { ref: any; data: any }[] = [];
         if (Array.isArray(data.users)) {
           data.users.forEach((u: any) => {
@@ -374,15 +326,16 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
         await addDoc(collection(db, 'audit_logs'), {
           taskId: 'system_backup_restore',
           changedBy: currentUser.uid,
-          oldValue: `Backup file: ${file.name}`,
-          newValue: `Restored ${data.users?.length ?? 0} users, ${data.tasks?.length ?? 0} tasks, ${data.blockers?.length ?? 0} blockers`,
+          oldValue: `Yedek dosyası: ${file.name}`,
+          newValue: `${data.users?.length ?? 0} kullanıcı, ${data.tasks?.length ?? 0} talimat, ${data.blockers?.length ?? 0} engel geri yüklendi`,
           timestamp: Date.now()
         });
 
         setImportStatus({ type: 'success', message: 'Sistem başarıyla önceki sürüme döndürüldü.' });
         e.target.value = '';
-      } catch (err: any) {
-        setImportStatus({ type: 'error', message: `Hata: ${err.message}` });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setImportStatus({ type: 'error', message: `Hata: ${msg}` });
       }
     };
     reader.readAsText(file);
@@ -431,14 +384,15 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
       await addDoc(collection(db, 'audit_logs'), {
         taskId: 'system_log_export',
         changedBy: currentUser.uid,
-        oldValue: logs.length + ' logs in DB',
-        newValue: 'Exported to local file',
+        oldValue: logs.length + ' kayıt (veritabanında)',
+        newValue: 'Yerel dosyaya aktarıldı',
         timestamp: Date.now()
       });
 
       setImportStatus({ type: 'success', message: `${logs.length} denetim izi kaydı başarıyla yerel diske aktarıldı.` });
-    } catch (err: any) {
-      setImportStatus({ type: 'error', message: `Arşivleme Hatası: ${err.message}` });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setImportStatus({ type: 'error', message: `Arşivleme Hatası: ${msg}` });
     } finally {
       setIsArchiving(false);
     }
@@ -462,7 +416,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
 
       {/* ── Offline Banner ─────────────────────────────────────────── */}
       {!isOnline && (
-        <div className="flex items-center gap-2.5 p-3 bg-red-500/10 border border-red-500/20 text-red-500 rounded-2xl text-[10px] font-semibold uppercase tracking-[0.15em] animate-pulse">
+        <div className="flex items-center gap-2.5 p-3 bg-status-danger/10 border border-status-danger/20 text-status-danger rounded-2xl text-[10px] font-semibold uppercase tracking-[0.15em] animate-pulse">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>Çevrimdışı moddasınız. Veritabanı ve SLA işlemleri geçici olarak kısıtlanmıştır.</span>
         </div>
@@ -543,9 +497,9 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                   </p>
 
                   {isInstalled ? (
-                    <div className="flex items-center gap-2 p-2.5 bg-emerald-50/60 border border-emerald-100/60 rounded-xl">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                      <span className="text-[9px] text-emerald-700 font-medium uppercase tracking-[0.2em]">
+                    <div className="flex items-center gap-2 p-2.5 bg-status-success/10 border border-status-success/20 rounded-xl">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-status-success flex-shrink-0" />
+                      <span className="text-[9px] text-status-success font-medium uppercase tracking-[0.2em]">
                         Uygulama zaten yüklü ve aktif!
                       </span>
                     </div>
@@ -556,7 +510,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                       label={<><Smartphone className="w-3.5 h-3.5 stroke-[2]" />Uygulamayı Şimdi Yükle</>}
                     />
                   ) : (
-                    <div className="flex flex-col gap-2 p-3 bg-slate-50/60 border border-slate-100 rounded-xl text-[10px] text-text-muted font-normal leading-relaxed">
+                    <div className="flex flex-col gap-2 p-3 bg-surface-glass border border-surface-border rounded-xl text-[10px] text-text-muted font-normal leading-relaxed">
                       <div className="flex items-start gap-2">
                         <AlertCircle className="w-3.5 h-3.5 text-executive-gold flex-shrink-0 mt-0.5 animate-pulse" />
                         <div>
@@ -608,7 +562,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                       />
                       <select
                         value={slaLowUnit}
-                        onChange={(e) => setSlaLowUnit(e.target.value as any)}
+                        onChange={(e) => setSlaLowUnit(e.target.value as 'days' | 'hours')}
                         disabled={!isOnline || isSavingSla}
                         className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
                       >
@@ -632,7 +586,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                       />
                       <select
                         value={slaMediumUnit}
-                        onChange={(e) => setSlaMediumUnit(e.target.value as any)}
+                        onChange={(e) => setSlaMediumUnit(e.target.value as 'days' | 'hours')}
                         disabled={!isOnline || isSavingSla}
                         className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
                       >
@@ -656,7 +610,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                       />
                       <select
                         value={slaHighUnit}
-                        onChange={(e) => setSlaHighUnit(e.target.value as any)}
+                        onChange={(e) => setSlaHighUnit(e.target.value as 'days' | 'hours')}
                         disabled={!isOnline || isSavingSla}
                         className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
                       >
@@ -680,7 +634,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                       />
                       <select
                         value={slaUrgentUnit}
-                        onChange={(e) => setSlaUrgentUnit(e.target.value as any)}
+                        onChange={(e) => setSlaUrgentUnit(e.target.value as 'days' | 'hours')}
                         disabled={!isOnline || isSavingSla}
                         className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
                       >
@@ -692,9 +646,9 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                 </div>
 
                 {!isOnline ? (
-                  <div className="flex items-start gap-2 p-2.5 bg-red-50 border border-red-100 rounded-xl">
-                    <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
-                    <p className="text-[9px] text-red-600 font-semibold uppercase tracking-[0.15em] leading-relaxed">
+                  <div className="flex items-start gap-2 p-2.5 bg-status-danger/10 border border-status-danger/20 rounded-xl">
+                    <AlertCircle className="w-3.5 h-3.5 text-status-danger flex-shrink-0 mt-0.5" />
+                    <p className="text-[9px] text-status-danger font-semibold uppercase tracking-[0.15em] leading-relaxed">
                       SLA sürelerini güncellemek için internet bağlantısı gereklidir.
                     </p>
                   </div>
@@ -738,9 +692,9 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                   <input type="file" accept=".json" onChange={handleImport} className="hidden" id="restore-upload" disabled={!isOnline} />
                   
                   {!isOnline ? (
-                    <div className="flex items-start gap-2 p-2.5 bg-red-50 border border-red-100 rounded-xl">
-                      <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
-                      <p className="text-[9px] text-red-600 font-semibold uppercase tracking-[0.15em] leading-relaxed">
+                    <div className="flex items-start gap-2 p-2.5 bg-status-danger/10 border border-status-danger/20 rounded-xl">
+                      <AlertCircle className="w-3.5 h-3.5 text-status-danger flex-shrink-0 mt-0.5" />
+                      <p className="text-[9px] text-status-danger font-semibold uppercase tracking-[0.15em] leading-relaxed">
                         Sistemi geri yüklemek için internet bağlantısı gereklidir.
                       </p>
                     </div>
@@ -769,9 +723,9 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
                   </p>
 
                   {!isOnline ? (
-                    <div className="flex items-start gap-2 p-2.5 bg-red-50 border border-red-100 rounded-xl">
-                      <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
-                      <p className="text-[9px] text-red-600 font-semibold uppercase tracking-[0.15em] leading-relaxed">
+                    <div className="flex items-start gap-2 p-2.5 bg-status-danger/10 border border-status-danger/20 rounded-xl">
+                      <AlertCircle className="w-3.5 h-3.5 text-status-danger flex-shrink-0 mt-0.5" />
+                      <p className="text-[9px] text-status-danger font-semibold uppercase tracking-[0.15em] leading-relaxed">
                         Denetim izlerini dışa aktarmak için internet bağlantısı gereklidir.
                       </p>
                     </div>

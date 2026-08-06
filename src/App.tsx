@@ -39,7 +39,6 @@ import { CertificateModal } from './components/CertificateModal';
 import { WarningModal } from './components/WarningModal';
 
 // Services & Hooks
-import { notificationService } from './services/notificationService';
 import { conflictDetectionService } from './services/conflictDetectionService';
 import { logError } from './services/errorLoggingService';
 import { useAppHandlers } from './services/useAppHandlers';
@@ -171,8 +170,9 @@ export default function App() {
       
       const match = errorMsg.match(/Beklenen Versiyon (\d+), Sunucu Versiyonu (\d+)/);
       const expectedVersion = match ? parseInt(match[1]!) : 0;
-      
-      conflictDetectionService.detectConflict(error, taskId, taskTitle, expectedVersion);
+      const serverVersion = match ? parseInt(match[2]!) : undefined;
+
+      conflictDetectionService.detectConflict(error, taskId, taskTitle, expectedVersion, serverVersion);
       return; // UI'da çakışma uyarısı tetiklendi, ek sistem hatası toast'ına gerek yok
     }
 
@@ -389,30 +389,11 @@ export default function App() {
     return () => { unsubscribe(); if (unsubscribeUserDoc) unsubscribeUserDoc(); };
   }, [handleFirestoreError]);
 
-  // ─── Periyodik Denetim (Admin) ────────────────────────────────────────────
-  useEffect(() => {
-    const uid = user?.uid;
-    const role = user?.role;
-    if (!uid || role !== 'Admin') return;
-    
-    const runAudit = () => {
-      const currentTasks = tasksRef.current;
-      const currentUsers = usersRef.current;
-      if (currentTasks.length === 0) return;
-      const admins = currentUsers.filter(u => u.role === 'Admin');
-      if (admins.length === 0) return;
-      notificationService.performAudit(currentTasks, admins).catch(console.error);
-    };
-
-    // Run audit after a small delay on startup
-    const timeout = setTimeout(runAudit, 3000);
-
-    const interval = setInterval(runAudit, 60 * 60 * 1000);
-    return () => {
-      clearTimeout(timeout);
-      clearInterval(interval);
-    };
-  }, [user?.uid, user?.role]);
+  // NOT: Atıl görev denetimi artık yalnızca sunucu tarafında çalışıyor
+  // (functions/src/scheduledAudit.ts — günde bir, Cloud Function). Burada
+  // eskiden istemci tarafında da (saatte bir) çalışan eşdeğer bir denetim
+  // vardı; iki sistemin aynı işi yapması gereksiz/çakışan yazmalara yol
+  // açabileceğinden kaldırıldı.
 
   // ─── Self-Healing + Idle Timer ────────────────────────────────────────────
   const handleLogout = useCallback(async () => {
@@ -427,7 +408,7 @@ export default function App() {
   // ─── Tüm CRUD handler'lar ─────────────────────────────────────────────────
   const {
     updateTaskStatus, createTask, updateTask, deleteTask,
-    addBlocker, resolveBlocker, addComment,
+    addBlocker, resolveBlocker, addComment, delegateTask,
     addUser, updateUserRole, deleteUser,
     updateBlocker, deleteBlocker,
   } = useAppHandlers({ user, tasks, blockers, onError: handleFirestoreError });
@@ -629,6 +610,7 @@ export default function App() {
                   onShowCertificate={setActiveCertificateTask}
                   onShowWarning={setActiveWarningTask}
                   onUpdateTask={(data) => selectedTask && updateTask(selectedTask.id, data)}
+                  onDelegateTask={(newAssigneeId) => selectedTask && delegateTask(selectedTask.id, newAssigneeId)}
                 />
               )}
             </Modal>

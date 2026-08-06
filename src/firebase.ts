@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, FirebaseError } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithCustomToken, signOut, onAuthStateChanged, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, where, or, orderBy, limit, startAfter, addDoc, serverTimestamp, getDocFromServer, runTransaction, writeBatch, getCountFromServer, increment, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -91,4 +91,4 @@ async function testConnection() {
 }
 setTimeout(testConnection, 2000); // Wait a bit for initialization
 
-export { signInWithPopup, signInWithCustomToken, signOut, onAuthStateChanged, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, where, or, orderBy, limit, startAfter, addDoc, serverTimestamp, ref, uploadBytes, getDownloadURL, runTransaction, writeBatch, getCountFromServer, increment };
+export { signInWithPopup, signInWithCustomToken, signOut, onAuthStateChanged, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, where, or, orderBy, limit, startAfter, addDoc, serverTimestamp, ref, uploadBytes, getDownloadURL, runTransaction, writeBatch, getCountFromServer, increment, FirebaseError };

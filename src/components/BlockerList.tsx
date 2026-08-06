@@ -7,6 +7,7 @@ import { Modal } from './ui/Modal';
 import { Badge } from './ui/Badge';
 import { cn, formatTimeAgo } from '../lib/utils';
 import { motion } from 'motion/react';
+import { PRIORITY_BADGE_VARIANT } from '../constants';
 
 interface BlockerListProps {
   tasks: Task[];
@@ -77,8 +78,8 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
           'flex flex-col gap-3 p-3.5 rounded-2xl border cursor-pointer group transition-all duration-300',
           !blocker.isResolved
             ? cn(
-                'bg-red-50/30 border-red-100/60 hover:bg-red-500/10 hover:shadow-sm',
-                isUrgentOrHigh ? 'animate-makam-flash border-red-300/80 hover:border-red-400' : 'border-red-200/50 hover:border-red-300/50'
+                'bg-status-danger/[0.04] border-status-danger/20 hover:bg-status-danger/10 hover:shadow-sm',
+                isUrgentOrHigh ? 'animate-makam-flash border-status-danger/50 hover:border-status-danger/60' : 'border-status-danger/15 hover:border-status-danger/25'
               )
             : 'bg-makam-glass border-surface-border opacity-60 grayscale hover:grayscale-0 hover:opacity-100 hover:bg-makam-glass'
         )}
@@ -88,8 +89,8 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
           <div className={cn(
             'w-8 h-8 flex-shrink-0 rounded-xl flex items-center justify-center border transition-all group-hover:scale-105',
             blocker.isResolved
-              ? 'bg-emerald-50 text-emerald-500 border-emerald-100'
-              : 'bg-surface-elevated text-red-500 border-red-100/80'
+              ? 'bg-status-success/10 text-status-success border-status-success/20'
+              : 'bg-surface-elevated text-status-danger border-status-danger/25'
           )}>
             {blocker.isResolved
               ? <CheckCircle2 className="w-4 h-4 stroke-[1.3]" />
@@ -98,7 +99,7 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
           <div className="flex flex-col gap-0.5 flex-1 min-w-0">
             <p className={cn(
               'text-[12px] font-medium line-clamp-2 leading-snug tracking-tight font-serif',
-              blocker.isResolved ? 'text-text-muted' : 'text-executive-blue group-hover:text-red-700'
+              blocker.isResolved ? 'text-text-muted' : 'text-executive-blue group-hover:text-status-danger'
             )}>
               {blocker.reason}
             </p>
@@ -109,12 +110,7 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
               {task && (
                 <>
                   <span className="text-[9px] text-text-tertiary/40">•</span>
-                  <Badge variant={
-                    task.priority === 'Urgent' ? 'danger' :
-                    task.priority === 'High' ? 'warning' :
-                    task.priority === 'Medium' ? 'info' :
-                    'default'
-                  }>
+                  <Badge variant={PRIORITY_BADGE_VARIANT[task.priority]}>
                     {task.priority === 'Urgent' ? 'Acil' :
                      task.priority === 'High' ? 'Yüksek' :
                      task.priority === 'Medium' ? 'Orta' : 'Düşük'}
@@ -159,7 +155,7 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
                 </button>
                 {isSystemAdmin && (
                   <button
-                    className="w-7 h-7 flex items-center justify-center text-text-tertiary hover:text-red-600 hover:bg-red-500/10 rounded-md transition-all"
+                    className="w-7 h-7 flex items-center justify-center text-text-tertiary hover:text-status-danger hover:bg-status-danger/10 rounded-md transition-all"
                     onClick={(e) => { e.stopPropagation(); setDeletingBlockerId(blocker.id); }}
                     title="Sil"
                   >
@@ -170,7 +166,7 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
             )}
             {!blocker.isResolved && isAdmin && (
               <button
-                className="px-3 py-1.5 text-[8px] bg-emerald-600 hover:bg-emerald-700 text-white font-medium uppercase tracking-[0.2em] rounded-lg shadow-sm transition-all active:scale-95"
+                className="px-3 py-1.5 text-[8px] bg-status-success hover:opacity-90 text-white font-medium uppercase tracking-[0.2em] rounded-lg shadow-sm transition-all active:scale-95"
                 onClick={(e) => { e.stopPropagation(); onResolve(blocker.id); }}
               >
                 Çözüldü
@@ -187,11 +183,11 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
 
       {/* ── Header ─────────────────────────────────────────────────── */}
       <div className="flex items-center gap-2.5 pb-4 border-b border-executive-blue/[0.04]">
-        <div className="w-8 h-8 rounded-xl bg-red-600 flex items-center justify-center shadow-lg">
+        <div className="w-8 h-8 rounded-xl bg-status-danger flex items-center justify-center shadow-lg">
           <AlertTriangle className="w-4 h-4 text-white stroke-[1.5]" />
         </div>
         <div>
-          <span className="text-[10px] font-medium text-red-600 uppercase tracking-[0.4em] block leading-none">
+          <span className="text-[10px] font-medium text-status-danger uppercase tracking-[0.4em] block leading-none">
             OPERASYONEL KRİZ YÖNETİMİ
           </span>
           <span className="text-[9px] text-text-tertiary uppercase tracking-[0.3em]">
@@ -207,11 +203,11 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
         {/* Active blockers */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-3.5 h-3.5 text-red-500 stroke-[1.5]" />
-            <h3 className="text-[9px] font-medium text-red-600 uppercase tracking-[0.35em]">
+            <AlertTriangle className="w-3.5 h-3.5 text-status-danger stroke-[1.5]" />
+            <h3 className="text-[9px] font-medium text-status-danger uppercase tracking-[0.35em]">
               Aktif Kriz Engelleri
             </h3>
-            <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100/60 text-[8px] font-bold">
+            <span className="px-2 py-0.5 rounded-full bg-status-danger/10 text-status-danger border border-status-danger/20 text-[8px] font-bold">
               {activeBlockers.length}
             </span>
           </div>
@@ -220,7 +216,7 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
               activeBlockers.map((b, i) => <BlockerCard key={b.id} blocker={b} index={i} />)
             ) : (
               <div className="py-12 flex flex-col items-center justify-center bg-makam-glass border border-dashed border-executive-blue/[0.05] rounded-2xl gap-3">
-                <CheckCircle2 className="w-8 h-8 text-emerald-300 stroke-[1]" />
+                <CheckCircle2 className="w-8 h-8 text-status-success/50 stroke-[1]" />
                 <span className="text-[9px] text-text-tertiary uppercase tracking-[0.35em]">Aktif engel bulunmuyor</span>
               </div>
             )}
@@ -234,7 +230,7 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
             <h3 className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.35em]">
               Çözüme Ulaşanlar
             </h3>
-            <span className="px-2 py-0.5 rounded-full bg-[#F5F3EF] text-text-tertiary border border-slate-200/60 text-[8px] font-bold">
+            <span className="px-2 py-0.5 rounded-full bg-surface-base text-text-tertiary border border-surface-border text-[8px] font-bold">
               {resolvedBlockers.length}
             </span>
           </div>

@@ -19,12 +19,12 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           className={cn(
             'makam-input w-full h-14 px-6 bg-makam-glass border border-makam-border/5 rounded-full text-[15px] font-light text-text-heading placeholder:text-text-muted/30 transition-all outline-none focus:border-executive-blue/20 focus:ring-8 focus:ring-executive-blue/5 shadow-inner',
-            error && 'border-red-300 focus:border-red-500 focus:ring-red-500/10',
+            error && 'border-status-danger/40 focus:border-status-danger focus:ring-status-danger/10',
             className
           )}
           {...props}
         />
-        {error && <span className="text-[10px] text-red-500 font-medium px-1 uppercase tracking-wider">{error}</span>}
+        {error && <span className="text-[10px] text-status-danger font-medium px-1 uppercase tracking-wider">{error}</span>}
       </div>
     );
   }

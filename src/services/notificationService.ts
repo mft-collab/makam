@@ -1,9 +1,7 @@
 import { collection, addDoc, query, where, getDocs, updateDoc, setDoc, doc, limit, orderBy, writeBatch } from 'firebase/firestore';
 import { getToken } from 'firebase/messaging';
 import { db, messaging, auth } from '../firebase';
-import type { Notification as AppNotification, Task, User } from '../types';
-import { IDLE_THRESHOLD_MS } from '../constants';
-import { logger } from '../lib/logger';
+import type { Notification as AppNotification, User } from '../types';
 
 enum OperationType {
   CREATE = 'create',
@@ -149,81 +147,5 @@ export const notificationService = {
       return handleFirestoreError(error, OperationType.WRITE, `notifications`);
     }
   },
-
-  /**
-   * #3 NOT: Bu fonksiyon şu an client-side çalışıyor.
-   * Üretimde Firebase Cloud Functions'a taşınmalı:
-   * functions/src/scheduledAudit.ts → pubsub.schedule('every 24 hours')
-   * 
-   * Geçici olarak duplicate koruması eklendi: 23 saat içinde audit çalışmaz.
-   */
-  async performAudit(tasks: Task[], admins: User[]) {
-    const now = Date.now();
-    const AUDIT_COOLDOWN_MS = 23 * 60 * 60 * 1000; // 23 saat
-
-    // Duplicate guard: son audit zamanını kontrol et
-    try {
-      const lastAuditSnap = await getDocs(
-        query(collection(db, 'system_logs'),
-          where('type', '==', 'DailyAudit'),
-          orderBy('timestamp', 'desc'),
-          limit(1)
-        )
-      );
-      if (!lastAuditSnap.empty && lastAuditSnap.docs.length > 0) {
-        const lastTimestamp = lastAuditSnap.docs[0]?.data()?.timestamp as number | undefined;
-        if (lastTimestamp && now - lastTimestamp < AUDIT_COOLDOWN_MS) {
-          logger.debug('[Audit] Son 23 saat içinde çalıştırıldı, atlandı.');
-          return;
-        }
-      }
-    } catch {
-      // Log yoksa veya erişim hatası → devam et
-    }
-
-    const idleTasks = tasks.filter(t => 
-      t.status !== 'COMPLETED' && 
-      t.status !== 'CANCELLED' && 
-      (now - t.updatedAt) > IDLE_THRESHOLD_MS
-    );
-
-    if (idleTasks.length === 0) return;
-
-    for (const admin of admins) {
-      // Check if an unread Crisis notification already exists to prevent spam
-      const existingQ = query(
-        collection(db, 'notifications'),
-        where('userId', '==', admin.uid),
-        where('type', '==', 'Crisis'),
-        where('isRead', '==', false),
-        limit(1)
-      );
-      try {
-        const existingSnap = await getDocs(existingQ);
-        if (!existingSnap.empty) continue;
-      } catch {
-        // Ignore read errors here to prevent breaking the flow
-      }
-
-      await this.createNotification({
-        userId: admin.uid,
-        title: 'KRİTİK: Atalet Uyarısı',
-        message: `${idleTasks.length} adet talimat 24 saattir işlem görmedi. Sistem otomatik kriz moduna geçti.`,
-        type: 'Crisis',
-        timestamp: now,
-        isRead: false
-      });
-    }
-    
-    try {
-      await addDoc(collection(db, 'system_logs'), {
-        type: 'DailyAudit',
-        timestamp: now,
-        idleTaskCount: idleTasks.length
-      });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'system_logs');
-    }
-  }
 
 };

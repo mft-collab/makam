@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom';
+import { FirebaseError } from 'firebase/app';
 
 // Firebase modüllerini mock'la — testlerde gerçek bağlantı gerekmez
 vi.mock('../firebase', () => ({
@@ -10,6 +11,7 @@ vi.mock('../firebase', () => ({
   updateDoc: vi.fn(),
   deleteDoc: vi.fn(),
   setDoc: vi.fn(),
+  getDoc: vi.fn(),
   getDocs: vi.fn(),
   onSnapshot: vi.fn(),
   query: vi.fn(),
@@ -22,7 +24,9 @@ vi.mock('../firebase', () => ({
     commit: vi.fn(),
   })),
   runTransaction: vi.fn(),
+  increment: vi.fn(),
   messaging: null,
+  FirebaseError,
 }));
 
 // localStorage mock

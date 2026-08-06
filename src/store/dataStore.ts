@@ -15,7 +15,7 @@ const idbStorage: StateStorage = {
   },
 };
 
-interface GlobalStats {
+export interface GlobalStats {
   totalTasks: number;
   status_ASSIGNED: number;
   status_IN_PROGRESS: number;
@@ -32,6 +32,11 @@ interface DataState {
   blockers: TaskBlocker[];
   stats: GlobalStats | null;
   isHydrated: boolean;
+  /** Bu oturumda Firestore'dan en az bir kez canlı veri geldi mi? IDB'den
+   *  rehydration asenkron olduğundan, canlı onSnapshot verisi IDB okumasından
+   *  ÖNCE gelebilir — bu durumda rehydration'ın bayat önbellek verisiyle taze
+   *  veriyi ezmesini engellemek için kullanılır (bkz. merge()). */
+  hasLiveData: boolean;
   taskLimit: number;
   setTasks: (tasks: Task[]) => void;
   setUsers: (users: User[]) => void;
@@ -39,6 +44,16 @@ interface DataState {
   setStats: (stats: GlobalStats) => void;
   setHydrated: () => void;
   loadMoreTasks: () => void;
+}
+
+// IDB okuması Firestore'un ilk canlı anlık görüntüsünden daha uzun sürerse,
+// rehydration bu sırada zaten gelmiş taze veriyi bayat önbellekle ezebilir.
+// hasLiveData bayrağı bu oturumda canlı veri gelip gelmediğini işaretler;
+// geldiyse rehydration'ın üzerine yazması engellenir. Ayrı export edilmiştir —
+// böylece asenkron persist/rehydrate akışını tetiklemeden doğrudan test edilebilir.
+export function mergeDataState(persistedState: unknown, currentState: DataState): DataState {
+  if (currentState.hasLiveData) return currentState;
+  return { ...currentState, ...(persistedState as Partial<DataState>) };
 }
 
 export const useDataStore = create<DataState>()(
@@ -49,17 +64,19 @@ export const useDataStore = create<DataState>()(
       blockers: [],
       stats: null,
       isHydrated: false,
+      hasLiveData: false,
       taskLimit: 200,
-      setTasks: (tasks) => set({ tasks }),
-      setUsers: (users) => set({ users }),
-      setBlockers: (blockers) => set({ blockers }),
-      setStats: (stats) => set({ stats }),
+      setTasks: (tasks) => set({ tasks, hasLiveData: true }),
+      setUsers: (users) => set({ users, hasLiveData: true }),
+      setBlockers: (blockers) => set({ blockers, hasLiveData: true }),
+      setStats: (stats) => set({ stats, hasLiveData: true }),
       setHydrated: () => set({ isHydrated: true }),
       loadMoreTasks: () => set((state) => ({ taskLimit: state.taskLimit + 200 })),
     }),
     {
       name: 'makam-data-storage',
       storage: createJSONStorage(() => idbStorage),
+      merge: mergeDataState,
       onRehydrateStorage: () => (state) => {
         if (state) {
           state.setHydrated();
