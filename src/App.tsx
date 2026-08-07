@@ -31,6 +31,7 @@ import { NotificationPrompt } from './components/NotificationPrompt';
 import { ExecutiveToast } from './components/ExecutiveToast';
 import { ReloadPrompt } from './components/ReloadPrompt';
 import { Logo } from './components/Logo';
+import { useResolvedTheme } from './hooks/useResolvedTheme';
 import { MobileDock } from './components/MobileDock';
 import { OfflineBanner } from './components/OfflineBanner';
 import { AppHeader } from './components/AppHeader';
@@ -75,6 +76,7 @@ function getOperationalErrorToast(error: unknown): Omit<ToastItem, 'id'> {
 }
 
 export default function App() {
+  const resolvedTheme = useResolvedTheme();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchedTask, setFetchedTask] = useState<Task | null>(null);
@@ -427,7 +429,7 @@ export default function App() {
         aria-label="Uygulama yükleniyor"
       >
         <div className="flex flex-col items-center gap-12">
-          <Logo size="xl" withText={false} />
+          <Logo size="xl" withText={false} variant={resolvedTheme} />
           <div className="flex flex-col items-center gap-4">
             <span className="text-text-muted font-normal uppercase tracking-[0.6em] text-[11px] animate-pulse">STRATEJİK VERİ BAĞLANTISI</span>
             <div className="w-48 h-[1px] bg-text-muted/15 overflow-hidden relative">

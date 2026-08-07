@@ -41,7 +41,7 @@ export const GuideModal = ({ isOpen, onClose }: GuideModalProps) => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* ── Talimat Yaşam Döngüsü ── */}
-          <SettingsCard title="Talimat Yaşam Döngüsü" description="Olağan akış" icon={GitCommit} accentColor="slate" index={0}>
+          <SettingsCard title="Talimat Yaşam Döngüsü" description="Olağan akış" icon={GitCommit} accentColor="gold" index={0}>
             <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2">
               {FLOW_STEPS.map((step, i) => (
                 <React.Fragment key={step.label}>

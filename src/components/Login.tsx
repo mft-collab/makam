@@ -2,6 +2,7 @@ import React from 'react';
 import { ShieldCheck, Activity, ArrowRight } from 'lucide-react';
 import { Logo } from './Logo';
 import { motion } from 'motion/react';
+import { useResolvedTheme } from '../hooks/useResolvedTheme';
 
 interface LoginProps {
   onLogin: () => void;
@@ -9,6 +10,7 @@ interface LoginProps {
 }
 
 export const Login = ({ onLogin, isLoading }: LoginProps) => {
+  const resolvedTheme = useResolvedTheme();
   return (
     <div className="min-h-screen bg-surface-base flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans">
       {/* Executive background plane */}
@@ -25,7 +27,7 @@ export const Login = ({ onLogin, isLoading }: LoginProps) => {
           transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
           className="flex flex-col items-center"
         >
-          <Logo size="lg" variant="light" className="flex-col !gap-6 text-center" />
+          <Logo size="lg" variant={resolvedTheme} className="flex-col !gap-6 text-center" />
         </motion.div>
 
         <motion.div 

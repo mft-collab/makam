@@ -2,6 +2,7 @@ import React from 'react';
 import { Modal } from './ui/Modal';
 import { ShieldCheck, Smartphone, Zap, Layout } from 'lucide-react';
 import { Logo } from './Logo';
+import { useResolvedTheme } from '../hooks/useResolvedTheme';
 
 interface AboutModalProps {
   isOpen: boolean;
@@ -9,17 +10,18 @@ interface AboutModalProps {
 }
 
 export const AboutModal = ({ isOpen, onClose }: AboutModalProps) => {
+  const resolvedTheme = useResolvedTheme();
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="" ariaLabel="Hakkında" size="md">
       <div className="flex flex-col items-center justify-center text-center p-2 gap-6">
-        <Logo size="xl" withText={false} variant="dark" />
+        <Logo size="xl" withText={false} variant={resolvedTheme} />
         
         <div className="flex flex-col gap-1">
           <h2 className="text-2xl font-serif text-text-heading tracking-tight">MAKAM Stratejik Yönetim</h2>
           <div className="flex items-center justify-center gap-2 mt-1">
             <span className="text-[10px] uppercase tracking-[0.22em] text-executive-gold font-medium">Sürüm v2.2.0</span>
             <span className="text-[10px] text-text-muted">•</span>
-            <span className="text-[9px] uppercase tracking-widest text-emerald-500 font-medium">Lisanslı Sürüm</span>
+            <span className="text-[9px] uppercase tracking-widest text-status-success font-medium">Lisanslı Sürüm</span>
           </div>
         </div>
 
