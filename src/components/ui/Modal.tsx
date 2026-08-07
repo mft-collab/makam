@@ -92,6 +92,8 @@ interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
+  /** title boş bırakıldığında dialog'un erişilebilir adı (aria-label) olarak kullanılır. */
+  ariaLabel?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
@@ -100,7 +102,7 @@ interface ModalProps {
 
 let modalIdCounter = 0;
 
-export const Modal = ({ isOpen, onClose, title, children, footer, size = 'md', layoutId }: ModalProps) => {
+export const Modal = ({ isOpen, onClose, title, ariaLabel, children, footer, size = 'md', layoutId }: ModalProps) => {
   const [mounted, setMounted] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
@@ -129,7 +131,7 @@ export const Modal = ({ isOpen, onClose, title, children, footer, size = 'md', l
           className="fixed inset-0 z-[100] overflow-y-auto"
           role="dialog"
           aria-modal="true"
-          aria-labelledby={modalId}
+          {...(title ? { 'aria-labelledby': modalId } : { 'aria-label': ariaLabel })}
         >
           <div className="flex min-h-full items-center justify-center p-4">
             {/* Backdrop */}
@@ -158,23 +160,35 @@ export const Modal = ({ isOpen, onClose, title, children, footer, size = 'md', l
                 sizes[size]
               )}
             >
-              {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-makam-border/5 shrink-0">
-                <h3
-                  id={modalId}
-                  className="text-[20px] font-light text-text-heading tracking-tight font-serif uppercase"
-                >
-                  {title}
-                </h3>
+              {/* Header — title boşsa (ör. About modal) tam genişlikte boş bir
+                  şerit yerine, kapat butonu doğrudan panelin köşesinde yüzer. */}
+              {title ? (
+                <div className="flex items-center justify-between px-6 py-4 border-b border-makam-border/5 shrink-0">
+                  <h3
+                    id={modalId}
+                    className="text-[20px] font-light text-text-heading tracking-tight font-serif uppercase"
+                  >
+                    {title}
+                  </h3>
+                  <button
+                    ref={closeButtonRef}
+                    onClick={onClose}
+                    aria-label={`${title} penceresini kapat`}
+                    className="w-10 h-10 flex items-center justify-center text-text-muted hover:text-executive-blue hover:bg-surface-glass transition-all rounded-full border border-transparent hover:border-makam-border/10 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-2"
+                  >
+                    <X className="w-5 h-5 stroke-[1.2]" aria-hidden="true" />
+                  </button>
+                </div>
+              ) : (
                 <button
                   ref={closeButtonRef}
                   onClick={onClose}
-                  aria-label={`${title} penceresini kapat`}
-                  className="w-10 h-10 flex items-center justify-center text-text-muted hover:text-executive-blue hover:bg-surface-glass transition-all rounded-full border border-transparent hover:border-makam-border/10 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-2"
+                  aria-label={ariaLabel ? `${ariaLabel} penceresini kapat` : 'Kapat'}
+                  className="absolute top-3 right-3 z-10 w-10 h-10 flex items-center justify-center text-text-muted hover:text-executive-blue hover:bg-surface-glass transition-all rounded-full border border-transparent hover:border-makam-border/10 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-2"
                 >
                   <X className="w-5 h-5 stroke-[1.2]" aria-hidden="true" />
                 </button>
-              </div>
+              )}
 
               {/* İçerik */}
               <div className="flex-1 overflow-y-auto p-5 scroll-smooth custom-scrollbar">

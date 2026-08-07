@@ -37,16 +37,33 @@ export const Logo = ({ className, size = 'md', withText = true, variant = 'dark'
         xmlns="http://www.w3.org/2000/svg"
       >
         <defs>
-          {/* ── Gold family ── */}
+          {/* ── Gold family ──
+               Açık zeminde taçın en parlak durağı krem/beyaza yakın (#FFF3D1)
+               kaldığında beyaz modal arka planıyla neredeyse birleşip
+               görünmez oluyordu (About modal'da doğrulandı) — dış halka
+               (ringGrad) için zaten yapılan variant ayrımı buraya da
+               taşındı: açık zeminde gradyan bir kademe koyu başlar. */}
           <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%"   stopColor="#FFF3D1" />
-            <stop offset="30%"  stopColor="#E5C16D" />
-            <stop offset="55%"  stopColor="#C5A059" />
-            <stop offset="80%"  stopColor="#9E7933" />
-            <stop offset="100%" stopColor="#70531C" />
+            {isOnDarkBg ? (
+              <>
+                <stop offset="0%"   stopColor="#FFF3D1" />
+                <stop offset="30%"  stopColor="#E5C16D" />
+                <stop offset="55%"  stopColor="#C5A059" />
+                <stop offset="80%"  stopColor="#9E7933" />
+                <stop offset="100%" stopColor="#70531C" />
+              </>
+            ) : (
+              <>
+                <stop offset="0%"   stopColor="#E5C16D" />
+                <stop offset="30%"  stopColor="#C5A059" />
+                <stop offset="55%"  stopColor="#9E7933" />
+                <stop offset="80%"  stopColor="#70531C" />
+                <stop offset="100%" stopColor="#4A3814" />
+              </>
+            )}
           </linearGradient>
           <linearGradient id="goldHighlight" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%"   stopColor={isOnDarkBg ? '#FFFFFF'  : '#FFF3D1'} />
+            <stop offset="0%"   stopColor={isOnDarkBg ? '#FFFFFF'  : '#E5C16D'} />
             <stop offset="25%"  stopColor="#FFEBB3" />
             <stop offset="60%"  stopColor="#E5C16D" />
             <stop offset="100%" stopColor="#C5A059" />

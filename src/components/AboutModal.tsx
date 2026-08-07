@@ -10,7 +10,7 @@ interface AboutModalProps {
 
 export const AboutModal = ({ isOpen, onClose }: AboutModalProps) => {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="" size="md">
+    <Modal isOpen={isOpen} onClose={onClose} title="" ariaLabel="Hakkında" size="md">
       <div className="flex flex-col items-center justify-center text-center p-2 gap-6">
         <Logo size="xl" withText={false} variant="dark" />
         
@@ -30,26 +30,26 @@ export const AboutModal = ({ isOpen, onClose }: AboutModalProps) => {
         <div className="w-full bg-surface-glass rounded-2xl border border-surface-border p-5 mt-2">
           <ul className="text-left flex flex-col gap-4">
             <li className="flex items-center gap-3 text-[12px] text-text-heading">
-              <Zap className="w-4 h-4 text-emerald-500 shrink-0" />
+              <Zap className="w-4 h-4 text-executive-gold shrink-0" />
               <span><strong className="font-medium">Çevrimdışı Öncelikli Motor:</strong> Zustand & IndexedDB</span>
             </li>
             <li className="flex items-center gap-3 text-[12px] text-text-heading">
-              <Layout className="w-4 h-4 text-blue-500 shrink-0" />
+              <Layout className="w-4 h-4 text-executive-gold shrink-0" />
               <span><strong className="font-medium">Sessiz Lüks Arayüz:</strong> Dinamik Gece Teması & Framer Motion</span>
             </li>
             <li className="flex items-center gap-3 text-[12px] text-text-heading">
-              <ShieldCheck className="w-4 h-4 text-purple-500 shrink-0" />
+              <ShieldCheck className="w-4 h-4 text-executive-gold shrink-0" />
               <span><strong className="font-medium">Kalite Güvence:</strong> Playwright E2E Otomasyonu</span>
             </li>
             <li className="flex items-center gap-3 text-[12px] text-text-heading">
-              <Smartphone className="w-4 h-4 text-amber-500 shrink-0" />
+              <Smartphone className="w-4 h-4 text-executive-gold shrink-0" />
               <span><strong className="font-medium">Çoklu Platform:</strong> PWA Destekli Adaptif Mimari</span>
             </li>
           </ul>
         </div>
 
         <div className="text-[10px] text-text-tertiary mt-2 uppercase tracking-widest font-light">
-          © {new Date().getFullYear()} MAKAM. Yasal Hak Sahibi: <a href="mailto:muftum@gmail.com" className="text-executive-gold font-medium hover:underline">muftum@gmail.com</a>
+          © {new Date().getFullYear()} MAKAM. Yasal Hak Sahibi: <a href="mailto:muftum@gmail.com" className="hover:text-text-muted transition-colors">muftum@gmail.com</a>
         </div>
       </div>
     </Modal>
