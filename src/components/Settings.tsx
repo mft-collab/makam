@@ -246,7 +246,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
       const backup = {
         tasks, users, blockers, auditLogs: logs,
         exportDate: new Date().toISOString(),
-        version: '2.1.0',
+        version: '2.2.0',
         system: 'MAKAM Stratejik Yönetim',
       };
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
@@ -393,7 +393,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
       const backup = {
         auditLogs: logs,
         archiveDate: new Date().toISOString(),
-        version: '2.1.0',
+        version: '2.2.0',
         system: 'MAKAM Stratejik Yönetim Denetim Arşivi',
       };
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });

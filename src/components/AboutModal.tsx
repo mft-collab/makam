@@ -17,7 +17,7 @@ export const AboutModal = ({ isOpen, onClose }: AboutModalProps) => {
         <div className="flex flex-col gap-1">
           <h2 className="text-2xl font-serif text-text-heading tracking-tight">MAKAM Stratejik Yönetim</h2>
           <div className="flex items-center justify-center gap-2 mt-1">
-            <span className="text-[10px] uppercase tracking-[0.22em] text-executive-gold font-medium">Sürüm v2.1.0</span>
+            <span className="text-[10px] uppercase tracking-[0.22em] text-executive-gold font-medium">Sürüm v2.2.0</span>
             <span className="text-[10px] text-text-muted">•</span>
             <span className="text-[9px] uppercase tracking-widest text-emerald-500 font-medium">Lisanslı Sürüm</span>
           </div>

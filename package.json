@@ -1,7 +1,7 @@
 {
   "name": "makam-app",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.2.0",
   "author": "muftum@gmail.com",
   "type": "module",
   "scripts": {
