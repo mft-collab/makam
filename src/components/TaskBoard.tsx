@@ -123,6 +123,7 @@ export const TaskBoard = ({
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-tertiary group-focus-within:text-executive-blue transition-colors stroke-[1.5]" />
           <input
             placeholder="Ara..."
+            aria-label="Talimatları ara"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 h-8 bg-makam-glass border border-executive-blue/[0.05] rounded-xl focus:ring-4 focus:ring-executive-blue/[0.04] focus:border-executive-blue/20 transition-all text-[12px] font-light text-executive-blue placeholder:text-text-tertiary outline-none"
@@ -135,6 +136,7 @@ export const TaskBoard = ({
           <select
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
+            aria-label="Öncelik filtresi"
             className="bg-transparent border-none text-[9px] font-medium text-text-muted uppercase tracking-[0.12em] sm:tracking-[0.25em] focus:ring-0 cursor-pointer outline-none min-w-0 w-full"
           >
             <option value="All">TÜM ÖNCELİKLER</option>
@@ -149,6 +151,7 @@ export const TaskBoard = ({
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
+            aria-label="Durum filtresi"
             className="bg-transparent border-none text-[9px] font-medium text-text-muted uppercase tracking-[0.12em] sm:tracking-[0.25em] focus:ring-0 cursor-pointer outline-none min-w-0 w-full"
           >
             <option value="All">TÜM DURUMLAR</option>
@@ -163,6 +166,7 @@ export const TaskBoard = ({
           <select
             value={assigneeFilter}
             onChange={(e) => setAssigneeFilter(e.target.value)}
+            aria-label="Sorumlu filtresi"
             className="bg-transparent border-none text-[9px] font-medium text-text-muted uppercase tracking-[0.12em] sm:tracking-[0.25em] focus:ring-0 cursor-pointer outline-none min-w-0 w-full"
           >
             <option value="All">TÜM SORUMLULAR</option>

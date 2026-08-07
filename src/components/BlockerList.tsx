@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { AlertTriangle, CheckCircle2, Clock, Edit2, Trash2 } from 'lucide-react';
 import { Task, TaskBlocker, User } from '../types';
 import { Button } from './ui/Button';
@@ -8,6 +8,8 @@ import { Badge } from './ui/Badge';
 import { cn, formatTimeAgo } from '../lib/utils';
 import { motion } from 'motion/react';
 import { PRIORITY_BADGE_VARIANT } from '../constants';
+
+const PRIORITY_WEIGHTS: Record<string, number> = { Urgent: 3, High: 2, Medium: 1, Low: 0 };
 
 interface BlockerListProps {
   tasks: Task[];
@@ -22,19 +24,22 @@ interface BlockerListProps {
 }
 
 export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = false, onResolve, onEditBlocker, onDeleteBlocker, onViewTask }: BlockerListProps) => {
-  const getBlockerPriorityWeight = (blocker: TaskBlocker) => {
-    const task = tasks.find(t => t.id === blocker.taskId);
-    if (!task) return -1;
-    const priorityWeights: Record<string, number> = { Urgent: 3, High: 2, Medium: 1, Low: 0 };
-    return priorityWeights[task.priority] ?? 0;
-  };
+  const activeBlockers = useMemo(() => {
+    const taskPriorityWeightById = new Map<string, number>();
+    for (const t of tasks) {
+      taskPriorityWeightById.set(t.id, PRIORITY_WEIGHTS[t.priority] ?? 0);
+    }
+    const weightOf = (blocker: TaskBlocker) => taskPriorityWeightById.get(blocker.taskId) ?? -1;
 
-  const activeBlockers = [...blockers.filter(b => !b.isResolved)].sort((a, b) => {
-    const weightA = getBlockerPriorityWeight(a);
-    const weightB = getBlockerPriorityWeight(b);
-    if (weightB !== weightA) return weightB - weightA;
-    return b.createdAt - a.createdAt;
-  });
+    return blockers
+      .filter(b => !b.isResolved)
+      .sort((a, b) => {
+        const weightA = weightOf(a);
+        const weightB = weightOf(b);
+        if (weightB !== weightA) return weightB - weightA;
+        return b.createdAt - a.createdAt;
+      });
+  }, [blockers, tasks]);
 
   const resolvedBlockers = blockers.filter(b => b.isResolved);
 

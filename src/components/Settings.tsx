@@ -586,13 +586,13 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
                         value={slaLowVal}
                         onChange={(e) => setSlaLowVal(Math.max(1, parseInt(e.target.value) || 0))}
                         disabled={!isOnline || isSavingSla}
-                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
+                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
                       />
                       <select
                         value={slaLowUnit}
                         onChange={(e) => setSlaLowUnit(e.target.value as 'days' | 'hours')}
                         disabled={!isOnline || isSavingSla}
-                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
+                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
                       >
                         <option value="days">İş Günü</option>
                         <option value="hours">İş Saati</option>
@@ -610,13 +610,13 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
                         value={slaMediumVal}
                         onChange={(e) => setSlaMediumVal(Math.max(1, parseInt(e.target.value) || 0))}
                         disabled={!isOnline || isSavingSla}
-                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
+                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
                       />
                       <select
                         value={slaMediumUnit}
                         onChange={(e) => setSlaMediumUnit(e.target.value as 'days' | 'hours')}
                         disabled={!isOnline || isSavingSla}
-                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
+                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
                       >
                         <option value="days">İş Günü</option>
                         <option value="hours">İş Saati</option>
@@ -634,13 +634,13 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
                         value={slaHighVal}
                         onChange={(e) => setSlaHighVal(Math.max(1, parseInt(e.target.value) || 0))}
                         disabled={!isOnline || isSavingSla}
-                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
+                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
                       />
                       <select
                         value={slaHighUnit}
                         onChange={(e) => setSlaHighUnit(e.target.value as 'days' | 'hours')}
                         disabled={!isOnline || isSavingSla}
-                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
+                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
                       >
                         <option value="days">İş Günü</option>
                         <option value="hours">İş Saati</option>
@@ -658,13 +658,13 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
                         value={slaUrgentVal}
                         onChange={(e) => setSlaUrgentVal(Math.max(1, parseInt(e.target.value) || 0))}
                         disabled={!isOnline || isSavingSla}
-                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
+                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
                       />
                       <select
                         value={slaUrgentUnit}
                         onChange={(e) => setSlaUrgentUnit(e.target.value as 'days' | 'hours')}
                         disabled={!isOnline || isSavingSla}
-                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus:outline-none focus:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
+                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
                       >
                         <option value="days">İş Günü</option>
                         <option value="hours">İş Saati</option>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { UserPlus, Shield, Mail, Building, Trash2, Edit2, Target, CheckCircle2, AlertTriangle, Activity, ArrowRight, History, Loader2 } from 'lucide-react';
 import { User, UserRole, Task, AuditLog, TaskStatus } from '../types';
 import { Button } from './ui/Button';
@@ -167,23 +167,42 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
 
   const isAdmin = currentUser?.role === 'Admin';
 
-  const staffUsers = users.filter(u => u.role === 'Staff');
-  const totalCapacityTasks = staffUsers.reduce((acc, u) => {
-    const userTasks = tasks.filter(t => (t.assigneeId === u.uid || t.assigneeId === u.email) && t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
-    return acc + userTasks.length;
-  }, 0);
-  const maxCapacity = Math.max(1, staffUsers.length * 4);
-  const capacityPercent = Math.min(100, Math.round((totalCapacityTasks / maxCapacity) * 100));
+  // Kullanıcı başına aktif görev sayısını tek geçişte hesaplayıp Map'te tutar —
+  // aksi halde her personel için tasks dizisi ayrı ayrı filtrelenir (O(kullanıcı × görev)
+  // yerine burada tek O(görev) geçiş + O(1) lookup).
+  const activeTaskCountByUser = useMemo(() => {
+    const map = new Map<string, number>();
+    const bump = (key: string | undefined) => {
+      if (!key) return;
+      map.set(key, (map.get(key) ?? 0) + 1);
+    };
+    for (const t of tasks) {
+      if (t.status === 'COMPLETED' || t.status === 'CANCELLED') continue;
+      bump(t.assigneeId);
+    }
+    return map;
+  }, [tasks]);
 
-  const availableStaffCount = staffUsers.filter(u => {
-    const userTasks = tasks.filter(t => (t.assigneeId === u.uid || t.assigneeId === u.email) && t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
-    return userTasks.length <= 2;
-  }).length;
+  const getActiveTaskCount = (u: { uid: string; email: string }) =>
+    (activeTaskCountByUser.get(u.uid) ?? 0) + (u.email !== u.uid ? (activeTaskCountByUser.get(u.email) ?? 0) : 0);
 
-  const overloadedStaffCount = staffUsers.filter(u => {
-    const userTasks = tasks.filter(t => (t.assigneeId === u.uid || t.assigneeId === u.email) && t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
-    return userTasks.length >= 5;
-  }).length;
+  const staffUsers = useMemo(() => users.filter(u => u.role === 'Staff'), [users]);
+
+  const { capacityPercent, availableStaffCount, overloadedStaffCount } = useMemo(() => {
+    let total = 0, available = 0, overloaded = 0;
+    for (const u of staffUsers) {
+      const count = getActiveTaskCount(u);
+      total += count;
+      if (count <= 2) available++;
+      if (count >= 5) overloaded++;
+    }
+    const max = Math.max(1, staffUsers.length * 4);
+    return {
+      capacityPercent: Math.min(100, Math.round((total / max) * 100)),
+      availableStaffCount: available,
+      overloadedStaffCount: overloaded,
+    };
+  }, [staffUsers, activeTaskCountByUser]);
 
   if (isLoading) return <TeamListSkeleton />;
 
@@ -265,7 +284,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {users.map((user, i) => {
             const canEdit = isAdmin || user.uid === currentUser?.uid;
-            const userTasks = tasks.filter(t => (t.assigneeId === user.uid || t.assigneeId === user.email) && t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
+            const userTaskCount = getActiveTaskCount(user);
             const rc = roleConfig[user.role];
 
             return (
@@ -280,19 +299,21 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
               >
                 {/* Action buttons (hover) */}
                 {canEdit && (
-                  <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0">
+                  <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0 group-focus-within:translate-x-0">
                     <button
-                      className="w-7 h-7 flex items-center justify-center bg-makam-glass border border-executive-blue/[0.06] rounded-lg text-text-tertiary hover:text-executive-blue hover:bg-surface-elevated transition-colors shadow-sm"
+                      className="w-7 h-7 flex items-center justify-center bg-makam-glass border border-executive-blue/[0.06] rounded-lg text-text-tertiary hover:text-executive-blue hover:bg-surface-elevated transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue"
                       onClick={(e) => { e.stopPropagation(); handleEdit(user); }}
                       title="Düzenle"
+                      aria-label={`${user.fullName} kaydını düzenle`}
                     >
                       <Edit2 className="w-3 h-3 stroke-[1.5]" />
                     </button>
                     {isAdmin && user.uid !== currentUser?.uid && (
                       <button
-                        className="w-7 h-7 flex items-center justify-center bg-makam-glass border border-executive-blue/[0.06] rounded-lg text-text-tertiary hover:text-status-danger hover:bg-status-danger/10 transition-colors shadow-sm"
+                        className="w-7 h-7 flex items-center justify-center bg-makam-glass border border-executive-blue/[0.06] rounded-lg text-text-tertiary hover:text-status-danger hover:bg-status-danger/10 transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger"
                         onClick={(e) => { e.stopPropagation(); handleDeleteClick(user); }}
                         title="Sil"
+                        aria-label={`${user.fullName} kaydını sil`}
                       >
                         <Trash2 className="w-3 h-3 stroke-[1.5]" />
                       </button>
@@ -339,15 +360,15 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                       </span>
                     )}
                   </div>
-                  {userTasks.length > 0 && (
+                  {userTaskCount > 0 && (
                     <span className={cn(
                       "inline-flex items-center gap-1 text-[8px] font-medium uppercase tracking-[0.2em] px-2 py-0.5 rounded-full border transition-all duration-300",
-                      userTasks.length >= 5 ? "bg-status-danger/[0.08] text-status-danger border-status-danger/25 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.15)]" :
-                      userTasks.length >= 3 ? "bg-status-warning/[0.08] text-status-warning border-status-warning/25" :
+                      userTaskCount >= 5 ? "bg-status-danger/[0.08] text-status-danger border-status-danger/25 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.15)]" :
+                      userTaskCount >= 3 ? "bg-status-warning/[0.08] text-status-warning border-status-warning/25" :
                       "bg-status-success/[0.08] text-status-success border-status-success/25"
                     )}>
                       <Activity className="w-2.5 h-2.5" />
-                      {userTasks.length} {userTasks.length >= 5 ? 'Aşırı Yük' : userTasks.length >= 3 ? 'Dengeli' : 'Müsait'}
+                      {userTaskCount} {userTaskCount >= 5 ? 'Aşırı Yük' : userTaskCount >= 3 ? 'Dengeli' : 'Müsait'}
                     </span>
                   )}
                 </div>

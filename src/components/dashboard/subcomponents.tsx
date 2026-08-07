@@ -183,7 +183,9 @@ export const PerformanceRow = ({ profile, index = 0 }: PerformanceRowProps) => {
 };
 
 // ─── Custom Tooltip for Recharts (Frosted Glass) ──────────────────────────────
-export const CustomTooltip = ({ active, payload, label }: any) => {
+// React.memo: Recharts re-invokes this on every mousemove while hovering the chart;
+// memoizing skips re-render when active/payload/label haven't actually changed.
+export const CustomTooltip = React.memo(({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-makam-glass backdrop-blur-xl border border-surface-border p-3 rounded-2xl shadow-xl flex flex-col gap-1.5 min-w-[120px] text-left">
@@ -204,4 +206,4 @@ export const CustomTooltip = ({ active, payload, label }: any) => {
     );
   }
   return null;
-};
+});

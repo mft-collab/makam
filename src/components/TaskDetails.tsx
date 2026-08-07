@@ -699,7 +699,7 @@ export const TaskDetails = ({
                   onChange={(e) => setBlockerReason(e.target.value)}
                   placeholder="Engeli tanımlayın..."
                   disabled={isSubmittingBlocker}
-                  className="flex-1 bg-makam-glass border border-makam-border/10 rounded-full px-5 py-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-status-danger/10 disabled:opacity-60"
+                  className="flex-1 bg-makam-glass border border-makam-border/10 rounded-full px-5 py-3 text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger/10 disabled:opacity-60"
                 />
                 <button
                   onClick={handleAddBlocker}
@@ -875,7 +875,7 @@ export const TaskDetails = ({
                   onChange={(e) => setNewChecklistItem(e.target.value)}
                   placeholder="Yeni bir alt işlem yazın..."
                   disabled={isSubmittingChecklist}
-                  className="flex-1 bg-makam-glass border border-makam-border/10 rounded-xl px-4 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-executive-blue/15 disabled:opacity-60"
+                  className="flex-1 bg-makam-glass border border-makam-border/10 rounded-xl px-4 py-2 text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue/15 disabled:opacity-60"
                   required
                 />
                 <button
@@ -935,7 +935,7 @@ export const TaskDetails = ({
                   }}
                   placeholder="Bir koordinasyon notu ekleyin..."
                   disabled={isSubmittingComment}
-                  className="w-full bg-makam-glass border border-makam-border/10 rounded-2xl p-4 pr-16 text-[13px] focus:outline-none focus:ring-2 focus:ring-executive-blue/10 min-h-[100px] resize-none disabled:opacity-60"
+                  className="w-full bg-makam-glass border border-makam-border/10 rounded-2xl p-4 pr-16 text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue/10 min-h-[100px] resize-none disabled:opacity-60"
                 />
                 <button
                   onClick={handleAddComment}

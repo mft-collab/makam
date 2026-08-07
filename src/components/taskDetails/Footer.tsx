@@ -152,7 +152,7 @@ export const TaskDetailsFooter = ({ task, currentUser, onStatusChange }: {
                 placeholder="https://... kanıt bağlantısı"
                 aria-label="Kanıt bağlantısı"
                 disabled={isSubmitting}
-                className="flex-1 min-w-[180px] bg-makam-glass border border-makam-border/10 rounded-full px-4 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-executive-blue/15 disabled:opacity-60"
+                className="flex-1 min-w-[180px] bg-makam-glass border border-makam-border/10 rounded-full px-4 py-2 text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue/15 disabled:opacity-60"
               />
             ) : (
               <>
