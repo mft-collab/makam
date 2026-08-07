@@ -13,7 +13,7 @@ import { logger } from './logger';
 import { conflictDetectionService } from '../services/conflictDetectionService';
 import { useUIStore } from '../store/uiStore';
 import { transitionTaskInTransaction } from '../services/taskService';
-import type { TaskStatus } from '../types';
+import type { Task, TaskStatus } from '../types';
 
 // Sunucu bu hata kodlarıyla reddettiğinde yeniden deneme sonucu asla değişmez
 // (ör. firestore.rules'taki bir iş kuralı ihlali veya bozuk veri) — kuyrukta
@@ -42,6 +42,21 @@ export interface OfflineMutation {
     taskId: string;
     newStatus: TaskStatus;
     userId: string;
+    expectedVersion?: number;
+  };
+  /** 'tasks' 'update' mutasyonları için: bu mutasyon aslında bir durum geçişidir
+   *  (ör. IN_PROGRESS→COMPLETED, kriz kurtarma, devir). Senkronizasyonda ham
+   *  transaction.update() yerine online yolla BİREBİR aynı transitionTaskInTransaction
+   *  fonksiyonu çağrılır — böylece audit_logs kaydı, system/stats sayaçları ve
+   *  kriz-affı (breach-debt + 24s mühlet uzatması) mantığı offline geçişlerde de
+   *  uygulanır. pausedAt/totalPausedTime artık burada elle hesaplanmaz; hesaplama
+   *  yalnızca transitionTaskInTransaction'da, senkron anında yapılır. */
+  statusTransition?: {
+    newStatus: TaskStatus;
+    userId: string;
+    evidence?: string;
+    evidenceType?: Task['evidenceType'];
+    assigneeId?: string;
     expectedVersion?: number;
   };
 }
@@ -77,7 +92,8 @@ export const offlineQueue = {
     data?: any,
     docId?: string,
     expectedVersion?: number,
-    linkedTaskTransition?: OfflineMutation['linkedTaskTransition']
+    linkedTaskTransition?: OfflineMutation['linkedTaskTransition'],
+    statusTransition?: OfflineMutation['statusTransition']
   ) {
     const queue = this.getQueue();
 
@@ -86,14 +102,16 @@ export const offlineQueue = {
     // güncelleme yaptığından, N ayrı sıralı update yerine tek birleşik update
     // göndermek davranışsal olarak eşdeğerdir (son değer kazanır) — kuyruk
     // şişmesini ve senkronda gereksiz yazma sayısını azaltır. linkedTaskTransition
-    // taşıyan mutasyonlar (blocker+görev atomik çifti) birleştirilmez — anlamları
-    // basit alan birleştirmesinden farklıdır.
-    if (action === 'update' && docId && !linkedTaskTransition) {
+    // taşıyan mutasyonlar (blocker+görev atomik çifti) ve statusTransition taşıyan
+    // mutasyonlar (durum geçişleri) birleştirilmez — her biri kendi audit/pause
+    // hesaplamasını gerektirir, basit alan birleştirmesinden anlamları farklıdır.
+    if (action === 'update' && docId && !linkedTaskTransition && !statusTransition) {
       const existing = queue.find(m =>
         m.action === 'update' &&
         m.collectionName === collectionName &&
         m.docId === docId &&
-        !m.linkedTaskTransition
+        !m.linkedTaskTransition &&
+        !m.statusTransition
       );
       if (existing) {
         existing.data = { ...existing.data, ...data };
@@ -113,7 +131,8 @@ export const offlineQueue = {
       data,
       timestamp: Date.now(),
       expectedVersion,
-      linkedTaskTransition
+      linkedTaskTransition,
+      statusTransition
     };
     queue.push(mutation);
     this.saveQueue(queue);
@@ -155,7 +174,11 @@ export const offlineQueue = {
             case 'create': {
               if (mutation.collectionName === 'blockers' && mutation.linkedTaskTransition) {
                 const { taskId, newStatus, userId, expectedVersion } = mutation.linkedTaskTransition;
-                const blockerRef = doc(collection(db, 'blockers'));
+                // Rastgele Firestore ID üretmek yerine kuyruğa alınırken atanan geçici
+                // ID'yi (mutation.data.id) doğrudan kalıcı doküman ID'si olarak kullan —
+                // aksi halde bu engeli hemen ardından referans alan sonraki mutasyonlar
+                // (ör. aynı oturumda çözme) sunucuda var olmayan bir ID'ye yazmaya çalışır.
+                const blockerRef = doc(db, 'blockers', mutation.data.id);
                 try {
                   await runTransaction(db, async (transaction) => {
                     await transitionTaskInTransaction(transaction, taskId, newStatus, userId, { expectedVersion });
@@ -213,6 +236,21 @@ export const offlineQueue = {
                     });
                   } catch (transitionErr) {
                     if (conflictDetectionService.detectConflict(transitionErr, taskId, 'Talimat', expectedVersion ?? 0)) {
+                      hadConflict = true;
+                      break;
+                    }
+                    throw transitionErr;
+                  }
+                } else if (mutation.collectionName === 'tasks' && mutation.statusTransition) {
+                  const { newStatus, userId, evidence, evidenceType, assigneeId, expectedVersion } = mutation.statusTransition;
+                  try {
+                    await runTransaction(db, async (transaction) => {
+                      await transitionTaskInTransaction(transaction, mutation.docId!, newStatus, userId, {
+                        evidence, evidenceType, assigneeId, expectedVersion
+                      });
+                    });
+                  } catch (transitionErr) {
+                    if (conflictDetectionService.detectConflict(transitionErr, mutation.docId!, 'Talimat', expectedVersion ?? 0)) {
                       hadConflict = true;
                       break;
                     }

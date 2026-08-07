@@ -14,6 +14,7 @@ import { db, collection, getDocs, query, orderBy, limit } from '../firebase';
 import { useUIStore } from '../store/uiStore';
 import { AUDIT_FIELD_LABELS } from '../lib/auditLabels';
 import { roleConfig, OrgNodeCard } from './teamList/subcomponents';
+import { Skeleton } from './ui/Skeleton';
 
 interface TeamListProps {
   users: User[];
@@ -22,9 +23,34 @@ interface TeamListProps {
   onUpdateUser: (userId: string, data: Partial<User>) => void;
   onDeleteUser: (userId: string) => void;
   onAddUser: (data: { email: string; fullName: string; role: UserRole; departmentId?: string }) => void;
+  isLoading?: boolean;
 }
 
-export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser, onAddUser }: TeamListProps) => {
+const TeamListSkeleton = () => (
+  <div className="flex flex-col gap-5 py-4 max-w-[1440px] mx-auto" aria-label="Kadro yükleniyor..." role="status">
+    <div className="flex items-center justify-between pb-4 border-b border-executive-blue/[0.04]">
+      <Skeleton className="h-8 w-56" />
+      <Skeleton className="h-8 w-40" rounded="full" />
+    </div>
+    <Skeleton className="h-4 w-full" rounded="full" />
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {[...Array(6)].map((_, i) => (
+        <div key={i} className="makam-card p-5 flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-11 w-11" rounded="full" />
+            <div className="flex flex-col gap-2 flex-1">
+              <Skeleton className="h-3 w-2/3" />
+              <Skeleton className="h-2.5 w-1/2" />
+            </div>
+          </div>
+          <Skeleton className="h-5 w-24" rounded="full" />
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser, onAddUser, isLoading = false }: TeamListProps) => {
   const addToast = useUIStore(state => state.addToast);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -158,6 +184,8 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
     const userTasks = tasks.filter(t => (t.assigneeId === u.uid || t.assigneeId === u.email) && t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
     return userTasks.length >= 5;
   }).length;
+
+  if (isLoading) return <TeamListSkeleton />;
 
   return (
     <div className="flex flex-col gap-5 py-4 max-w-[1440px] mx-auto font-sans">

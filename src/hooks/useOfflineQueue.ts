@@ -70,7 +70,8 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
       setQueueLength(queue.length);
       setPendingMutations(queue);
       return result;
-    } catch {
+    } catch (e) {
+      logger.error('[useOfflineQueue] Manuel senkronizasyon başarısız:', e);
       return false;
     }
   }, []);

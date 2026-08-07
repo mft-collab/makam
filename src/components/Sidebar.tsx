@@ -54,10 +54,10 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
       aria-current={activeTab === item.id ? 'page' : undefined}
       aria-label={item.label}
       className={cn(
-        'flex items-center gap-4 px-3.5 py-2.5 rounded-xl transition-all duration-500 group relative border border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-gold focus-visible:ring-offset-2 focus-visible:ring-offset-[#161513]',
+        'flex items-center gap-4 px-3.5 py-2.5 rounded-xl transition-all duration-500 group relative border border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
         activeTab === item.id
           ? 'bg-executive-gold/[0.08] border-executive-gold/15 shadow-[0_8px_32px_rgba(197,160,89,0.05)] translate-x-1'
-          : 'hover:bg-white/[0.03] hover:translate-x-0.5'
+          : 'hover:bg-surface-glass hover:translate-x-0.5'
       )}
     >
       <PremiumIcon
@@ -69,7 +69,7 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
       />
       <span className={cn(
         'font-normal text-[13px] tracking-wide transition-colors duration-300',
-        activeTab === item.id ? 'text-[#D4B573] font-medium' : 'text-white/60 group-hover:text-white/80'
+        activeTab === item.id ? 'text-executive-gold font-medium' : 'text-text-muted group-hover:text-text-body'
       )}>
         {item.label}
       </span>
@@ -85,8 +85,8 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
   );
 
   const SidebarContent = (
-    <div className="w-64 h-full bg-[#161513]/85 backdrop-blur-[35px] flex flex-col p-6 gap-8 relative overflow-y-auto no-scrollbar border-r border-white/[0.06] shadow-2xl">
-      <div className="relative w-full py-4 px-3 flex justify-center items-center rounded-2xl bg-white/[0.02] border border-white/[0.05] shadow-[0_8px_32px_rgba(0,0,0,0.15)] overflow-hidden group">
+    <div className="w-64 h-full bg-makam-glass backdrop-blur-[35px] flex flex-col p-6 gap-8 relative overflow-y-auto no-scrollbar border-r border-surface-border shadow-2xl">
+      <div className="relative w-full py-4 px-3 flex justify-center items-center rounded-2xl bg-surface-glass border border-surface-border shadow-[0_8px_32px_rgba(0,0,0,0.15)] overflow-hidden group">
         <div className="absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-executive-gold/30 to-transparent opacity-70 pointer-events-none" />
 
         <button
@@ -98,21 +98,21 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
           aria-label="Sistem Hakkında"
         >
           <Logo variant="dark" size="md" className="drop-shadow-[0_4px_12px_rgba(197,160,89,0.12)]" />
-          <div className="absolute -right-2 -top-2 bg-executive-gold text-[#161513] text-[8px] font-bold px-1.5 py-0.5 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300">v2.1.0</div>
+          <div className="absolute -right-2 -top-2 bg-executive-gold text-brand-obsidian text-[8px] font-bold px-1.5 py-0.5 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300">v2.1.0</div>
         </button>
       </div>
 
       <nav className="flex flex-col gap-7 flex-1" aria-label="Ana menü">
         <div className="flex flex-col gap-1.5">
-          <div className="text-[9px] text-white/60 font-medium uppercase tracking-[0.22em] mb-2 px-2" aria-hidden="true">
+          <div className="text-[9px] text-text-muted font-medium uppercase tracking-[0.22em] mb-2 px-2" aria-hidden="true">
             OPERASYON
           </div>
           {filteredPrimaryItems.map(renderMenuItem)}
         </div>
 
         {filteredSystemItems.length > 0 && (
-          <div className="flex flex-col gap-1.5 pt-2 border-t border-white/[0.06]">
-            <div className="text-[9px] text-white/60 font-medium uppercase tracking-[0.22em] mb-2 px-2" aria-hidden="true">
+          <div className="flex flex-col gap-1.5 pt-2 border-t border-surface-border">
+            <div className="text-[9px] text-text-muted font-medium uppercase tracking-[0.22em] mb-2 px-2" aria-hidden="true">
               SİSTEM
             </div>
             {filteredSystemItems.map(renderMenuItem)}
@@ -122,7 +122,7 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
 
       <div className="flex flex-col gap-4 pt-6">
         <div className="makam-divider mb-2 opacity-10" />
-        <div className="px-4 py-3 flex items-center gap-3 group bg-white/[0.03] border border-white/[0.08] rounded-2xl shadow-sm transition-all duration-300 hover:bg-white/[0.05]">
+        <div className="px-4 py-3 flex items-center gap-3 group bg-surface-glass border border-surface-border rounded-2xl shadow-sm transition-all duration-300 hover:bg-makam-glass">
           <Avatar
             name={user?.fullName ?? '?'}
             photoURL={user?.photoURL}
@@ -131,10 +131,10 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
             className="border-surface-border flex-shrink-0 group-hover:scale-105 transition-all"
           />
           <div className="flex flex-col overflow-hidden gap-1">
-            <span className="text-[14px] font-normal text-white truncate tracking-tight leading-none font-display">{user?.fullName}</span>
+            <span className="text-[14px] font-normal text-text-heading truncate tracking-tight leading-none font-display">{user?.fullName}</span>
             <div className="flex items-center gap-1.5 mt-1">
               <span className="w-1 h-1 rounded-full bg-status-success" />
-              <span className="text-[8px] text-[#D4B573] font-medium uppercase tracking-[0.22em]">{user ? ROLE_LABELS[user.role] : ''}</span>
+              <span className="text-[8px] text-executive-gold font-medium uppercase tracking-[0.22em]">{user ? ROLE_LABELS[user.role] : ''}</span>
             </div>
           </div>
         </div>
@@ -145,7 +145,7 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
             onLogout();
           }}
           aria-label="Oturumu kapat"
-          className="flex items-center justify-center gap-2 px-5 py-3 text-white/40 hover:text-status-danger hover:bg-status-danger/10 rounded-full transition-all group font-medium text-[11px] uppercase tracking-[0.16em] border border-surface-border hover:border-status-danger/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger focus-visible:ring-offset-2 focus-visible:ring-offset-[#161513]"
+          className="flex items-center justify-center gap-2 px-5 py-3 text-text-tertiary hover:text-status-danger hover:bg-status-danger/10 rounded-full transition-all group font-medium text-[11px] uppercase tracking-[0.16em] border border-surface-border hover:border-status-danger/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
         >
           <LogOut className="w-4 h-4 transition-transform group-hover:-translate-x-1" aria-hidden="true" />
           <span>Oturumu Kapat</span>
@@ -153,7 +153,7 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
 
         <button
           onClick={() => setIsAboutModalOpen(true)}
-          className="mt-2 text-[10px] text-white/20 hover:text-executive-gold transition-colors font-medium tracking-widest uppercase text-center"
+          className="mt-2 text-[10px] text-text-tertiary/60 hover:text-executive-gold transition-colors font-medium tracking-widest uppercase text-center"
         >
           MAKAM v2.1.0
         </button>

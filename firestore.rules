@@ -147,10 +147,10 @@ service cloud.firestore {
     }
 
     function isValidTaskUpdate(data) {
-      let allowedFields = ['id', 'parentId', 'title', 'description', 'creatorId', 'assigneeId', 'coordinatorId', 
-                           'status', 'priority', 'deadline', 'createdAt', 'updatedAt', 'evidence', 'evidenceType', 
+      let allowedFields = ['id', 'parentId', 'title', 'description', 'creatorId', 'assigneeId', 'coordinatorId',
+                           'status', 'priority', 'deadline', 'createdAt', 'updatedAt', 'evidence', 'evidenceType',
                            'pausedAt', 'totalPausedTime', 'comments', 'lockVersion', 'departmentId',
-                           'completedAt', 'estimatedHours', 'tags', 'checklist'];
+                           'completedAt', 'estimatedHours', 'tags', 'checklist', 'changedBy'];
       
       return data.keys().hasOnly(allowedFields) &&
              (!('id' in data) || data.id is string) &&
@@ -174,7 +174,10 @@ service cloud.firestore {
              (!('completedAt' in data) || data.completedAt is number) &&
              (!('estimatedHours' in data) || (data.estimatedHours is number && data.estimatedHours >= 0)) &&
              (!('tags' in data) || (data.tags is list && data.tags.size() <= 10)) &&
-             (!('checklist' in data) || (data.checklist is list && data.checklist.size() <= 100));
+             (!('checklist' in data) || (data.checklist is list && data.checklist.size() <= 100)) &&
+             // changedBy, audit_logs kuralındaki (isValidAuditLog) desenle aynı: istemci
+             // başka bir kullanıcı adına sahte "değiştiren" kaydı yazamaz.
+             (!('changedBy' in data) || data.changedBy == request.auth.uid);
     }
 
     function isValidBlocker(data) {

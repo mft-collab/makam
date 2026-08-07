@@ -540,6 +540,7 @@ export default function App() {
                         onUpdateUser={updateUserRole}
                         onDeleteUser={deleteUser}
                         onAddUser={addUser}
+                        isLoading={isDataLoading}
                       />
                     )}
                     {Boolean(activeTab === 'reports') && <Reports tasks={filteredTasksByFocus} users={filteredUsersByFocus} blockers={filteredBlockersByFocus} setActiveTab={setActiveTab} />}
@@ -549,7 +550,7 @@ export default function App() {
                       />
                     )}
                     {Boolean(activeTab === 'settings') && (
-                      <Settings tasks={tasks} users={users} blockers={blockers} triggerToast={triggerToast} currentUser={user} />
+                      <Settings tasks={tasks} users={users} blockers={blockers} triggerToast={triggerToast} currentUser={user} isLoading={isDataLoading} />
                     )}
                   </Suspense>
                 </motion.div>

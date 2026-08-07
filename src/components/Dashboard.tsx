@@ -122,7 +122,9 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
   if (isLoading) return <DashboardSkeleton />;
 
   return (
-    <div className="flex flex-col gap-5 py-4 max-w-[1440px] mx-auto font-sans">
+    // pb-24: sağ altta beliren PWA "Çevrimdışı Hazır"/güncelleme toast'ı (ReloadPrompt,
+    // fixed bottom-6 right-6) alt satırların üzerine binmesin diye ekstra boşluk.
+    <div className="flex flex-col gap-5 pt-4 pb-24 max-w-[1440px] mx-auto font-sans">
 
       {/* ── Stratejik Sağlık Endeksi Banner ── */}
       <motion.div

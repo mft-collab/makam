@@ -21,6 +21,10 @@ const db = admin.firestore();
 
 const IDLE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 saat
 
+// Spark (ücretsiz) plan zaman aşımı/kota riskine karşı üst sınır — kalan görevler
+// bir sonraki günlük koşuda (cron zaten her gün tekrar çalışıyor) işlenir.
+const MAX_TASKS_PER_RUN = 500;
+
 export const scheduledDailyAudit = functions
   .region('europe-west1')        // Frankfurt — TR'ye en yakın bölge
   .pubsub
@@ -35,6 +39,7 @@ export const scheduledDailyAudit = functions
       const tasksSnap = await db
         .collection('tasks')
         .where('status', 'not-in', ['COMPLETED', 'CANCELLED'])
+        .limit(MAX_TASKS_PER_RUN)
         .get();
 
       if (tasksSnap.empty) {

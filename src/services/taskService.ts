@@ -91,7 +91,13 @@ async function transitionTaskInTransaction(
     updatedAt: now,
     lockVersion: currentVersion + 1,
     pausedAt,
-    totalPausedTime
+    totalPausedTime,
+    // changedBy ayrıca audit_logs dokümanına da yazılıyor (aşağıda), ama görev
+    // dokümanının kendisinde de tutulur — aksi halde onTaskStatusChanged (Cloud
+    // Function) trigger'ı after.changedBy'ı hiç okuyamaz ve "değiştiren kişiye
+    // bildirim gönderme" filtresi asla çalışmaz (kullanıcı kendi değişikliğinde
+    // bile bildirim alır).
+    changedBy: userId
   };
 
   // Görev tamamlandığında completedAt otomatik ayarlanır

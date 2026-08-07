@@ -192,14 +192,3 @@ export function getSLAConfigForPriority(priority: 'Low' | 'Medium' | 'High' | 'U
   }
   return DEFAULT_SLA_CONFIG[priority];
 }
-
-/**
- * Deprecated: Geriye dönük uyumluluk için gün bazlı sayı döner.
- */
-export function getDaysForPriority(priority: 'Low' | 'Medium' | 'High' | 'Urgent'): number {
-  const config = getSLAConfigForPriority(priority);
-  if (config.unit === 'hours') {
-    return Math.max(1, Math.round(config.value / 8)); // 8 saatlik iş gününe yuvarlama
-  }
-  return config.value;
-}

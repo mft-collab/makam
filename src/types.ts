@@ -77,6 +77,10 @@ export const TaskSchema = z.object({
     text: z.string(),
     isCompleted: z.boolean(),
   })).optional(),
+  /** Son durum geçişini yapan kullanıcının uid'si — transitionTaskInTransaction
+   *  tarafından her geçişte set edilir. Cloud Functions'taki onTaskStatusChanged
+   *  trigger'ının "değiştiren kişiye bildirim gönderme" filtresi bu alana bakar. */
+  changedBy: z.string().optional(),
 });
 export type Task = z.infer<typeof TaskSchema>;
 

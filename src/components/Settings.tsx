@@ -9,6 +9,7 @@ import { getSLAConfigForPriority } from '../lib/sla';
 import { SettingsCard, ActionButton, StatusBanner } from './settings/SharedUI';
 import { userBackupSchema, taskBackupSchema, restoreBackupSchema } from './settings/constants';
 import { cleanDataObj, toTs, pick } from './settings/helpers';
+import { Skeleton } from './ui/Skeleton';
 
 interface SettingsProps {
   tasks: Task[];
@@ -16,10 +17,35 @@ interface SettingsProps {
   blockers: any[];
   triggerToast?: (title: string, body: string, type?: 'info' | 'success' | 'warning' | 'danger') => void;
   currentUser?: User | null;
+  isLoading?: boolean;
 }
 
+const SettingsSkeleton = () => (
+  <div className="flex flex-col gap-5 py-4 max-w-[1440px] mx-auto" aria-label="Ayarlar yükleniyor..." role="status">
+    <div className="flex items-center gap-2.5 pb-4 border-b border-executive-blue/[0.04]">
+      <Skeleton className="h-8 w-8" rounded="lg" />
+      <Skeleton className="h-6 w-52" />
+    </div>
+    <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-6">
+      <div className="flex flex-col gap-2">
+        {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {[...Array(2)].map((_, i) => (
+          <div key={i} className="makam-card p-6 flex flex-col gap-3">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+            <Skeleton className="h-9 w-full mt-2" rounded="full" />
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
 // ── Main Component ────────────────────────────────────────────────────────────
-export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: SettingsProps) => {
+export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, isLoading = false }: SettingsProps) => {
   const [activeSubTab, setActiveSubTab] = useState<'general' | 'sla' | 'data'>('general');
   const [isOnline, setIsOnline] = useState(typeof window !== 'undefined' ? window.navigator.onLine : true);
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error' | 'loading'; message: string } | null>(null);
@@ -397,6 +423,8 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser }: 
       setIsArchiving(false);
     }
   };
+
+  if (isLoading) return <SettingsSkeleton />;
 
   return (
     <div className="flex flex-col gap-5 py-4 max-w-[1440px] mx-auto font-sans">

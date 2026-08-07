@@ -412,4 +412,102 @@ describe('OfflineQueue', () => {
       expect(transactionUpdate).toHaveBeenCalledTimes(2);
     });
   });
+
+  // ─── sync — statusTransition (offline durum geçişi) ────────────────────────
+  // Çevrimdışı durum geçişleri artık ham transaction.update() yerine online ile
+  // BİREBİR AYNI transitionTaskInTransaction'dan geçiyor (bkz. offlineQueue.ts
+  // sync() + useAppHandlers.ts). Bu, audit_logs/system-stats yazımının ve
+  // kriz-affı (breach-debt + 24s mühlet uzatması) mantığının offline'da da
+  // uygulandığını doğrular.
+
+  describe('sync — statusTransition (offline durum geçişi)', () => {
+    it('CRISIS→IN_PROGRESS: offline geçişte de online ile aynı ihlal-affı, audit ve stats mantığı uygulanır', async () => {
+      const transactionUpdate = vi.fn();
+      const transactionSet = vi.fn();
+      const now = Date.now();
+      const pastDeadline = now - 2 * 60 * 60 * 1000; // 2 saat önce ihlal edilmiş
+
+      vi.mocked(firebase.runTransaction).mockImplementationOnce(async (_db: any, fn: any) => {
+        const transaction = {
+          get: vi.fn().mockResolvedValue({
+            exists: () => true,
+            data: () => ({
+              status: 'CRISIS',
+              lockVersion: 2,
+              totalPausedTime: 0,
+              pausedAt: null,
+              deadline: pastDeadline,
+            }),
+          }),
+          update: transactionUpdate,
+          set: transactionSet,
+        };
+        return fn(transaction);
+      });
+
+      offlineQueue.enqueue(
+        'tasks', 'update', undefined, 'task-1', undefined, undefined,
+        { newStatus: 'IN_PROGRESS', userId: 'user-1', expectedVersion: 2 }
+      );
+      const result = await offlineQueue.sync();
+
+      expect(result).toBe(true);
+      expect(offlineQueue.getQueue()).toHaveLength(0);
+
+      // Görev dokümanı: lockVersion arttı, kriz-affı (breach debt + 24s) totalPausedTime'a eklendi
+      expect(transactionUpdate).toHaveBeenCalledOnce();
+      const [, updateData] = transactionUpdate.mock.calls[0]!;
+      expect(updateData).toMatchObject({ status: 'IN_PROGRESS', lockVersion: 3, pausedAt: null });
+      expect(updateData.totalPausedTime).toBeGreaterThanOrEqual(24 * 60 * 60 * 1000);
+
+      // Düz transaction.update() ile ASLA yazılmayan audit_logs + system/stats,
+      // offline yolda da (online ile aynı transitionTaskInTransaction üzerinden) yazılıyor
+      const auditCall = transactionSet.mock.calls.find(([, data]: any) => data?.changes !== undefined);
+      expect(auditCall?.[1]).toMatchObject({ taskId: 'task-1', changedBy: 'user-1', oldValue: 'CRISIS', newValue: 'IN_PROGRESS' });
+      const statsCall = transactionSet.mock.calls.find(([, data]: any) => 'status_CRISIS' in (data ?? {}));
+      expect(statsCall?.[1]).toMatchObject({ status_IN_PROGRESS: { __increment: 1 } });
+    });
+
+    it('statusTransition taşıyan mutasyon birleştirmeye dahil edilmez', () => {
+      offlineQueue.enqueue(
+        'tasks', 'update', undefined, 'task-1', undefined, undefined,
+        { newStatus: 'IN_PROGRESS', userId: 'user-1', expectedVersion: 2 }
+      );
+      offlineQueue.enqueue('tasks', 'update', { title: 'Başlık düzeltmesi' }, 'task-1', 2);
+
+      // statusTransition mutasyonu korunur, ardından gelen plain update ayrı bir öğe olarak eklenir
+      expect(offlineQueue.getQueue()).toHaveLength(2);
+    });
+
+    it('versiyon uyuşmazsa statusTransition UYGULANMAZ, mutasyon düşürülür ve çakışma bildirilir', async () => {
+      const transactionUpdate = vi.fn();
+      vi.mocked(firebase.runTransaction).mockImplementationOnce(async (_db: any, fn: any) => {
+        const transaction = {
+          get: vi.fn().mockResolvedValue({
+            exists: () => true,
+            data: () => ({ status: 'IN_PROGRESS', lockVersion: 9, totalPausedTime: 0 }),
+          }),
+          update: transactionUpdate,
+          set: vi.fn(),
+        };
+        return fn(transaction);
+      });
+
+      const { conflictDetectionService } = await import('../services/conflictDetectionService');
+      const conflictHandler = vi.fn();
+      const unsubscribe = conflictDetectionService.subscribe(conflictHandler);
+
+      offlineQueue.enqueue(
+        'tasks', 'update', undefined, 'task-1', undefined, undefined,
+        { newStatus: 'COMPLETED', userId: 'user-1', expectedVersion: 2 }
+      );
+      const result = await offlineQueue.sync();
+      unsubscribe();
+
+      expect(result).toBe(true);
+      expect(offlineQueue.getQueue()).toHaveLength(0);
+      expect(transactionUpdate).not.toHaveBeenCalled();
+      expect(conflictHandler).toHaveBeenCalledOnce();
+    });
+  });
 });

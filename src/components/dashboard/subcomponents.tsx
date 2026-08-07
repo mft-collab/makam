@@ -58,7 +58,7 @@ export const StatCard = ({ label, value, max, icon: Icon, color, onClick, index 
 
       {/* Label + Value */}
       <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-        <span className="text-[9px] font-semibold text-text-tertiary uppercase tracking-[0.16em] truncate">{label}</span>
+        <span className="text-[9px] font-semibold text-text-tertiary uppercase tracking-[0.08em] leading-tight whitespace-normal">{label}</span>
         <div className="flex items-baseline gap-1 min-w-0">
           <RollingNumber value={value} className="text-[20px] sm:text-[22px] font-light text-executive-blue tracking-tight tabular-nums leading-none shrink-0" />
           {max > 0 && <span className="text-[10px] text-text-tertiary font-light truncate min-w-0">/ {max}</span>}

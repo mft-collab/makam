@@ -81,7 +81,6 @@ export function useAppHandlers({
     evidenceType?: Task['evidenceType']
   ) => {
     if (!user) return;
-    const now = Date.now();
     const oldTask = tasks.find(t => t.id === taskId);
 
     if (isOfflineNow()) {
@@ -93,27 +92,23 @@ export function useAppHandlers({
           // sync sırasında blockerService.addBlocker ile aynı transaction'da uygulanır.
           offlineQueue.enqueue(
             'blockers', 'create',
-            { id: bid, taskId, reason: 'Hızlı kaydırma ile kriz bildirimi.', isResolved: false, createdAt: now },
+            { id: bid, taskId, reason: 'Hızlı kaydırma ile kriz bildirimi.', isResolved: false, createdAt: Date.now() },
             undefined, undefined,
             { taskId, newStatus: 'BLOCKED', userId: user.uid, expectedVersion: oldTask?.lockVersion }
           );
         } else {
-          offlineQueue.enqueue('tasks', 'update', { status: 'BLOCKED', pausedAt: now, evidence, evidenceType, updatedAt: now }, taskId, oldTask?.lockVersion);
+          // statusTransition: pausedAt/totalPausedTime burada elle hesaplanmaz —
+          // senkronda transitionTaskInTransaction, online ile birebir aynı mantıkla hesaplar.
+          offlineQueue.enqueue(
+            'tasks', 'update', undefined, taskId, undefined, undefined,
+            { newStatus: 'BLOCKED', userId: user.uid, evidence, evidenceType, expectedVersion: oldTask?.lockVersion }
+          );
         }
       } else {
-        const updateData: Partial<Task> = { status: newStatus, evidence, evidenceType, updatedAt: now };
-        if (oldTask) {
-          let totalPausedTime = oldTask.totalPausedTime || 0;
-          let pausedAt = oldTask.pausedAt ?? null;
-          if ((oldTask.status === 'BLOCKED' || oldTask.status === 'AWAITING_APPROVAL' || oldTask.status === 'PENDING_DELEGATION') && oldTask.pausedAt) {
-            totalPausedTime += now - oldTask.pausedAt;
-            pausedAt = null;
-          }
-          if (newStatus === 'AWAITING_APPROVAL') pausedAt = now;
-          updateData.totalPausedTime = totalPausedTime;
-          updateData.pausedAt = pausedAt;
-        }
-        offlineQueue.enqueue('tasks', 'update', updateData, taskId, oldTask?.lockVersion);
+        offlineQueue.enqueue(
+          'tasks', 'update', undefined, taskId, undefined, undefined,
+          { newStatus, userId: user.uid, evidence, evidenceType, expectedVersion: oldTask?.lockVersion }
+        );
       }
       toast('🔄 Çevrimdışı Güncelleme', `Durum lokal kuyrukta güncellendi: ${newStatus}`, 'warning', taskId);
       return;
@@ -299,20 +294,14 @@ export function useAppHandlers({
     if (!user) return;
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
-    const now = Date.now();
 
     if (isOfflineNow()) {
-      let totalPausedTime = task.totalPausedTime || 0;
-      if ((task.status === 'BLOCKED' || task.status === 'AWAITING_APPROVAL' || task.status === 'PENDING_DELEGATION') && task.pausedAt) {
-        totalPausedTime += now - task.pausedAt;
-      }
-      offlineQueue.enqueue('tasks', 'update', {
-        assigneeId: newAssigneeId,
-        status: 'PENDING_DELEGATION',
-        pausedAt: now,
-        totalPausedTime,
-        updatedAt: now,
-      }, taskId, task.lockVersion);
+      // statusTransition: pausedAt/totalPausedTime burada elle hesaplanmaz —
+      // senkronda transitionTaskInTransaction, online ile birebir aynı mantıkla hesaplar.
+      offlineQueue.enqueue(
+        'tasks', 'update', undefined, taskId, undefined, undefined,
+        { newStatus: 'PENDING_DELEGATION', userId: user.uid, assigneeId: newAssigneeId, expectedVersion: task.lockVersion }
+      );
       toast('🔄 Çevrimdışı Devir', 'Talimat devri lokal sıraya alındı.', 'warning', taskId);
       return;
     }
