@@ -157,7 +157,7 @@ export function useAppHandlers({
     try {
       await taskService.createTask(data, user.uid);
       setIsCreateModalOpen(false);
-      toast('📋 Talimat Tanımlandı', `"${data.title?.slice(0, 50) ?? 'Yeni talimat'}" sisteme işlendi.`, 'success');
+      toast('📋 Talimat Tanımlandı', `"${data.title?.slice(0, 50) ?? 'Yeni talimat'}" dizgeye işlendi.`, 'success');
     } catch (err) {
       onError(err, 'create', 'tasks');
     }

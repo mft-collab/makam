@@ -105,7 +105,7 @@ export async function exportTasksToPDF(
       <div style="background:${OBSIDIAN};border-bottom:3px solid ${SATIN_GOLD};padding:22px 28px;display:flex;justify-content:space-between;align-items:center;">
         <div>
           <div style="color:${SATIN_GOLD};font-size:26px;font-weight:700;letter-spacing:0.04em;">MAKAM</div>
-          <div style="color:#FFFFFF;font-size:13px;margin-top:4px;">Stratejik Yönetim Sistemi &mdash; Talimat Raporu</div>
+          <div style="color:#FFFFFF;font-size:13px;margin-top:4px;">Stratejik Yönetim Dizgesi &mdash; Talimat Raporu</div>
           <div style="color:#B8B6B0;font-size:11px;margin-top:2px;">Oluşturma: ${format(now, 'd MMMM yyyy HH:mm', { locale: tr })}</div>
         </div>
         ${rangeLabel ? `<div style="color:#FFFFFF;font-size:11px;">${rangeLabel}</div>` : ''}

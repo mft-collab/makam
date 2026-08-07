@@ -113,7 +113,7 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
         {filteredSystemItems.length > 0 && (
           <div className="flex flex-col gap-1.5 pt-2 border-t border-surface-border">
             <div className="text-[9px] text-text-muted font-medium uppercase tracking-[0.22em] mb-2 px-2" aria-hidden="true">
-              SİSTEM
+              DİZGE
             </div>
             {filteredSystemItems.map(renderMenuItem)}
           </div>

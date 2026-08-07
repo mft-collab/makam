@@ -82,7 +82,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 className="makam-button-primary w-full h-16 tracking-[0.16em]"
               >
                 <RefreshCw className="w-5 h-5 mr-3 stroke-[1.5]" />
-                SİSTEMİ YENİLE
+                DİZGEYİ YENİLE
               </button>
               <button 
                 onClick={() => window.location.href = '/'} 

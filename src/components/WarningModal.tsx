@@ -97,7 +97,7 @@ export const WarningModal = ({ task, assignee, onClose }: WarningModalProps) => 
             onClick={onClose}
             className="mt-4 md:mt-6 px-10 md:px-12 h-12 md:h-14 tracking-[0.3em] bg-red-500/10 text-red-500 border border-red-500/20 rounded-full text-[10px] md:text-[11px] font-medium uppercase hover:bg-red-500/90 hover:text-white transition-all duration-300 w-full md:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
           >
-            SİSTEME DÖN
+            DİZGEYE DÖN
           </button>
         </div>
       </motion.div>

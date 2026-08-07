@@ -94,7 +94,7 @@ export const CertificateModal = ({ task, assignee, onClose }: CertificateModalPr
             onClick={onClose}
             className="makam-button-primary mt-4 md:mt-6 px-10 md:px-12 h-12 md:h-14 tracking-[0.3em] w-full md:w-auto text-[10px] md:text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-2"
           >
-            SİSTEME DÖN
+            DİZGEYE DÖN
           </button>
         </div>
       </motion.div>

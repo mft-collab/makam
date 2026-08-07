@@ -436,7 +436,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
         </div>
         <div>
           <span className="text-[10px] font-medium text-executive-blue uppercase tracking-[0.4em] block leading-none">
-            SİSTEM YAPILANDIRMASI
+            DİZGE YAPILANDIRMASI
           </span>
           <span className="text-[9px] text-text-tertiary uppercase tracking-[0.3em]">Konfigürasyon & Veri Yönetimi</span>
         </div>
@@ -508,7 +508,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
               {/* Notification and Audio System Test */}
               <SettingsCard title="Bildirim & Ses Testi" description="Akustik & görsel doğrulaması" icon={Bell} accentColor="amber" index={0}>
                 <p className="text-[11px] text-text-muted font-light leading-relaxed">
-                  Sistem ses sentezleyici çanını ve yerel bildirim motorunun (In-App Toast ve PWA Push) çalışma durumunu anında test edin.
+                  Dizge ses sentezleyici çanını ve yerel bildirim motorunun (In-App Toast ve PWA Push) çalışma durumunu anında test edin.
                 </p>
                 <ActionButton
                   variant="warning"

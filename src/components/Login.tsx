@@ -72,7 +72,7 @@ export const Login = ({ onLogin, isLoading }: LoginProps) => {
               disabled={isLoading}
               className="makam-button-primary w-full h-14 text-[13px] tracking-[0.16em] font-medium group cursor-pointer"
             >
-              {isLoading ? 'SİSTEME BAĞLANILIYOR...' : (
+              {isLoading ? 'DİZGEYE BAĞLANILIYOR...' : (
                 <span className="flex items-center justify-center gap-2">
                   KURUMSAL GİRİŞ YAP
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform stroke-[2]" />
