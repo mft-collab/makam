@@ -63,7 +63,7 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
             
             <div className="flex flex-col gap-4">
-              <h2 className="text-3xl font-light text-text-heading tracking-tight font-serif uppercase">Sistem Kesintisi</h2>
+              <h2 className="text-3xl font-light text-text-heading tracking-tight font-serif uppercase">Dizge Kesintisi</h2>
               <p className="text-text-muted text-[15px] font-light leading-relaxed">
                 {errorMessage}
               </p>

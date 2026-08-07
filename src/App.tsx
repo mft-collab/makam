@@ -68,7 +68,7 @@ function getOperationalErrorToast(error: unknown): Omit<ToastItem, 'id'> {
   }
 
   return {
-    title: 'Sistem Hatası',
+    title: 'Dizge Hatası',
     body: `Hata: ${errorMsg}`,
     type: 'danger'
   };

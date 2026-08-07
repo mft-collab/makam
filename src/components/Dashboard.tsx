@@ -170,7 +170,7 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
 
         <div className="relative z-10 flex items-center gap-8 justify-between w-full md:w-auto">
           <div className="flex flex-col items-start md:items-end gap-1">
-            <span className="text-[9px] text-text-tertiary uppercase tracking-[0.2em] font-medium">Sistem Durumu</span>
+            <span className="text-[9px] text-text-tertiary uppercase tracking-[0.2em] font-medium">Dizge Durumu</span>
             <div className="flex items-center gap-2">
               <span className={cn(
                 "w-2 h-2 rounded-full",

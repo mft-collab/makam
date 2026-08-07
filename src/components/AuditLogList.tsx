@@ -184,13 +184,13 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
                 <div className="flex items-center gap-6 flex-1">
                   {/* Avatar */}
                   <Avatar
-                    name={user?.fullName ?? 'Sistem'}
+                    name={user?.fullName ?? 'Dizge'}
                     photoURL={user?.photoURL}
                     size="sm"
                   />
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center gap-2">
-                      <span className="text-[12px] font-medium text-executive-blue tracking-tight group-hover:text-executive-blue transition-colors">{user?.fullName || 'Sistem'}</span>
+                      <span className="text-[12px] font-medium text-executive-blue tracking-tight group-hover:text-executive-blue transition-colors">{user?.fullName || 'Dizge'}</span>
                       <span className="text-[8px] text-text-tertiary font-medium uppercase tracking-[0.15em] px-1.5 py-0.5 bg-surface-glass border border-surface-border rounded-md">{user ? ROLE_LABELS[user.role as keyof typeof ROLE_LABELS] : ''}</span>
                     </div>
                     <span className="text-[9px] text-text-tertiary uppercase tracking-[0.2em]">{new Date(log.timestamp).toLocaleString('tr-TR')}</span>

@@ -743,7 +743,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
       <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Kadrodan Çıkar">
         <div className="flex flex-col gap-4">
           <p className="text-[13px] text-text-muted font-light leading-relaxed">
-            <strong className="text-status-danger font-medium">{userToDelete?.fullName}</strong> isimli personeli sistemden çıkarmak istediğinize emin misiniz?
+            <strong className="text-status-danger font-medium">{userToDelete?.fullName}</strong> isimli personeli dizgeden çıkarmak istediğinize emin misiniz?
           </p>
           {userToDelete && (() => {
             const activeTaskCount = tasks.filter(t =>
@@ -761,7 +761,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
           })()}
           <div className="flex justify-end gap-2.5 pt-4 border-t border-executive-blue/[0.04]">
             <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>İptal</Button>
-            <Button variant="danger" onClick={confirmDelete}>Sistemden Çıkar</Button>
+            <Button variant="danger" onClick={confirmDelete}>Dizgeden Çıkar</Button>
           </div>
         </div>
       </Modal>

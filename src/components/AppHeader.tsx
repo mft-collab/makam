@@ -78,7 +78,7 @@ export function AppHeader({
                {Boolean(activeTab === 'team') && 'Kadro'}
                {Boolean(activeTab === 'reports') && 'Raporlar'}
                {Boolean(activeTab === 'audit') && 'Denetim İzleri'}
-               {Boolean(activeTab === 'settings') && 'Sistem Ayarları'}
+               {Boolean(activeTab === 'settings') && 'Dizge Ayarları'}
              </h1>
              <div className="flex items-center gap-3">
                <span className="w-1.5 h-1.5 rounded-full bg-status-success shadow-[0_0_10px_var(--color-status-success)]" />
@@ -107,7 +107,7 @@ export function AppHeader({
           {isOnline ? (
             <div 
               className="flex items-center gap-1.5 px-3 py-1.5 bg-status-success/[0.04] border border-status-success/10 rounded-full cursor-help group relative"
-              title="Sistem Güvenli & Senkronize"
+              title="Dizge Güvenli & Senkronize"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-status-success shadow-[0_0_8px_var(--color-status-success)] animate-pulse" />
               <span className="text-[8px] font-bold text-status-success uppercase tracking-widest hidden sm:inline">ONLINE</span>
@@ -154,7 +154,7 @@ export function AppHeader({
           <button
             onClick={handleToggleTheme}
             aria-label={`Temayı değiştir. Şu anki tema: ${
-              theme === 'light' ? 'Açık' : theme === 'dark' ? 'Koyu' : 'Sistem'
+              theme === 'light' ? 'Açık' : theme === 'dark' ? 'Koyu' : 'Dizge'
             }`}
             className="w-9 h-9 flex items-center justify-center rounded-full border border-makam-border/10 bg-makam-glass hover:bg-text-muted/5 transition-all text-text-muted hover:text-executive-blue cursor-pointer"
           >

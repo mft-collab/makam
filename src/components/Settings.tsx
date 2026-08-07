@@ -206,7 +206,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
     if ('Notification' in window && Notification.permission === 'granted') {
       try {
         new Notification('Makam Kurumsal Bildirim', {
-          body: 'Sistem arka plan ve yerel bildirim altyapısı aktiftir.',
+          body: 'Dizge arka plan ve yerel bildirim altyapısı aktiftir.',
           icon: '/favicon.ico'
         });
       } catch (err) {
@@ -234,11 +234,11 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
   const handleExport = async () => {
     if (!currentUser || currentUser.role !== 'Admin') {
       if (triggerToast) {
-        triggerToast('YETKİSİZ İŞLEM', 'Sistem yedeği indirme yetkisi yalnızca Admin makamına aittir.', 'danger');
+        triggerToast('YETKİSİZ İŞLEM', 'Dizge yedeği indirme yetkisi yalnızca Admin makamına aittir.', 'danger');
       }
       return;
     }
-    setImportStatus({ type: 'loading', message: 'Sistem Verileri Yedekleniyor...' });
+    setImportStatus({ type: 'loading', message: 'Dizge Verileri Yedekleniyor...' });
     try {
       const snapshot = await getDocs(query(collection(db, 'audit_logs')));
       const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -258,7 +258,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      setImportStatus({ type: 'success', message: 'Sistem yedeği başarıyla indirildi.' });
+      setImportStatus({ type: 'success', message: 'Dizge yedeği başarıyla indirildi.' });
     } catch (err) {
       console.error('Export failed:', err);
       const msg = err instanceof Error ? err.message : String(err);
@@ -270,7 +270,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!currentUser || currentUser.role !== 'Admin') {
       if (triggerToast) {
-        triggerToast('YETKİSİZ İŞLEM', 'Sistem geri yükleme yetkisi yalnızca Admin makamına aittir.', 'danger');
+        triggerToast('YETKİSİZ İŞLEM', 'Dizge geri yükleme yetkisi yalnızca Admin makamına aittir.', 'danger');
       }
       return;
     }
@@ -309,7 +309,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
           });
         }
 
-        setImportStatus({ type: 'loading', message: 'Sistem Geri Yükleniyor...' });
+        setImportStatus({ type: 'loading', message: 'Dizge Geri Yükleniyor...' });
 
         const items: { ref: any; data: any }[] = [];
         if (Array.isArray(data.users)) {
@@ -357,7 +357,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
           timestamp: Date.now()
         });
 
-        setImportStatus({ type: 'success', message: 'Sistem başarıyla önceki sürüme döndürüldü.' });
+        setImportStatus({ type: 'success', message: 'Dizge başarıyla önceki sürüme döndürüldü.' });
         e.target.value = '';
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -521,7 +521,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
               <SettingsCard title="Cihaza Yükle (PWA)" description="Masaüstü & Mobil Uygulama" icon={Smartphone} accentColor="gold" index={1}>
                 <div className="flex flex-col gap-2.5">
                   <p className="text-[11px] text-text-muted font-light leading-relaxed">
-                    MAKAM sistemini bilgisayarınıza veya telefonunuza bağımsız bir uygulama olarak yükleyebilirsiniz. Bu sayede daha hızlı erişim sağlar ve tam ekran deneyimi yaşarsınız.
+                    MAKAM dizgesini bilgisayarınıza veya telefonunuza bağımsız bir uygulama olarak yükleyebilirsiniz. Bu sayede daha hızlı erişim sağlar ve tam ekran deneyimi yaşarsınız.
                   </p>
 
                   {isInstalled ? (
@@ -699,7 +699,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
                 {/* Export */}
-                <SettingsCard title="Arşivleme" description="Sistem yedeği oluştur" icon={Download} accentColor="slate" index={0}>
+                <SettingsCard title="Arşivleme" description="Dizge yedeği oluştur" icon={Download} accentColor="slate" index={0}>
                   <p className="text-[11px] text-text-muted font-light leading-relaxed">
                     Tüm talimat, personel ve denetim verilerini tek bir JSON dosyasına aktarır.
                   </p>
@@ -712,9 +712,9 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
                 </SettingsCard>
 
                 {/* Import / Restore */}
-                <SettingsCard title="Geri Yükleme" description="Yedekten sistemi döndür" icon={RotateCcw} accentColor="amber" index={1}>
+                <SettingsCard title="Geri Yükleme" description="Yedekten dizgeyi döndür" icon={RotateCcw} accentColor="amber" index={1}>
                   <p className="text-[11px] text-text-muted font-light leading-relaxed">
-                    Daha önce alınan bir yedek dosyasından sistemi geri yükler (Çalışma zamanı Zod doğrulaması içerir).
+                    Daha önce alınan bir yedek dosyasından dizgeyi geri yükler (Çalışma zamanı Zod doğrulaması içerir).
                   </p>
 
                   <input type="file" accept=".json" onChange={handleImport} className="hidden" id="restore-upload" disabled={!isOnline} />
@@ -723,7 +723,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
                     <div className="flex items-start gap-2 p-2.5 bg-status-danger/10 border border-status-danger/20 rounded-xl">
                       <AlertCircle className="w-3.5 h-3.5 text-status-danger flex-shrink-0 mt-0.5" />
                       <p className="text-[9px] text-status-danger font-semibold uppercase tracking-[0.15em] leading-relaxed">
-                        Sistemi geri yüklemek için internet bağlantısı gereklidir.
+                        Dizgeyi geri yüklemek için internet bağlantısı gereklidir.
                       </p>
                     </div>
                   ) : (
@@ -745,9 +745,9 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
                 </SettingsCard>
 
                 {/* Export Audit Logs */}
-                <SettingsCard title="Denetim İzlerini Arşivle" description="Sistem log dışa aktarımı" icon={ShieldCheck} accentColor="slate" index={2}>
+                <SettingsCard title="Denetim İzlerini Arşivle" description="Dizge log dışa aktarımı" icon={ShieldCheck} accentColor="slate" index={2}>
                   <p className="text-[11px] text-text-muted font-light leading-relaxed">
-                    Tüm sistem erişim ve değişim loglarını yerel bir JSON dosyasına aktarır. Denetim izleri kanıt bütünlüğü gereği değiştirilemez/silinemez olduğundan bu işlem veritabanından hiçbir kaydı kaldırmaz.
+                    Tüm dizge erişim ve değişim loglarını yerel bir JSON dosyasına aktarır. Denetim izleri kanıt bütünlüğü gereği değiştirilemez/silinemez olduğundan bu işlem veritabanından hiçbir kaydı kaldırmaz.
                   </p>
 
                   {!isOnline ? (
@@ -768,17 +768,17 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
                 </SettingsCard>
 
                 {/* System Optimization */}
-                <SettingsCard title="Sistem Optimizasyonu" description="Önbellek & bildirim temizliği" icon={Database} accentColor="slate" index={3}>
+                <SettingsCard title="Dizge Optimizasyonu" description="Önbellek & bildirim temizliği" icon={Database} accentColor="slate" index={3}>
                   <p className="text-[11px] text-text-muted font-light leading-relaxed">
-                    Okunmuş bildirimleri ve geçici önbelleği temizleyerek sistem performansını artırır.
+                    Okunmuş bildirimleri ve geçici önbelleği temizleyerek dizge performansını artırır.
                   </p>
                   <ActionButton
                     variant="secondary"
                     disabled={!isOnline}
                     onClick={async () => {
-                      setImportStatus({ type: 'loading', message: 'Sistem Optimize Ediliyor...' });
+                      setImportStatus({ type: 'loading', message: 'Dizge Optimize Ediliyor...' });
                       await taskService.cleanupDatabase();
-                      setImportStatus({ type: 'success', message: 'Sistem başarıyla optimize edildi.' });
+                      setImportStatus({ type: 'success', message: 'Dizge başarıyla optimize edildi.' });
                     }}
                     label={<><RotateCcw className="w-3.5 h-3.5 stroke-[2]" />Optimizasyonu Çalıştır</>}
                   />

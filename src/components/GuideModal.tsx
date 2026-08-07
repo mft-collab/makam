@@ -57,7 +57,9 @@ export const GuideModal = ({ isOpen, onClose }: GuideModalProps) => {
               Kadro, kendisine ayrılmış her talimatı önce <strong className="font-medium text-text-heading">SÜRECİ BAŞLAT</strong> ile
               icraya alır. Yönetici rolü dışındaki personel tamamladığında talimat doğrudan kapanmaz,
               önce Makam onayına sunulur. Bir engel çıkarsa talimat <strong className="font-medium text-text-heading">Engellendi</strong> durumuna
-              alınır ve engel giderilene kadar mühlet sayacı durur.
+              alınır ve engel giderilene kadar mühlet sayacı durur. Bir Müdür, talimatı başka bir Müdür&rsquo;e
+              (izin/mazeret gibi durumlarda) devredebilir; bu sırada talimat <strong className="font-medium text-text-heading">Yetki Devri Bekleniyor</strong> durumuna
+              alınır ve mühlet sayacı yine durur.
             </p>
           </SettingsCard>
 
@@ -102,7 +104,7 @@ export const GuideModal = ({ isOpen, onClose }: GuideModalProps) => {
         {/* ── Kriz Eskalasyonu (tam genişlik) ── */}
         <SettingsCard title="Kriz Eskalasyonu" description="Otomatik yükseltme kuralı" icon={Flame} accentColor="red" index={4} fullWidth>
           <p className="text-[11px] text-text-muted font-light leading-relaxed">
-            Sistem her gün <strong className="font-medium text-text-heading">08:00&rsquo;de</strong> otomatik bir denetim çalıştırır:
+            Dizge her gün <strong className="font-medium text-text-heading">08:00&rsquo;de</strong> otomatik bir denetim çalıştırır:
             tamamlanmamış veya lağvedilmemiş bir talimat <strong className="font-medium text-text-heading">24 saattir hiç güncellenmemişse</strong> otomatik
             olarak <strong className="font-medium text-text-heading">Kriz</strong> durumuna yükseltilir ve ilgili yöneticiler bilgilendirilir.
             Bunu önlemenin yolu basittir: talimat üzerinde düzenli olarak durum/yorum/kanıt güncellemesi yaparak

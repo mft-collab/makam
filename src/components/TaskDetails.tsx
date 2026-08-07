@@ -745,7 +745,7 @@ export const TaskDetails = ({
                     <div key={log.id} className="flex gap-3 p-3 bg-makam-glass border border-surface-border rounded-xl">
                       <div className="flex-shrink-0 pt-0.5">
                         <Avatar
-                          name={actor?.fullName ?? (isSystemActor ? 'Sistem' : log.changedBy) ?? 'Sistem'}
+                          name={actor?.fullName ?? (isSystemActor ? 'Dizge' : log.changedBy) ?? 'Dizge'}
                           photoURL={actor?.photoURL}
                           size="sm"
                         />
@@ -753,7 +753,7 @@ export const TaskDetails = ({
                       <div className="flex flex-col gap-1.5 flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[12px] font-medium text-text-heading">
-                            {actor?.fullName || (isSystemActor ? 'Sistem' : log.changedBy) || 'Sistem'}
+                            {actor?.fullName || (isSystemActor ? 'Dizge' : log.changedBy) || 'Dizge'}
                           </span>
                           <span className="text-[9px] text-text-muted tabular-nums">
                             {format(log.timestamp, 'd MMM HH:mm', { locale: tr })}

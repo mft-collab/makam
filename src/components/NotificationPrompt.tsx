@@ -158,7 +158,7 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
 
                     <div className="flex flex-col gap-1.5">
                       <h3 className="text-[17px] font-medium text-executive-blue font-serif tracking-tight">
-                        Kurumsal Bildirim Sistemi
+                        Kurumsal Bildirim Dizgesi
                       </h3>
                       <p className="text-[12px] text-text-muted leading-relaxed">
                         İl müftülüğü talimatlarını ve kritik görev güncellemelerini
@@ -253,7 +253,7 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
                           </>
                         ) : (
                           <>
-                            Sunucu bağlantısı kurulamadı. Sayfayı yenileyip tekrar deneyin. Sorun devam ederse sistem yöneticinize bildirin.
+                            Sunucu bağlantısı kurulamadı. Sayfayı yenileyip tekrar deneyin. Sorun devam ederse dizge yöneticinize bildirin.
                           </>
                         )}
                       </p>

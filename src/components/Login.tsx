@@ -83,7 +83,7 @@ export const Login = ({ onLogin, isLoading }: LoginProps) => {
 
           <div className="flex flex-col items-center gap-3 opacity-40">
             <p className="text-[9px] text-text-muted font-medium uppercase tracking-[0.22em] text-center leading-loose">
-              HİZMETİÇİ<br />STRATEJİK KARAR YÖNETİM SİSTEMİ
+              HİZMETİÇİ<br />STRATEJİK KARAR YÖNETİM DİZGESİ
             </p>
             <div className="w-12 h-[1px] bg-makam-border/10" />
           </div>

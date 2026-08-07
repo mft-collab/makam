@@ -39,12 +39,12 @@ export function ReloadPrompt() {
                    </div>
                    <div className="flex flex-col">
                       <h4 className="text-[15px] font-semibold text-text-heading tracking-tight">
-                        {offlineReady ? 'Çevrimdışı Hazır' : 'Sistem Güncellemesi'}
+                        {offlineReady ? 'Çevrimdışı Hazır' : 'Dizge Güncellemesi'}
                       </h4>
                       <p className="text-[13px] text-text-muted font-medium">
                         {offlineReady 
                           ? 'Uygulama artık internet olmadan çalışabilir.' 
-                          : 'Sistem için yeni bir güncelleme mevcut.'}
+                          : 'Dizge için yeni bir güncelleme mevcut.'}
                       </p>
                    </div>
                 </div>

@@ -24,7 +24,7 @@ export const AboutModal = ({ isOpen, onClose }: AboutModalProps) => {
         </div>
 
         <p className="text-[13px] text-text-muted leading-relaxed max-w-sm">
-          Bu sistem, stratejik verileri minimum gecikme ve maksimum güvenlikle işlemek üzere tasarlanmış <strong className="text-text-heading font-medium">dünya standartlarında</strong> bir mimari üzerine inşa edilmiştir.
+          Bu dizge, stratejik verileri minimum gecikme ve maksimum güvenlikle işlemek üzere tasarlanmış <strong className="text-text-heading font-medium">dünya standartlarında</strong> bir mimari üzerine inşa edilmiştir.
         </p>
 
         <div className="w-full bg-surface-glass rounded-2xl border border-surface-border p-5 mt-2">

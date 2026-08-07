@@ -38,7 +38,7 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
 
   const systemItems: MenuItem[] = [
     { id: 'audit', label: 'Denetim İzleri', icon: Database, roles: ['Admin'] },
-    { id: 'settings', label: 'Sistem Ayarları', icon: SettingsIcon, roles: ['Admin'] },
+    { id: 'settings', label: 'Dizge Ayarları', icon: SettingsIcon, roles: ['Admin'] },
   ];
 
   const filteredPrimaryItems = primaryItems.filter(item => user && item.roles.includes(user.role));
@@ -95,7 +95,7 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
             setIsAboutModalOpen(true);
           }}
           className="relative z-10 w-full flex items-center justify-center outline-none transition-transform hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
-          aria-label="Sistem Hakkında"
+          aria-label="Dizge Hakkında"
         >
           <Logo variant="dark" size="md" className="drop-shadow-[0_4px_12px_rgba(197,160,89,0.12)]" />
           <div className="absolute -right-2 -top-2 bg-executive-gold text-brand-obsidian text-[8px] font-bold px-1.5 py-0.5 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300">v2.1.0</div>

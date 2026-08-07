@@ -28,7 +28,7 @@ const MAX_TASKS_PER_RUN = 500;
 export const scheduledDailyAudit = functions
   .region('europe-west1')        // Frankfurt — TR'ye en yakın bölge
   .pubsub
-  .schedule('0 8 * * *')         // Her gün 08:00 UTC (11:00 TR)
+  .schedule('0 8 * * *')         // Her gün 08:00 — aşağıdaki timeZone nedeniyle İstanbul saatiyle yorumlanır
   .timeZone('Europe/Istanbul')
   .onRun(async (_context: functions.EventContext) => {
     const now = Date.now();
