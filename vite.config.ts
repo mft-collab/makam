@@ -88,24 +88,22 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {
+          // vendor-charts (recharts) ve vendor-pdf (jsPDF) BİLEREK manualChunks'tan
+          // çıkarıldı: bu ikisini adlandırılmış chunk olarak zorlamak, yalnızca
+          // Dashboard/Reports'un lazy() dynamic import'u üzerinden erişilebilir
+          // olmalarına rağmen, Rollup'ın ana giriş dosyasına bu chunk'lardan
+          // STATİK import eklemesine yol açıyordu (ölçüldü — network log'da
+          // vendor-charts.js login ekranında ~86ms'de "High priority" olarak
+          // indiriliyordu, modulePreload/SW precache filtreleriyle önlenemedi).
+          // Rollup'ın otomatik chunk bölme mantığı dynamic import sınırına saygı
+          // gösteriyor; bu ikisi artık yalnızca Dashboard/Reports chunk'ı içine
+          // veya ona özel otomatik bir chunk'a gömülüyor.
           manualChunks: {
             'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/messaging'],
             'vendor-motion':   ['motion'],
-            'vendor-charts':   ['recharts'],
             'vendor-date':     ['date-fns'],
-            'vendor-pdf':      ['jspdf', 'jspdf-autotable'],
           },
         },
-      },
-      modulePreload: {
-        // Vite varsayılan olarak lazy route'ların bağımlı olduğu TÜM vendor
-        // chunk'ları için <link rel="modulepreload"> ekliyor — bu da recharts
-        // (405KB) ve jsPDF (422KB) paketlerini, kullanıcı henüz giriş bile
-        // yapmamışken (Login ekranı) indirmeye zorluyordu ve gerçek kritik
-        // kaynaklarla bant genişliği için yarışıyordu (ölçülen FCP/LCP ~9s).
-        // Bu iki paket yalnızca ilgili sekmeye girildiğinde gerekli.
-        resolveDependencies: (_filename, deps) =>
-          deps.filter(dep => !dep.includes('vendor-charts') && !dep.includes('vendor-pdf')),
       },
     },
     resolve: {
