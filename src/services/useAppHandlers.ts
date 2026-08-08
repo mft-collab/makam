@@ -55,13 +55,17 @@ export function useAppHandlers({
   blockers,
   onError,
 }: UseAppHandlersOptions) {
-  const {
-    selectedTaskId,
-    setSelectedTaskId,
-    setIsCreateModalOpen,
-    setIsEditModalOpen,
-    addToast,
-  } = useUIStore();
+  // Selector bazlı okuma — bu hook yalnızca selectedTaskId'nin değişmesiyle
+  // ilgileniyor; whole-store `useUIStore()` kullanmak toasts/filter/isOffline
+  // gibi ilgisiz her alan değişiminde (ör. her toast eklenip 6sn sonra otomatik
+  // kaldırıldığında) App.tsx'in gereksiz yere yeniden render olmasına yol
+  // açıyordu. Action fonksiyonları zustand'da stabil referanslar olduğundan
+  // selector ile alınmaları da re-render tetiklemez.
+  const selectedTaskId = useUIStore(s => s.selectedTaskId);
+  const setSelectedTaskId = useUIStore(s => s.setSelectedTaskId);
+  const setIsCreateModalOpen = useUIStore(s => s.setIsCreateModalOpen);
+  const setIsEditModalOpen = useUIStore(s => s.setIsEditModalOpen);
+  const addToast = useUIStore(s => s.addToast);
 
   // Merkezi toast yardımcısı
   const toast = useCallback((

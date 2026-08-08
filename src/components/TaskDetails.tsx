@@ -146,12 +146,18 @@ export const TaskDetails = ({
     return () => { cancelled = true; };
   }, [activeTab, task.id, logsRetryNonce]);
 
-  const assignee = users.find(u => u.uid === task.assigneeId || u.email === task.assigneeId);
-  const creator  = users.find(u => u.uid === task.creatorId || u.email === task.creatorId);
+  const usersById = useMemo(() => {
+    const map = new Map<string, UserType>();
+    for (const u of users) {
+      map.set(u.uid, u);
+      map.set(u.email, u);
+    }
+    return map;
+  }, [users]);
+  const assignee = usersById.get(task.assigneeId);
+  const creator  = usersById.get(task.creatorId);
   // Koordinatörü görevin coordinatorId alanına göre bul
-  const coordinator = task.coordinatorId
-    ? users.find(u => u.uid === task.coordinatorId || u.email === task.coordinatorId)
-    : undefined;
+  const coordinator = task.coordinatorId ? usersById.get(task.coordinatorId) : undefined;
   // İş kuralı ihlali: koordinatör Admin ise uyar
   const coordinatorIsAdmin = coordinator?.role === 'Admin';
   

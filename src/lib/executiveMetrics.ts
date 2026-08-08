@@ -72,7 +72,20 @@ export function isTaskInCrisis(task: Task, now: number): boolean {
   return isActive(task) && effectiveMsToDeadline(task, now) < 0;
 }
 
-export function calculateTaskRisk(task: Task, allTasks: Task[], now = Date.now()): TaskRiskProfile {
+/**
+ * `subtasksByParent` verilirse (getInterventionQueue gibi bir görev listesi
+ * üzerinde döngü yapan çağıranlar için) alt görevler O(1) lookup ile alınır;
+ * verilmezse (ör. doğrudan/tekil çağrılarda — bkz. executiveMetrics.test.ts)
+ * eskisi gibi `allTasks` içinde filtrelenir. N görev için N kez çağrıldığında
+ * (ör. getInterventionQueue'nun aktif görev döngüsü) map'i önceden bir kez
+ * kurmak O(n²)'yi O(n)'e indirir.
+ */
+export function calculateTaskRisk(
+  task: Task,
+  allTasks: Task[],
+  now = Date.now(),
+  subtasksByParent?: Map<string, Task[]>
+): TaskRiskProfile {
   if (!isActive(task)) {
     return { task, score: 0, level: 'low', reasons: ['Operasyon sonlanmış'] };
   }
@@ -81,7 +94,7 @@ export function calculateTaskRisk(task: Task, allTasks: Task[], now = Date.now()
   const reasons: string[] = [];
   const msToDeadline = effectiveMsToDeadline(task, now);
   const ageSinceUpdate = now - task.updatedAt;
-  const subtasks = allTasks.filter(t => t.parentId === task.id);
+  const subtasks = subtasksByParent ? (subtasksByParent.get(task.id) ?? []) : allTasks.filter(t => t.parentId === task.id);
   const overdueSubtasks = subtasks.filter(t => isActive(t) && t.deadline < now).length;
   const blockedSubtasks = subtasks.filter(t => t.status === 'BLOCKED').length;
 
@@ -144,11 +157,24 @@ export function getInterventionQueue(tasks: Task[], users: User[], now = Date.no
     activeLoadByUser.set(task.assigneeId, (activeLoadByUser.get(task.assigneeId) ?? 0) + 1);
   });
 
+  const subtasksByParent = new Map<string, Task[]>();
+  for (const t of tasks) {
+    if (!t.parentId) continue;
+    const list = subtasksByParent.get(t.parentId);
+    if (list) list.push(t); else subtasksByParent.set(t.parentId, [t]);
+  }
+
+  const usersById = new Map<string, User>();
+  for (const u of users) {
+    usersById.set(u.uid, u);
+    usersById.set(u.email, u);
+  }
+
   return tasks
     .filter(isActive)
     .map(task => {
-      const profile = calculateTaskRisk(task, tasks, now);
-      const assignee = users.find(u => u.uid === task.assigneeId || u.email === task.assigneeId);
+      const profile = calculateTaskRisk(task, tasks, now, subtasksByParent);
+      const assignee = usersById.get(task.assigneeId);
       const load = activeLoadByUser.get(task.assigneeId) ?? 0;
       const msToDeadline = effectiveMsToDeadline(task, now);
 
@@ -183,8 +209,19 @@ export function getInterventionQueue(tasks: Task[], users: User[], now = Date.no
 }
 
 export function getUserPerformanceProfiles(tasks: Task[], users: User[], now = Date.now()): UserPerformanceProfile[] {
+  // Her kullanıcı için tasks'ı baştan filtrelemek yerine (O(kullanıcı × görev)
+  // — Dashboard'da her 60 saniyede bir tick ile tekrarlanıyordu) tek geçişte
+  // assigneeId'ye göre gruplanır.
+  const tasksByAssignee = new Map<string, Task[]>();
+  for (const t of tasks) {
+    const list = tasksByAssignee.get(t.assigneeId);
+    if (list) list.push(t); else tasksByAssignee.set(t.assigneeId, [t]);
+  }
+
   return users.map(user => {
-    const owned = tasks.filter(t => t.assigneeId === user.uid || t.assigneeId === user.email);
+    const byUid = tasksByAssignee.get(user.uid) ?? [];
+    const byEmail = user.email === user.uid ? [] : (tasksByAssignee.get(user.email) ?? []);
+    const owned = byEmail.length > 0 ? [...byUid, ...byEmail] : byUid;
     const active = owned.filter(isActive);
     const completed = owned.filter(t => t.status === 'COMPLETED');
     const onTime = completed.filter(t => (t.completedAt ?? t.updatedAt) <= t.deadline).length;

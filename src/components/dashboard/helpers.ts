@@ -27,27 +27,42 @@ export const computeDeltas = (scopeTasks: Task[], tick: number): DashboardDeltas
   const yesterdayStart = todayStart - 24 * 60 * 60 * 1000;
   const yesterdayEnd = todayStart - 1;
 
-  const todayInProgress = scopeTasks.filter(t => t.status === 'IN_PROGRESS' && t.updatedAt >= todayStart).length;
-  const yesterdayInProgress = scopeTasks.filter(t => t.status === 'IN_PROGRESS' && t.updatedAt >= yesterdayStart && t.updatedAt <= yesterdayEnd).length;
-  const inProgressDelta = todayInProgress - yesterdayInProgress;
+  // Dashboard'da `tick` her 60 saniyede bir güncellenip bu fonksiyonu yeniden
+  // tetiklediğinden (bkz. Dashboard.tsx), 8 ayrı filter geçişi yerine tek
+  // geçişte tüm sayaçlar biriktirilir.
+  let todayInProgress = 0, yesterdayInProgress = 0;
+  let todayReview = 0, yesterdayReview = 0;
+  let todayBlocked = 0, yesterdayBlocked = 0;
+  let todayCrisis = 0, yesterdayCrisis = 0;
 
-  const todayReview = scopeTasks.filter(t => t.status === 'AWAITING_APPROVAL' && t.updatedAt >= todayStart).length;
-  const yesterdayReview = scopeTasks.filter(t => t.status === 'AWAITING_APPROVAL' && t.updatedAt >= yesterdayStart && t.updatedAt <= yesterdayEnd).length;
-  const reviewDelta = todayReview - yesterdayReview;
+  for (const t of scopeTasks) {
+    const isToday = t.updatedAt >= todayStart;
+    const isYesterday = t.updatedAt >= yesterdayStart && t.updatedAt <= yesterdayEnd;
+    if (!isToday && !isYesterday) continue;
 
-  const todayBlocked = scopeTasks.filter(t => t.status === 'BLOCKED' && t.updatedAt >= todayStart).length;
-  const yesterdayBlocked = scopeTasks.filter(t => t.status === 'BLOCKED' && t.updatedAt >= yesterdayStart && t.updatedAt <= yesterdayEnd).length;
-  const blockedDelta = todayBlocked - yesterdayBlocked;
-
-  const todayCrisis = scopeTasks.filter(t => isTaskInCrisis(t, tick) && t.updatedAt >= todayStart).length;
-  const yesterdayCrisis = scopeTasks.filter(t => isTaskInCrisis(t, tick) && t.updatedAt >= yesterdayStart && t.updatedAt <= yesterdayEnd).length;
-  const crisisDelta = todayCrisis - yesterdayCrisis;
+    if (t.status === 'IN_PROGRESS') {
+      if (isToday) todayInProgress++;
+      if (isYesterday) yesterdayInProgress++;
+    }
+    if (t.status === 'AWAITING_APPROVAL') {
+      if (isToday) todayReview++;
+      if (isYesterday) yesterdayReview++;
+    }
+    if (t.status === 'BLOCKED') {
+      if (isToday) todayBlocked++;
+      if (isYesterday) yesterdayBlocked++;
+    }
+    if (isTaskInCrisis(t, tick)) {
+      if (isToday) todayCrisis++;
+      if (isYesterday) yesterdayCrisis++;
+    }
+  }
 
   return {
-    inProgress: inProgressDelta,
-    inReview:   reviewDelta,
-    blocked:    blockedDelta,
-    crisis:     crisisDelta
+    inProgress: todayInProgress - yesterdayInProgress,
+    inReview:   todayReview - yesterdayReview,
+    blocked:    todayBlocked - yesterdayBlocked,
+    crisis:     todayCrisis - yesterdayCrisis,
   };
 };
 

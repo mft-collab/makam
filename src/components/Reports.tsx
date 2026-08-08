@@ -6,7 +6,7 @@ import { cn } from '../lib/utils';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from 'recharts';
-import { format, subDays, startOfDay, endOfDay } from 'date-fns';
+import { format, subDays, differenceInCalendarDays } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { useUIStore } from '../store/uiStore';
 
@@ -126,8 +126,28 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
     return users.filter(u => u.role === 'Manager' && (selectedDept === 'ALL' || u.departmentId === selectedDept));
   }, [users, selectedDept]);
 
+  // filteredTasks üzerinde her yönetici/personel için ayrı ayrı tam tarama
+  // yapmak yerine (O(kişi × görev) — tarih/departman filtresi her
+  // değiştiğinde tekrarlanıyordu) tek geçişte assigneeId'ye göre gruplanır
+  // (O(görev) + kişi başına O(1) lookup).
+  const tasksByAssignee = useMemo(() => {
+    const map = new Map<string, Task[]>();
+    for (const t of filteredTasks) {
+      const list = map.get(t.assigneeId);
+      if (list) list.push(t); else map.set(t.assigneeId, [t]);
+    }
+    return map;
+  }, [filteredTasks]);
+
+  const tasksForUser = (u: { uid: string; email: string }): Task[] => {
+    const byUid = tasksByAssignee.get(u.uid) ?? [];
+    if (u.email === u.uid) return byUid;
+    const byEmail = tasksByAssignee.get(u.email) ?? [];
+    return byEmail.length > 0 ? [...byUid, ...byEmail] : byUid;
+  };
+
   const managerPerformance = useMemo(() => managers.map(manager => {
-    const mt = filteredTasks.filter(t => t.assigneeId === manager.uid || t.assigneeId === manager.email);
+    const mt = tasksForUser(manager);
     const completed = mt.filter(t => t.status === 'COMPLETED').length;
     const blocked   = mt.filter(t => t.status === 'BLOCKED').length;
     const total     = mt.length;
@@ -135,7 +155,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
     const onTimeCompleted = mt.filter(t => t.status === 'COMPLETED' && (t.completedAt || t.updatedAt) <= t.deadline).length;
     const slaRate = completed > 0 ? Math.round((onTimeCompleted / completed) * 100) : 100;
     return { ...manager, total, completed, blocked, completionRate, slaRate };
-  }).sort((a, b) => b.completionRate - a.completionRate), [managers, filteredTasks]);
+  }).sort((a, b) => b.completionRate - a.completionRate), [managers, tasksByAssignee]);
 
   const averageCompletionTime = useMemo(() => {
     const completed = filteredTasks.filter(t => t.status === 'COMPLETED');
@@ -154,34 +174,43 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
     : 0;
 
   // #6 — Son 14 gün SLA uyum oranı (trend)
-  const slaComplianceTrend = useMemo(() =>
-    Array.from({ length: 14 }).map((_, i) => {
-      const day = subDays(new Date(), 13 - i);
-      const dayStart = startOfDay(day).getTime();
-      const dayEnd   = endOfDay(day).getTime();
-      const completed = filteredTasks.filter(t =>
-        t.status === 'COMPLETED' &&
-        t.updatedAt >= dayStart && t.updatedAt <= dayEnd
-      );
-      const onTime = completed.filter(t => (t.completedAt || t.updatedAt) <= t.deadline).length;
-      const rate   = completed.length > 0 ? Math.round((onTime / completed.length) * 100) : null;
+  // Önceki hali her gün için filteredTasks'ı baştan tarıyordu (14 × O(görev)).
+  // Burada tek geçişte tarihe göre 14 kovaya (bucket) dağıtılır — DST geçişlerinde
+  // yanlış gün hesaplamaması için ham ms farkı yerine date-fns'in takvim-günü
+  // farkı alan `differenceInCalendarDays`ı kullanılır (aynı yerel gün sınırlarını
+  // temel alır, tıpkı eski startOfDay/endOfDay aralığı gibi).
+  const slaComplianceTrend = useMemo(() => {
+    const today = new Date();
+    const buckets: { completed: number; onTime: number }[] = Array.from({ length: 14 }, () => ({ completed: 0, onTime: 0 }));
+    for (const t of filteredTasks) {
+      if (t.status !== 'COMPLETED') continue;
+      const daysAgo = differenceInCalendarDays(today, new Date(t.updatedAt));
+      const dayIndex = 13 - daysAgo;
+      const bucket = dayIndex >= 0 && dayIndex <= 13 ? buckets[dayIndex] : undefined;
+      if (!bucket) continue;
+      bucket.completed++;
+      if ((t.completedAt || t.updatedAt) <= t.deadline) bucket.onTime++;
+    }
+    return buckets.map((b, i) => {
+      const day = subDays(today, 13 - i);
       return {
         name: format(day, 'dd MMM', { locale: tr }),
-        oran: rate,
-        tamamlanan: completed.length,
+        oran: b.completed > 0 ? Math.round((b.onTime / b.completed) * 100) : null,
+        tamamlanan: b.completed,
       };
-    })
-  , [filteredTasks]);
+    });
+  }, [filteredTasks]);
 
   // #6 — Personel yük dağılımı (Staff bazlı)
   const staffWorkload = useMemo(() => {
     const staff = users.filter(u => u.role === 'Staff' && (selectedDept === 'ALL' || u.departmentId === selectedDept));
     return staff.map(u => {
-      const assigned = filteredTasks.filter(t => (t.assigneeId === u.uid || t.assigneeId === u.email) && t.status !== 'COMPLETED' && t.status !== 'CANCELLED').length;
-      const completed = filteredTasks.filter(t => (t.assigneeId === u.uid || t.assigneeId === u.email) && t.status === 'COMPLETED').length;
+      const ut = tasksForUser(u);
+      const assigned = ut.filter(t => t.status !== 'COMPLETED' && t.status !== 'CANCELLED').length;
+      const completed = ut.filter(t => t.status === 'COMPLETED').length;
       return { name: u.fullName.split(' ')[0], assigned, completed, total: assigned + completed };
     }).filter(u => u.total > 0).sort((a, b) => b.total - a.total).slice(0, 6);
-  }, [users, filteredTasks, selectedDept]);
+  }, [users, tasksByAssignee, selectedDept]);
 
   // #6 — Durum dağılımı (Pie chart verisi)
   const statusDistribution = useMemo(() => {

@@ -11,6 +11,151 @@ import { PRIORITY_BADGE_VARIANT } from '../constants';
 
 const PRIORITY_WEIGHTS: Record<string, number> = { Urgent: 3, High: 2, Medium: 1, Low: 0 };
 
+const getSlaLabel = (deadline: number) => {
+  const msLeft = deadline - Date.now();
+  const hoursLeft = Math.floor(Math.abs(msLeft) / (1000 * 60 * 60));
+  const daysLeft  = Math.floor(hoursLeft / 24);
+  const isOverdue = msLeft < 0;
+  return isOverdue
+    ? `${daysLeft > 0 ? `${daysLeft}g ` : ''}${hoursLeft % 24}s geçti`
+    : daysLeft > 0
+      ? `${daysLeft}g ${hoursLeft % 24}s kaldı`
+      : `${hoursLeft}s kaldı`;
+};
+
+interface BlockerCardProps {
+  blocker: TaskBlocker;
+  index: number;
+  tasksById: Map<string, Task>;
+  usersById: Map<string, User>;
+  isAdmin: boolean;
+  isSystemAdmin: boolean;
+  onViewTask: (task: Task) => void;
+  onResolve: (blockerId: string) => void;
+  onRequestEdit: (blocker: TaskBlocker) => void;
+  onRequestDelete: (blockerId: string) => void;
+}
+
+// Modül seviyesinde tanımlanır (parent'ın içinde DEĞİL) — aksi halde her
+// render'da yeni bir component tipi olarak yaratılır, bu da React'in DOM'u
+// reconcile etmesini engelleyip her state güncellemesinde (ör. bir engel
+// çözüldüğünde) TÜM kartların yeniden mount olmasına ve giriş animasyonlarının
+// baştan oynamasına yol açardı.
+const BlockerCard = ({ blocker, index, tasksById, usersById, isAdmin, isSystemAdmin, onViewTask, onResolve, onRequestEdit, onRequestDelete }: BlockerCardProps) => {
+  const task     = tasksById.get(blocker.taskId);
+  const assignee = task ? usersById.get(task.assigneeId) : undefined;
+  const isUrgentOrHigh = task?.priority === 'Urgent' || task?.priority === 'High';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 260, damping: 28, delay: index * 0.05 }}
+      onClick={() => task && onViewTask(task)}
+      className={cn(
+        'flex flex-col gap-3 p-3.5 rounded-2xl border cursor-pointer group transition-all duration-300',
+        !blocker.isResolved
+          ? cn(
+              'bg-status-danger/[0.04] border-status-danger/20 hover:bg-status-danger/10 hover:shadow-sm',
+              isUrgentOrHigh ? 'animate-makam-flash border-status-danger/50 hover:border-status-danger/60' : 'border-status-danger/15 hover:border-status-danger/25'
+            )
+          : 'bg-makam-glass border-surface-border opacity-60 grayscale hover:grayscale-0 hover:opacity-100 hover:bg-makam-glass'
+      )}
+    >
+      {/* Top row: icon + reason + date */}
+      <div className="flex items-start gap-3">
+        <div className={cn(
+          'w-8 h-8 flex-shrink-0 rounded-xl flex items-center justify-center border transition-all group-hover:scale-105',
+          blocker.isResolved
+            ? 'bg-status-success/10 text-status-success border-status-success/20'
+            : 'bg-surface-elevated text-status-danger border-status-danger/25'
+        )}>
+          {blocker.isResolved
+            ? <CheckCircle2 className="w-4 h-4 stroke-[1.3]" />
+            : <AlertTriangle className="w-4 h-4 stroke-[1.3]" />}
+        </div>
+        <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+          <p className={cn(
+            'text-[12px] font-medium line-clamp-2 leading-snug tracking-tight font-serif',
+            blocker.isResolved ? 'text-text-muted' : 'text-executive-blue group-hover:text-status-danger'
+          )}>
+            {blocker.reason}
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+            <span className="text-[9px] text-text-tertiary font-medium uppercase tracking-[0.2em] truncate">
+              {task?.title || 'Bilinmeyen Talimat'}
+            </span>
+            {task && (
+              <>
+                <span className="text-[9px] text-text-tertiary/40">•</span>
+                <Badge variant={PRIORITY_BADGE_VARIANT[task.priority]}>
+                  {task.priority === 'Urgent' ? 'Acil' :
+                   task.priority === 'High' ? 'Yüksek' :
+                   task.priority === 'Medium' ? 'Orta' : 'Düşük'}
+                </Badge>
+                {task.deadline > 0 && (
+                  <Badge variant={task.deadline < Date.now() ? 'danger' : 'default'} icon={<Clock className="w-2.5 h-2.5" />}>
+                    {getSlaLabel(task.deadline)}
+                  </Badge>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+          <span className="text-[8px] text-text-tertiary font-medium uppercase tracking-[0.15em]">
+            {new Date(blocker.createdAt).toLocaleDateString('tr-TR')}
+          </span>
+          <span className="text-[8px] text-text-tertiary">{formatTimeAgo(blocker.createdAt)}</span>
+        </div>
+      </div>
+
+      {/* Bottom row: assignee + actions */}
+      <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-executive-blue/[0.04]">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-full bg-executive-blue/[0.04] border border-executive-blue/[0.08] flex items-center justify-center text-[10px] font-light text-executive-blue">
+            {assignee?.fullName?.charAt(0) || '?'}
+          </div>
+          <span className="text-[10px] text-text-muted font-medium tracking-tight">
+            {assignee?.fullName || 'Atanmamış'}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          {isAdmin && (
+            <div className="flex items-center bg-makam-glass rounded-lg p-0.5 border border-executive-blue/[0.05] gap-0.5">
+              <button
+                className="w-7 h-7 flex items-center justify-center text-text-tertiary hover:text-executive-blue hover:bg-surface-elevated rounded-md transition-all"
+                onClick={(e) => { e.stopPropagation(); onRequestEdit(blocker); }}
+                title="Düzenle"
+              >
+                <Edit2 className="w-3 h-3 stroke-[1.5]" />
+              </button>
+              {isSystemAdmin && (
+                <button
+                  className="w-7 h-7 flex items-center justify-center text-text-tertiary hover:text-status-danger hover:bg-status-danger/10 rounded-md transition-all"
+                  onClick={(e) => { e.stopPropagation(); onRequestDelete(blocker.id); }}
+                  title="Sil"
+                >
+                  <Trash2 className="w-3 h-3 stroke-[1.5]" />
+                </button>
+              )}
+            </div>
+          )}
+          {!blocker.isResolved && isAdmin && (
+            <button
+              className="px-3 py-1.5 text-[8px] bg-status-success hover:opacity-90 text-white font-medium uppercase tracking-[0.2em] rounded-lg shadow-sm transition-all active:scale-95"
+              onClick={(e) => { e.stopPropagation(); onResolve(blocker.id); }}
+            >
+              Çözüldü
+            </button>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
 interface BlockerListProps {
   tasks: Task[];
   blockers: TaskBlocker[];
@@ -24,6 +169,16 @@ interface BlockerListProps {
 }
 
 export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = false, onResolve, onEditBlocker, onDeleteBlocker, onViewTask }: BlockerListProps) => {
+  const tasksById = useMemo(() => new Map(tasks.map(t => [t.id, t])), [tasks]);
+  const usersById = useMemo(() => {
+    const map = new Map<string, User>();
+    for (const u of users) {
+      map.set(u.uid, u);
+      map.set(u.email, u);
+    }
+    return map;
+  }, [users]);
+
   const activeBlockers = useMemo(() => {
     const taskPriorityWeightById = new Map<string, number>();
     for (const t of tasks) {
@@ -55,132 +210,9 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
     }
   };
 
-  // ── Single Blocker Card ──────────────────────────────────────────────────
-  const BlockerCard = ({ blocker, index }: { blocker: TaskBlocker; index: number }) => {
-    const task     = tasks.find(t => t.id === blocker.taskId);
-    const assignee = users.find(u => u.uid === task?.assigneeId || u.email === task?.assigneeId);
-    const isUrgentOrHigh = task?.priority === 'Urgent' || task?.priority === 'High';
-
-    const getSlaLabel = (deadline: number) => {
-      const msLeft = deadline - Date.now();
-      const hoursLeft = Math.floor(Math.abs(msLeft) / (1000 * 60 * 60));
-      const daysLeft  = Math.floor(hoursLeft / 24);
-      const isOverdue = msLeft < 0;
-      return isOverdue
-        ? `${daysLeft > 0 ? `${daysLeft}g ` : ''}${hoursLeft % 24}s geçti`
-        : daysLeft > 0
-          ? `${daysLeft}g ${hoursLeft % 24}s kaldı`
-          : `${hoursLeft}s kaldı`;
-    };
-
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 260, damping: 28, delay: index * 0.05 }}
-        onClick={() => task && onViewTask(task)}
-        className={cn(
-          'flex flex-col gap-3 p-3.5 rounded-2xl border cursor-pointer group transition-all duration-300',
-          !blocker.isResolved
-            ? cn(
-                'bg-status-danger/[0.04] border-status-danger/20 hover:bg-status-danger/10 hover:shadow-sm',
-                isUrgentOrHigh ? 'animate-makam-flash border-status-danger/50 hover:border-status-danger/60' : 'border-status-danger/15 hover:border-status-danger/25'
-              )
-            : 'bg-makam-glass border-surface-border opacity-60 grayscale hover:grayscale-0 hover:opacity-100 hover:bg-makam-glass'
-        )}
-      >
-        {/* Top row: icon + reason + date */}
-        <div className="flex items-start gap-3">
-          <div className={cn(
-            'w-8 h-8 flex-shrink-0 rounded-xl flex items-center justify-center border transition-all group-hover:scale-105',
-            blocker.isResolved
-              ? 'bg-status-success/10 text-status-success border-status-success/20'
-              : 'bg-surface-elevated text-status-danger border-status-danger/25'
-          )}>
-            {blocker.isResolved
-              ? <CheckCircle2 className="w-4 h-4 stroke-[1.3]" />
-              : <AlertTriangle className="w-4 h-4 stroke-[1.3]" />}
-          </div>
-          <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-            <p className={cn(
-              'text-[12px] font-medium line-clamp-2 leading-snug tracking-tight font-serif',
-              blocker.isResolved ? 'text-text-muted' : 'text-executive-blue group-hover:text-status-danger'
-            )}>
-              {blocker.reason}
-            </p>
-            <div className="flex flex-wrap items-center gap-1.5 mt-1">
-              <span className="text-[9px] text-text-tertiary font-medium uppercase tracking-[0.2em] truncate">
-                {task?.title || 'Bilinmeyen Talimat'}
-              </span>
-              {task && (
-                <>
-                  <span className="text-[9px] text-text-tertiary/40">•</span>
-                  <Badge variant={PRIORITY_BADGE_VARIANT[task.priority]}>
-                    {task.priority === 'Urgent' ? 'Acil' :
-                     task.priority === 'High' ? 'Yüksek' :
-                     task.priority === 'Medium' ? 'Orta' : 'Düşük'}
-                  </Badge>
-                  {task.deadline > 0 && (
-                    <Badge variant={task.deadline < Date.now() ? 'danger' : 'default'} icon={<Clock className="w-2.5 h-2.5" />}>
-                      {getSlaLabel(task.deadline)}
-                    </Badge>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
-            <span className="text-[8px] text-text-tertiary font-medium uppercase tracking-[0.15em]">
-              {new Date(blocker.createdAt).toLocaleDateString('tr-TR')}
-            </span>
-            <span className="text-[8px] text-text-tertiary">{formatTimeAgo(blocker.createdAt)}</span>
-          </div>
-        </div>
-
-        {/* Bottom row: assignee + actions */}
-        <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-executive-blue/[0.04]">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-executive-blue/[0.04] border border-executive-blue/[0.08] flex items-center justify-center text-[10px] font-light text-executive-blue">
-              {assignee?.fullName?.charAt(0) || '?'}
-            </div>
-            <span className="text-[10px] text-text-muted font-medium tracking-tight">
-              {assignee?.fullName || 'Atanmamış'}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            {isAdmin && (
-              <div className="flex items-center bg-makam-glass rounded-lg p-0.5 border border-executive-blue/[0.05] gap-0.5">
-                <button
-                  className="w-7 h-7 flex items-center justify-center text-text-tertiary hover:text-executive-blue hover:bg-surface-elevated rounded-md transition-all"
-                  onClick={(e) => { e.stopPropagation(); setEditingBlocker(blocker); setEditReason(blocker.reason); }}
-                  title="Düzenle"
-                >
-                  <Edit2 className="w-3 h-3 stroke-[1.5]" />
-                </button>
-                {isSystemAdmin && (
-                  <button
-                    className="w-7 h-7 flex items-center justify-center text-text-tertiary hover:text-status-danger hover:bg-status-danger/10 rounded-md transition-all"
-                    onClick={(e) => { e.stopPropagation(); setDeletingBlockerId(blocker.id); }}
-                    title="Sil"
-                  >
-                    <Trash2 className="w-3 h-3 stroke-[1.5]" />
-                  </button>
-                )}
-              </div>
-            )}
-            {!blocker.isResolved && isAdmin && (
-              <button
-                className="px-3 py-1.5 text-[8px] bg-status-success hover:opacity-90 text-white font-medium uppercase tracking-[0.2em] rounded-lg shadow-sm transition-all active:scale-95"
-                onClick={(e) => { e.stopPropagation(); onResolve(blocker.id); }}
-              >
-                Çözüldü
-              </button>
-            )}
-          </div>
-        </div>
-      </motion.div>
-    );
+  const handleRequestEdit = (blocker: TaskBlocker) => {
+    setEditingBlocker(blocker);
+    setEditReason(blocker.reason);
   };
 
   return (
@@ -218,7 +250,21 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
           </div>
           <div className="flex flex-col gap-2.5">
             {activeBlockers.length > 0 ? (
-              activeBlockers.map((b, i) => <BlockerCard key={b.id} blocker={b} index={i} />)
+              activeBlockers.map((b, i) => (
+                <BlockerCard
+                  key={b.id}
+                  blocker={b}
+                  index={i}
+                  tasksById={tasksById}
+                  usersById={usersById}
+                  isAdmin={isAdmin}
+                  isSystemAdmin={isSystemAdmin}
+                  onViewTask={onViewTask}
+                  onResolve={onResolve}
+                  onRequestEdit={handleRequestEdit}
+                  onRequestDelete={setDeletingBlockerId}
+                />
+              ))
             ) : (
               <div className="py-12 flex flex-col items-center justify-center bg-makam-glass border border-dashed border-executive-blue/[0.05] rounded-2xl gap-3">
                 <CheckCircle2 className="w-8 h-8 text-status-success/50 stroke-[1]" />
@@ -241,7 +287,21 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
           </div>
           <div className="flex flex-col gap-2.5">
             {resolvedBlockers.length > 0 ? (
-              resolvedBlockers.map((b, i) => <BlockerCard key={b.id} blocker={b} index={i} />)
+              resolvedBlockers.map((b, i) => (
+                <BlockerCard
+                  key={b.id}
+                  blocker={b}
+                  index={i}
+                  tasksById={tasksById}
+                  usersById={usersById}
+                  isAdmin={isAdmin}
+                  isSystemAdmin={isSystemAdmin}
+                  onViewTask={onViewTask}
+                  onResolve={onResolve}
+                  onRequestEdit={handleRequestEdit}
+                  onRequestDelete={setDeletingBlockerId}
+                />
+              ))
             ) : (
               <div className="py-12 flex flex-col items-center justify-center bg-makam-glass border border-dashed border-executive-blue/[0.05] rounded-2xl gap-3">
                 <Clock className="w-8 h-8 text-surface-border/50 stroke-[1]" />

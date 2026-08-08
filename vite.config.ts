@@ -103,6 +103,33 @@ export default defineConfig(({ mode }) => {
             'vendor-motion':   ['motion'],
             'vendor-date':     ['date-fns'],
           },
+          // recharts/jspdf'i manualChunks'a koymuyoruz (yukarıdaki not), ama
+          // Rollup'ın bu iki paketi taşıyan otomatik chunk'a verdiği isim
+          // (facade module'e göre, ör. "BarChart" veya "exportService")
+          // dependency güncellemelerinde değişebiliyor ve .size-limit.json'daki
+          // glob'ları sessizce kırıyordu. chunkFileNames burada yalnızca DOSYA
+          // ADINI sabitliyor — manualChunks'ın aksine chunk sınırlarını/erişim
+          // grafiğini etkilemediği için static-import regresyonunu geri getirmez.
+          chunkFileNames: (chunkInfo) => {
+            const ids = chunkInfo.moduleIds ?? [];
+            // Yalnızca SAF vendor chunk'ları yeniden adlandırılır (tüm modülleri
+            // node_modules altında olanlar) — Reports/Dashboard gibi rota
+            // chunk'ları recharts'tan doğrudan import ettiği için modül
+            // listesinde recharts geçebilir, ama bunlar kendi route chunk
+            // isimlerini korumalı, yanlışlıkla vendor-charts'a eşleşmemeli.
+            const isPureVendorChunk = ids.length > 0 && ids.every(id => id.includes('node_modules'));
+            if (isPureVendorChunk && ids.some(id => /[\\/]node_modules[\\/]recharts[\\/]/.test(id))) {
+              return 'assets/vendor-charts-[hash].js';
+            }
+            // jspdf'in exportService.ts dışında statik importer'ı yok (yalnızca
+            // Reports.tsx'in dynamic import()'u üzerinden erişiliyor), bu yüzden
+            // recharts'ın aksine saflık şartı gerekmiyor — jspdf içeren tek chunk
+            // her zaman bu lazy PDF facade'idir.
+            if (ids.some(id => /[\\/]node_modules[\\/]jspdf[\\/]/.test(id))) {
+              return 'assets/vendor-pdf-[hash].js';
+            }
+            return 'assets/[name]-[hash].js';
+          },
         },
       },
     },

@@ -219,17 +219,34 @@ export const taskService = {
       const rootSnap = await getDoc(doc(db, 'tasks', taskId));
       const rootData = rootSnap.exists() ? (rootSnap.data() as Task) : null;
 
-      // Kök görev + tüm iç içe alt görevleri (recursive) topla — silme öncesi
-      // hiçbir yazma yapılmaz, böylece yarıda kalan bir hata veri tutarsızlığı
-      // bırakmaz (tüm silme/istatistik işlemleri tek bir atomik batch'te yapılır).
-      const collectTaskIds = async (id: string): Promise<{ id: string; status: TaskStatus }[]> => {
-        const snap = await getDoc(doc(db, 'tasks', id));
-        const self = snap.exists() ? [{ id, status: (snap.data() as Task).status }] : [];
-        const subTasksSnapshot = await getDocs(query(collection(db, 'tasks'), where('parentId', '==', id)));
-        const children = await Promise.all(subTasksSnapshot.docs.map(subDoc => collectTaskIds(subDoc.id)));
-        return [...self, ...children.flat()];
-      };
-      const tasksToDelete = await collectTaskIds(taskId);
+      // Kök görev + tüm iç içe alt görevleri seviye seviye (BFS) topla — silme
+      // öncesi hiçbir yazma yapılmaz, böylece yarıda kalan bir hata veri
+      // tutarsızlığı bırakmaz (tüm silme/istatistik işlemleri tek bir atomik
+      // batch'te yapılır). Önceki hali her düğüm için ayrı bir getDoc + ayrı
+      // bir getDocs çağırıyordu (N düğüm → ~2N round-trip); burada aynı
+      // seviyedeki tüm ebeveyn id'leri `parentId in [...]` ile TEK sorguda
+      // toplanır (Firestore 'in' sınırı 30 olduğundan büyük seviyeler 30'luk
+      // gruplara bölünür) ve düğüm verisi zaten sorgu sonucunda geldiği için
+      // ayrıca getDoc ile yeniden okunmaz.
+      const tasksToDelete: { id: string; status: TaskStatus }[] = [];
+      if (rootSnap.exists()) {
+        tasksToDelete.push({ id: taskId, status: rootData!.status });
+      }
+      let currentLevelIds = [taskId];
+      while (currentLevelIds.length > 0) {
+        const idChunks: string[][] = [];
+        for (let i = 0; i < currentLevelIds.length; i += 30) {
+          idChunks.push(currentLevelIds.slice(i, i + 30));
+        }
+        const levelSnapshots = await Promise.all(
+          idChunks.map(chunk => getDocs(query(collection(db, 'tasks'), where('parentId', 'in', chunk))))
+        );
+        const levelChildren = levelSnapshots.flatMap(snap =>
+          snap.docs.map(d => ({ id: d.id, status: (d.data() as Task).status }))
+        );
+        tasksToDelete.push(...levelChildren);
+        currentLevelIds = levelChildren.map(c => c.id);
+      }
 
       if (tasksToDelete.length === 0) return;
 

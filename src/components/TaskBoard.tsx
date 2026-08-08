@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useCallback, useState, useMemo, type ReactElement } from 'react';
 import { Plus, Search, Layers, Clock, ArrowRight, CheckCircle2, AlertTriangle, AlertCircle, ShieldCheck, Zap, Info, Filter, X } from 'lucide-react';
+import { List, type RowComponentProps } from 'react-window';
 import { Task, User, TaskStatus } from '../types';
 import { cn } from '../lib/utils';
 import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_BADGE_VARIANT } from '../constants';
@@ -11,6 +12,182 @@ import { TaskCardSkeleton } from './ui/Skeleton';
 import { Badge } from './ui/Badge';
 import { useDataStore } from '../store/dataStore';
 import { isTaskInCrisis } from '../lib/executiveMetrics';
+
+// Sanallaştırma (react-window) sabitleri — büyük görev listelerinde (ör.
+// Admin'in ilk yüklemede gördüğü 200+ görev) her satırı DOM'a basmak yerine
+// yalnızca görünür pencereyi render eder. Yükseklikler mevcut hücre
+// padding/font boyutlarına göre ölçülüp tarayıcıda doğrulanmıştır.
+const DESKTOP_ROW_HEIGHT = 64;
+const DESKTOP_LIST_MAX_HEIGHT = 640;
+const DESKTOP_GRID_TEMPLATE = '150px minmax(0,1fr) 190px 130px 160px 64px';
+const MOBILE_ROW_HEIGHT = 80;
+const MOBILE_LIST_MAX_HEIGHT = 560;
+
+interface TaskRowData {
+  tasks: Task[];
+  usersById: Map<string, User>;
+  onViewTask: (task: Task) => void;
+  onUpdateTaskStatus?: (taskId: string, newStatus: TaskStatus) => void;
+}
+
+function MobileTaskRow({ index, style, ariaAttributes, tasks, usersById, onViewTask, onUpdateTaskStatus }: RowComponentProps<TaskRowData>): ReactElement | null {
+  const task = tasks[index];
+  if (!task) return null;
+  const assignee = usersById.get(task.assigneeId);
+  const isCrisis = isTaskInCrisis(task, Date.now());
+  return (
+    <div style={style} {...ariaAttributes}>
+      {/* #9 — Swipe gesture: sola = Tamamlandı, sağa = Engellendi */}
+      <motion.div
+        drag="x"
+        dragConstraints={{ left: -80, right: 80 }}
+        dragElastic={0.3}
+        onDragEnd={(_, info) => {
+          if (info.offset.x < -60 && onUpdateTaskStatus && task.status !== 'COMPLETED') {
+            onUpdateTaskStatus(task.id, 'COMPLETED');
+          } else if (info.offset.x > 60 && onUpdateTaskStatus && task.status !== 'BLOCKED') {
+            onUpdateTaskStatus(task.id, 'BLOCKED');
+          }
+        }}
+        onClick={() => onViewTask(task)}
+        className={cn(
+          'flex items-start gap-3 p-3.5 h-full box-border cursor-pointer hover:bg-makam-glass transition-all group relative overflow-hidden border-b border-makam-border/30',
+          isCrisis && 'bg-status-danger/[0.04]'
+        )}
+      >
+        {/* Swipe hint bg */}
+        <div className="absolute inset-0 -z-10 flex">
+          <div className="flex-1 bg-status-success/10 opacity-0 group-active:opacity-100 transition-opacity" />
+          <div className="flex-1 bg-status-danger/10 opacity-0 group-active:opacity-100 transition-opacity" />
+        </div>
+        {/* Status dot */}
+        <div className={cn(
+          'w-2 h-2 rounded-full mt-1.5 flex-shrink-0',
+          task.status === 'COMPLETED'       ? 'bg-status-success' :
+          task.status === 'BLOCKED'         ? 'bg-status-danger' :
+          task.status === 'AWAITING_APPROVAL'? 'bg-executive-gold' :
+          task.status === 'IN_PROGRESS'     ? 'bg-executive-blue' :
+          'bg-surface-border'
+        )} />
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-medium text-executive-blue line-clamp-1 tracking-tight font-serif group-hover:text-executive-blue">
+            {task.title}
+          </p>
+          <div className="flex items-center gap-2 mt-1 min-w-0">
+            <span className="text-[9px] text-text-tertiary truncate min-w-0">{assignee?.fullName || 'Atanmamış'}</span>
+            <span className={cn(
+              'text-[8px] font-medium uppercase tracking-[0.12em] px-1.5 py-0.5 rounded-md whitespace-nowrap flex-shrink-0',
+              isCrisis ? 'bg-status-danger/10 text-status-danger' : 'bg-surface-glass text-text-tertiary'
+            )}>
+              {isCrisis ? 'SLA İhlali' : format(task.deadline, 'd MMM', { locale: tr })}
+            </span>
+          </div>
+        </div>
+        <ArrowRight className="w-3.5 h-3.5 text-text-tertiary group-hover:text-executive-blue mt-1 flex-shrink-0" />
+      </motion.div>
+    </div>
+  );
+}
+
+function DesktopTaskRow({ index, style, ariaAttributes, tasks, usersById, onViewTask }: RowComponentProps<TaskRowData>): ReactElement | null {
+  const task = tasks[index];
+  if (!task) return null;
+  const assignee = usersById.get(task.assigneeId);
+  const isCrisis = isTaskInCrisis(task, Date.now());
+  return (
+    <div
+      {...ariaAttributes}
+      role="row"
+      onClick={() => onViewTask(task)}
+      style={{ ...style, gridTemplateColumns: DESKTOP_GRID_TEMPLATE }}
+      className={cn(
+        'grid items-center border-b border-makam-border/30 cursor-pointer transition-colors duration-200 hover:bg-makam-glass group',
+        isCrisis && 'bg-status-danger/[0.03]'
+      )}
+    >
+      {/* Status */}
+      <div role="cell" className="px-4 py-3">
+        <Badge
+          variant={
+            task.status === 'COMPLETED' ? 'success' :
+            task.status === 'BLOCKED' ? 'danger' :
+            task.status === 'AWAITING_APPROVAL' ? 'warning' :
+            task.status === 'IN_PROGRESS' ? 'primary' : 'info'
+          }
+          withPulse={task.status === 'BLOCKED'}
+          icon={
+            task.status === 'COMPLETED' ? <CheckCircle2 className="w-3.5 h-3.5 stroke-[1.3]" /> :
+            task.status === 'BLOCKED' ? <AlertTriangle className="w-3.5 h-3.5 stroke-[1.3]" /> :
+            task.status === 'AWAITING_APPROVAL' ? <ShieldCheck className="w-3.5 h-3.5 stroke-[1.3]" /> :
+            task.status === 'IN_PROGRESS' ? <Zap className="w-3.5 h-3.5 stroke-[1.3]" /> :
+            <Info className="w-3.5 h-3.5 stroke-[1.3]" />
+          }
+        >
+          {STATUS_LABELS[task.status]}
+        </Badge>
+      </div>
+
+      {/* Title + description */}
+      <div role="cell" className="px-4 py-3 min-w-0">
+        <div className="flex flex-col gap-0.5 max-w-[320px]">
+          <span className="text-[13px] font-medium text-executive-blue group-hover:text-executive-blue tracking-tight font-serif line-clamp-1">
+            {task.title}
+          </span>
+          <span className="text-[10px] text-text-tertiary font-light line-clamp-1">{task.description}</span>
+        </div>
+      </div>
+
+      {/* Assignee */}
+      <div role="cell" className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          {/* #10 — Avatar */}
+          <Avatar
+            name={assignee?.fullName ?? '?'}
+            photoURL={assignee?.photoURL}
+            size="xs"
+          />
+          <span className="text-[11px] font-normal text-executive-blue tracking-tight whitespace-nowrap">
+            {assignee?.fullName || 'Atanmamış'}
+          </span>
+        </div>
+      </div>
+
+      {/* Priority */}
+      <div role="cell" className="px-4 py-3">
+        <Badge
+          variant={PRIORITY_BADGE_VARIANT[task.priority]}
+          icon={
+            task.priority === 'Urgent' ? <AlertCircle className="w-2.5 h-2.5 stroke-[1.5]" /> :
+            task.priority === 'High' ? <AlertTriangle className="w-2.5 h-2.5 stroke-[1.5]" /> :
+            <Zap className="w-2.5 h-2.5 stroke-[1.5]" />
+          }
+        >
+          {PRIORITY_LABELS[task.priority]}
+        </Badge>
+      </div>
+
+      {/* Deadline */}
+      <div role="cell" className="px-4 py-3">
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-1.5">
+            <Clock className={cn('w-3 h-3 stroke-[1.2]', isCrisis ? 'text-status-danger animate-pulse' : 'text-text-tertiary')} />
+            <span className={cn('text-[11px] font-light tabular-nums tracking-tight', isCrisis ? 'text-status-danger' : 'text-executive-blue')}>
+              {format(task.deadline, 'd MMM yyyy', { locale: tr })}
+            </span>
+          </div>
+          {isCrisis && <span className="text-[8px] font-medium text-status-danger uppercase tracking-[0.2em]">SLA İhlali</span>}
+        </div>
+      </div>
+
+      {/* Arrow */}
+      <div role="cell" className="px-4 py-3 text-right">
+        <button className="w-7 h-7 rounded-full bg-makam-glass border border-executive-blue/[0.05] flex items-center justify-center text-text-tertiary group-hover:bg-executive-gold group-hover:text-white group-hover:border-transparent transition-all duration-300 shadow-sm ml-auto">
+          <ArrowRight className="w-3 h-3 stroke-[2]" />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 interface TaskBoardProps {
   tasks: Task[];
@@ -36,9 +213,22 @@ export const TaskBoard = ({
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const { loadMoreTasks, taskLimit } = useDataStore();
 
+  // O(tasks × users) yerine tek geçişte kurulan O(1) lookup — hem uid hem
+  // email ile eşleşme aranabildiği için (Firestore'da assigneeId bazen uid,
+  // bazen email olabiliyor) her iki alan da anahtar olarak eklenir.
+  const usersById = useMemo(() => {
+    const map = new Map<string, User>();
+    for (const u of users) {
+      map.set(u.uid, u);
+      map.set(u.email, u);
+    }
+    return map;
+  }, [users]);
+  const assigneeFilterEmail = assigneeFilter === 'All' ? null : (usersById.get(assigneeFilter)?.email ?? null);
+
   const filteredTasks = useMemo(() => tasks.filter(task => {
     // #12 — Genişletilmiş arama: başlık, açıklama, sorumlu adı, durum
-    const assignee = users.find(u => u.uid === task.assigneeId || u.email === task.assigneeId);
+    const assignee = usersById.get(task.assigneeId);
     const statusLabel = STATUS_LABELS[task.status]?.toLowerCase() ?? '';
     const searchLower = search.toLowerCase();
     const matchesSearch = !search.trim() || [
@@ -53,7 +243,7 @@ export const TaskBoard = ({
     const isAssignedToMe = task.assigneeId === currentUser?.uid || task.assigneeId === currentUser?.email;
     const isVisible = showSubtasks || isTopLevel || isAssignedToMe;
     const matchesPriority = priorityFilter === 'All' || task.priority === priorityFilter;
-    const matchesAssignee = assigneeFilter === 'All' || task.assigneeId === assigneeFilter || (users.find(u => u.uid === assigneeFilter)?.email === task.assigneeId);
+    const matchesAssignee = assigneeFilter === 'All' || task.assigneeId === assigneeFilter || task.assigneeId === assigneeFilterEmail;
     const matchesStatus   = statusFilter   === 'All' || task.status === statusFilter;
 
     // NOT: Rol bazlı ek bir kısıtlama burada uygulanmıyor — `tasks` prop'u zaten
@@ -62,9 +252,21 @@ export const TaskBoard = ({
     // yalnızca "bana atanan/benim oluşturduğum" ile sınırlamak departman gözetimi
     // rolünü işlevsiz kılardı.
     return matchesSearch && isVisible && matchesPriority && matchesAssignee && matchesStatus;
-  }), [tasks, search, currentUser, showSubtasks, priorityFilter, assigneeFilter, statusFilter, users]);
+  }), [tasks, search, currentUser, showSubtasks, priorityFilter, assigneeFilter, assigneeFilterEmail, statusFilter, usersById]);
 
   const hasActiveFilter = priorityFilter !== 'All' || assigneeFilter !== 'All' || statusFilter !== 'All' || search !== '';
+
+  const rowKey = useCallback((index: number, data: TaskRowData) => data.tasks[index]?.id ?? index, []);
+  const mobileRowProps = useMemo<TaskRowData>(
+    () => ({ tasks: filteredTasks, usersById, onViewTask, onUpdateTaskStatus }),
+    [filteredTasks, usersById, onViewTask, onUpdateTaskStatus]
+  );
+  const desktopRowProps = useMemo<TaskRowData>(
+    () => ({ tasks: filteredTasks, usersById, onViewTask }),
+    [filteredTasks, usersById, onViewTask]
+  );
+  const mobileListHeight = Math.min(filteredTasks.length * MOBILE_ROW_HEIGHT, MOBILE_LIST_MAX_HEIGHT);
+  const desktopListHeight = Math.min(filteredTasks.length * DESKTOP_ROW_HEIGHT, DESKTOP_LIST_MAX_HEIGHT);
 
   return (
     <div className="flex flex-col gap-4 py-4 max-w-[1440px] mx-auto font-sans">
@@ -194,7 +396,7 @@ export const TaskBoard = ({
         className="bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl overflow-hidden shadow-[0_1px_8px_rgba(22,21,19,0.02)]"
       >
         {/* Mobile card list for xs screens */}
-        <div className="sm:hidden divide-y divide-makam-border/30">
+        <div className="sm:hidden">
           {isLoading ? (
             <div className="flex flex-col gap-3 p-3">
               {[...Array(5)].map((_, i) => <TaskCardSkeleton key={i} />)}
@@ -204,202 +406,62 @@ export const TaskBoard = ({
               Kayıt bulunamadı
             </div>
           ) : (
-            filteredTasks.map((task, i) => {
-              const assignee = users.find(u => u.uid === task.assigneeId || u.email === task.assigneeId);
-              const isCrisis = isTaskInCrisis(task, Date.now());
-              return (
-                // #9 — Swipe gesture: sola = Tamamlandı, sağa = Engellendi
-                <motion.div
-                  key={task.id}
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ type: 'spring', stiffness: 280, damping: 30, delay: i * 0.03 }}
-                  drag="x"
-                  dragConstraints={{ left: -80, right: 80 }}
-                  dragElastic={0.3}
-                  onDragEnd={(_, info) => {
-                    if (info.offset.x < -60 && onUpdateTaskStatus && task.status !== 'COMPLETED') {
-                      onUpdateTaskStatus(task.id, 'COMPLETED');
-                    } else if (info.offset.x > 60 && onUpdateTaskStatus && task.status !== 'BLOCKED') {
-                      onUpdateTaskStatus(task.id, 'BLOCKED');
-                    }
-                  }}
-                  onClick={() => onViewTask(task)}
-                  className={cn(
-                    'flex items-start gap-3 p-3.5 cursor-pointer hover:bg-makam-glass transition-all group relative overflow-hidden',
-                    isCrisis && 'bg-status-danger/[0.04]'
-                  )}
-                >
-                  {/* Swipe hint bg */}
-                  <div className="absolute inset-0 -z-10 flex">
-                    <div className="flex-1 bg-status-success/10 opacity-0 group-active:opacity-100 transition-opacity" />
-                    <div className="flex-1 bg-status-danger/10 opacity-0 group-active:opacity-100 transition-opacity" />
-                  </div>
-                  {/* Status dot */}
-                  <div className={cn(
-                    'w-2 h-2 rounded-full mt-1.5 flex-shrink-0',
-                    task.status === 'COMPLETED'       ? 'bg-status-success' :
-                    task.status === 'BLOCKED'         ? 'bg-status-danger' :
-                    task.status === 'AWAITING_APPROVAL'? 'bg-executive-gold' :
-                    task.status === 'IN_PROGRESS'     ? 'bg-executive-blue' :
-                    'bg-surface-border'
-                  )} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-medium text-executive-blue line-clamp-1 tracking-tight font-serif group-hover:text-executive-blue">
-                      {task.title}
-                    </p>
-                    <div className="flex items-center gap-2 mt-1 min-w-0">
-                      <span className="text-[9px] text-text-tertiary truncate min-w-0">{assignee?.fullName || 'Atanmamış'}</span>
-                      <span className={cn(
-                        'text-[8px] font-medium uppercase tracking-[0.12em] px-1.5 py-0.5 rounded-md whitespace-nowrap flex-shrink-0',
-                        isCrisis ? 'bg-status-danger/10 text-status-danger' : 'bg-surface-glass text-text-tertiary'
-                      )}>
-                        {isCrisis ? 'SLA İhlali' : format(task.deadline, 'd MMM', { locale: tr })}
-                      </span>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-3.5 h-3.5 text-text-tertiary group-hover:text-executive-blue mt-1 flex-shrink-0" />
-                </motion.div>
-              );
-            })
+            <List
+              rowComponent={MobileTaskRow}
+              rowCount={filteredTasks.length}
+              rowHeight={MOBILE_ROW_HEIGHT}
+              rowProps={mobileRowProps}
+              rowKey={rowKey}
+              style={{ height: mobileListHeight }}
+            />
           )}
         </div>
 
-        {/* Desktop / tablet table */}
-        <div className="hidden sm:block overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-surface-glass border-b border-executive-blue/[0.04]">
-                {['Durum', 'Operasyon Tanımı', 'Sorumlu', 'Önem', 'Mühlet', ''].map(h => (
-                  <th key={h} className={cn(
-                    'px-4 py-3 text-[8px] font-semibold text-text-tertiary uppercase tracking-[0.18em]',
-                    h === '' && 'text-right'
-                  )}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-makam-border/30">
-              {isLoading ? (
-                [...Array(7)].map((_, i) => (
-                  <tr key={i} className="animate-pulse">
-                    {[...Array(6)].map((__, j) => (
-                      <td key={j} className="px-4 py-3.5">
-                        <div className="h-3 bg-executive-blue/[0.04] rounded-lg" style={{ width: j === 1 ? '60%' : j === 5 ? '40px' : '80px' }} />
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              ) : filteredTasks.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-16 text-center text-[10px] text-text-tertiary uppercase tracking-[0.22em]">
-                    Kayıtlı veri bulunamadı.
-                  </td>
-                </tr>
-              ) : (
-                filteredTasks.map((task, i) => {
-                  const assignee = users.find(u => u.uid === task.assigneeId || u.email === task.assigneeId);
-                  const isCrisis = isTaskInCrisis(task, Date.now());
-                  return (
-                    <motion.tr
-                      layoutId={`task-card-${task.id}`}
-                      key={task.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: i * 0.025 }}
-                      className={cn(
-                        'group cursor-pointer transition-all duration-300 hover:bg-makam-glass',
-                        isCrisis && 'bg-status-danger/[0.03]'
-                      )}
-                      onClick={() => onViewTask(task)}
-                    >
-                      {/* Status */}
-                      <td className="px-4 py-3">
-                        <Badge
-                          variant={
-                            task.status === 'COMPLETED' ? 'success' :
-                            task.status === 'BLOCKED' ? 'danger' :
-                            task.status === 'AWAITING_APPROVAL' ? 'warning' :
-                            task.status === 'IN_PROGRESS' ? 'primary' : 'info'
-                          }
-                          withPulse={task.status === 'BLOCKED'}
-                          icon={
-                            task.status === 'COMPLETED' ? <CheckCircle2 className="w-3.5 h-3.5 stroke-[1.3]" /> :
-                            task.status === 'BLOCKED' ? <AlertTriangle className="w-3.5 h-3.5 stroke-[1.3]" /> :
-                            task.status === 'AWAITING_APPROVAL' ? <ShieldCheck className="w-3.5 h-3.5 stroke-[1.3]" /> :
-                            task.status === 'IN_PROGRESS' ? <Zap className="w-3.5 h-3.5 stroke-[1.3]" /> :
-                            <Info className="w-3.5 h-3.5 stroke-[1.3]" />
-                          }
-                        >
-                          {STATUS_LABELS[task.status]}
-                        </Badge>
-                      </td>
-
-                      {/* Title + description */}
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col gap-0.5 max-w-[320px]">
-                          <span className="text-[13px] font-medium text-executive-blue group-hover:text-executive-blue tracking-tight font-serif line-clamp-1">
-                            {task.title}
-                          </span>
-                          <span className="text-[10px] text-text-tertiary font-light line-clamp-1">{task.description}</span>
-                        </div>
-                      </td>
-
-                      {/* Assignee */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          {/* #10 — Avatar */}
-                          <Avatar
-                            name={assignee?.fullName ?? '?'}
-                            photoURL={assignee?.photoURL}
-                            size="xs"
-                          />
-                          <span className="text-[11px] font-normal text-executive-blue tracking-tight whitespace-nowrap">
-                            {assignee?.fullName || 'Atanmamış'}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Priority */}
-                      <td className="px-4 py-3">
-                        <Badge
-                          variant={PRIORITY_BADGE_VARIANT[task.priority]}
-                          icon={
-                            task.priority === 'Urgent' ? <AlertCircle className="w-2.5 h-2.5 stroke-[1.5]" /> :
-                            task.priority === 'High' ? <AlertTriangle className="w-2.5 h-2.5 stroke-[1.5]" /> :
-                            <Zap className="w-2.5 h-2.5 stroke-[1.5]" />
-                          }
-                        >
-                          {PRIORITY_LABELS[task.priority]}
-                        </Badge>
-                      </td>
-
-                      {/* Deadline */}
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-1.5">
-                            <Clock className={cn('w-3 h-3 stroke-[1.2]', isCrisis ? 'text-status-danger animate-pulse' : 'text-text-tertiary')} />
-                            <span className={cn('text-[11px] font-light tabular-nums tracking-tight', isCrisis ? 'text-status-danger' : 'text-executive-blue')}>
-                              {format(task.deadline, 'd MMM yyyy', { locale: tr })}
-                            </span>
-                          </div>
-                          {isCrisis && <span className="text-[8px] font-medium text-status-danger uppercase tracking-[0.2em]">SLA İhlali</span>}
-                        </div>
-                      </td>
-
-                      {/* Arrow */}
-                      <td className="px-4 py-3 text-right">
-                        <button className="w-7 h-7 rounded-full bg-makam-glass border border-executive-blue/[0.05] flex items-center justify-center text-text-tertiary group-hover:bg-executive-gold group-hover:text-white group-hover:border-transparent transition-all duration-300 shadow-sm ml-auto">
-                          <ArrowRight className="w-3 h-3 stroke-[2]" />
-                        </button>
-                      </td>
-                    </motion.tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+        {/* Desktop / tablet table (CSS Grid tabanlı — react-window virtualization
+            native <table>/<tbody> ile absolute-positioned satırları
+            hizalayamadığı için grid'e çevrildi; header ve satırlar aynı
+            DESKTOP_GRID_TEMPLATE'i paylaşarak sütun hizasını korur) */}
+        <div className="hidden sm:block overflow-x-auto custom-scrollbar" role="table">
+          <div
+            role="row"
+            style={{ gridTemplateColumns: DESKTOP_GRID_TEMPLATE }}
+            className="grid bg-surface-glass border-b border-executive-blue/[0.04]"
+          >
+            {['Durum', 'Operasyon Tanımı', 'Sorumlu', 'Önem', 'Mühlet', ''].map(h => (
+              <div key={h} role="columnheader" className={cn(
+                'px-4 py-3 text-[8px] font-semibold text-text-tertiary uppercase tracking-[0.18em]',
+                h === '' && 'text-right'
+              )}>
+                {h}
+              </div>
+            ))}
+          </div>
+          <div role="rowgroup">
+            {isLoading ? (
+              [...Array(7)].map((_, i) => (
+                <div key={i} style={{ gridTemplateColumns: DESKTOP_GRID_TEMPLATE }} className="grid animate-pulse">
+                  {[...Array(6)].map((__, j) => (
+                    <div key={j} className="px-4 py-3.5">
+                      <div className="h-3 bg-executive-blue/[0.04] rounded-lg" style={{ width: j === 1 ? '60%' : j === 5 ? '40px' : '80px' }} />
+                    </div>
+                  ))}
+                </div>
+              ))
+            ) : filteredTasks.length === 0 ? (
+              <div className="px-4 py-16 text-center text-[10px] text-text-tertiary uppercase tracking-[0.22em]">
+                Kayıtlı veri bulunamadı.
+              </div>
+            ) : (
+              <List
+                rowComponent={DesktopTaskRow}
+                rowCount={filteredTasks.length}
+                rowHeight={DESKTOP_ROW_HEIGHT}
+                rowProps={desktopRowProps}
+                rowKey={rowKey}
+                style={{ height: desktopListHeight }}
+              />
+            )}
+          </div>
         </div>
       </motion.div>
 

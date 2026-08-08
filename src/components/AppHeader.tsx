@@ -32,7 +32,12 @@ export function AppHeader({
   onGlobalFocusDeptChange,
   departments
 }: Props) {
-  const { theme, setTheme } = useUIStore();
+  // Selector bazlı okuma — bu bileşen sticky/her zaman görünür olduğundan
+  // whole-store `useUIStore()` toasts/filter/activeTab gibi ilgisiz her alan
+  // değişiminde (ör. her toast eklenip 6sn sonra otomatik kaldırıldığında)
+  // gereksiz yeniden render'a yol açıyordu.
+  const theme = useUIStore(s => s.theme);
+  const setTheme = useUIStore(s => s.setTheme);
   const [isOnline, setIsOnline] = useState(typeof window !== 'undefined' ? window.navigator.onLine : true);
   const [queueCount, setQueueCount] = useState(0);
   const [isGuideOpen, setIsGuideOpen] = useState(false);

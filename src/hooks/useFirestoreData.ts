@@ -47,6 +47,11 @@ export function useFirestoreData(user: User | null, onError: (err: any, type: st
   const email = user?.email;
   const departmentId = user?.departmentId;
 
+  // Tasks listener'ı ayrı bir effect'te tutulur çünkü tek başına `taskLimit`e
+  // bağlıdır ("Daha Fazla Yükle") — users/blockers/stats bu değere bağlı
+  // değil. Tek effect'te birleştirilmiş olsalardı, her "Daha Fazla Yükle"
+  // tıklaması bu üç listener'ı da gereksiz yere abonelikten çıkarıp yeniden
+  // kurar, ekstra Firestore okuması ve kısa isLoading flicker'ına yol açardı.
   useEffect(() => {
     if (!uid) return;
 
@@ -58,7 +63,7 @@ export function useFirestoreData(user: User | null, onError: (err: any, type: st
       ? query(
           collection(db, 'tasks'),
           orderBy('updatedAt', 'desc'),
-          limit(taskLimit > 500 ? taskLimit : 500)
+          limit(taskLimit)
         )
       : isStaff
         ? query(
@@ -94,6 +99,14 @@ export function useFirestoreData(user: User | null, onError: (err: any, type: st
       },
       (e) => { onError(e, 'list', 'tasks'); setIsLoading(false); }
     );
+
+    return () => {
+      unsubTasks();
+    };
+  }, [uid, role, email, departmentId, taskLimit, setTasks, onError]);
+
+  useEffect(() => {
+    if (!uid) return;
 
     const unsubUsers = onSnapshot(
       collection(db, 'users'),
@@ -147,12 +160,11 @@ export function useFirestoreData(user: User | null, onError: (err: any, type: st
     );
 
     return () => {
-      unsubTasks();
       unsubUsers();
       unsubBlockers();
       unsubStats();
     };
-  }, [uid, role, email, departmentId, taskLimit, setTasks, setUsers, setBlockers, setStats, onError]);
+  }, [uid, setUsers, setBlockers, setStats, onError]);
 
   return { tasks, users, blockers, isLoading, auditLogs: [] as AuditLog[] };
 }

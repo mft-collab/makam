@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ShieldCheck, ArrowRight, Loader2 } from 'lucide-react';
 import type { QueryDocumentSnapshot, DocumentData, QueryConstraint } from 'firebase/firestore';
 import { AuditLog, Task, User, TaskStatus } from '../types';
@@ -75,6 +75,11 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
     setHasMore(true);
     fetchLogs(true, null);
   }, [selectedUser, dateFrom, dateTo]);
+
+  // "Daha Fazla Yükle" ile büyüyebilen log listesinde her satır için tasks/users
+  // dizisinde O(n) find() yapmak yerine, tek geçişte kurulan O(1) Map lookup.
+  const tasksById = useMemo(() => new Map(tasks.map(t => [t.id, t])), [tasks]);
+  const usersById = useMemo(() => new Map(users.map(u => [u.uid, u])), [users]);
 
   const filteredLogs = logsState.filter(log => {
     const isStatusChange = !log.changes && log.newValue !== undefined;
@@ -174,8 +179,8 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
       <div className="flex flex-col gap-5">
         {filteredLogs.length > 0 ? (
           filteredLogs.map((log) => {
-            const task = tasks.find((t: Task) => t.id === log.taskId);
-            const user = users.find((u: User) => u.uid === log.changedBy);
+            const task = tasksById.get(log.taskId);
+            const user = usersById.get(log.changedBy);
 
             return (
               <div key={log.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-xl group hover:bg-surface-elevated hover:shadow-sm transition-all relative overflow-hidden">

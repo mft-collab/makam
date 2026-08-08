@@ -50,6 +50,7 @@ import { useSLASync } from './hooks/useSLASync';
 import { useIdleTimer } from './hooks/useIdleTimer';
 import { useSelfHealing } from './hooks/useSelfHealing';
 import { useUIStore, type ToastItem } from './store/uiStore';
+import { useShallow } from 'zustand/react/shallow';
 
 function getOperationalErrorToast(error: unknown): Omit<ToastItem, 'id'> {
   const errorCode = typeof error === 'object' && error !== null && 'code' in error
@@ -89,6 +90,10 @@ export default function App() {
   const usersRef = useRef<User[]>([]);
 
   // ─── uiStore ─────────────────────────────────────────────────────────────
+  // `useShallow` ile yalnızca burada kullanılan alanlar seçilir — aksi halde
+  // whole-store `useUIStore()` store'daki İLGİSİZ her alan değişiminde (ör.
+  // isOffline, filter, editingTask — bu bileşenin kullanmadığı alanlar) App'in
+  // ve altındaki tüm ağacın gereksiz yere yeniden render olmasına yol açardı.
   const {
     activeTab, setActiveTab,
     toasts, addToast, removeToast,
@@ -99,7 +104,17 @@ export default function App() {
     selectedTaskId, setSelectedTaskId,
     showNotifications, setShowNotifications,
     theme,
-  } = useUIStore();
+  } = useUIStore(useShallow(s => ({
+    activeTab: s.activeTab, setActiveTab: s.setActiveTab,
+    toasts: s.toasts, addToast: s.addToast, removeToast: s.removeToast,
+    isCreateModalOpen: s.isCreateModalOpen, setIsCreateModalOpen: s.setIsCreateModalOpen,
+    isEditModalOpen: s.isEditModalOpen, setIsEditModalOpen: s.setIsEditModalOpen,
+    parentTaskId: s.parentTaskId, setParentTaskId: s.setParentTaskId,
+    initialTitle: s.initialTitle, setInitialTitle: s.setInitialTitle,
+    selectedTaskId: s.selectedTaskId, setSelectedTaskId: s.setSelectedTaskId,
+    showNotifications: s.showNotifications, setShowNotifications: s.setShowNotifications,
+    theme: s.theme,
+  })));
 
   // ─── Tema Uygulama ────────────────────────────────────────────────────────
   useEffect(() => {

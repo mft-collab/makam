@@ -188,6 +188,31 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
 
   const staffUsers = useMemo(() => users.filter(u => u.role === 'Staff'), [users]);
 
+  // Şema (tree) görünümünde her yönetici için ayrı ayrı users.filter()
+  // çağırmak yerine (O(yönetici × personel)) departman başına tek geçişte
+  // gruplanır (O(personel) + O(1) lookup).
+  const staffByDepartment = useMemo(() => {
+    const map = new Map<string, User[]>();
+    for (const u of users) {
+      if (u.role !== 'Staff') continue;
+      const key = u.departmentId ?? '';
+      const list = map.get(key);
+      if (list) list.push(u); else map.set(key, [u]);
+    }
+    return map;
+  }, [users]);
+
+  const independentStaff = useMemo(() => users.filter(u =>
+    u.role === 'Staff' && (!u.departmentId || !users.some(m => m.role === 'Manager' && m.departmentId === u.departmentId))
+  ), [users]);
+
+  const selectedUserAllTasks = useMemo(() => {
+    if (!selectedUser) return [];
+    return tasks.filter(t => t.assigneeId === selectedUser.uid || t.assigneeId === selectedUser.email);
+  }, [tasks, selectedUser]);
+
+  const tasksById = useMemo(() => new Map(tasks.map(t => [t.id, t])), [tasks]);
+
   const { capacityPercent, availableStaffCount, overloadedStaffCount } = useMemo(() => {
     let total = 0, available = 0, overloaded = 0;
     for (const u of staffUsers) {
@@ -396,7 +421,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
             <span className="text-[8px] font-bold uppercase tracking-[0.3em] text-executive-blue bg-executive-blue/5 border border-executive-blue/10 px-2.5 py-1 rounded-full">Birim Yöneticileri</span>
             <div className="flex flex-wrap justify-center gap-8 mt-2 w-full">
               {users.filter(u => u.role === 'Manager').map(u => {
-                const staffInDept = users.filter(staff => staff.role === 'Staff' && staff.departmentId === u.departmentId);
+                const staffInDept = staffByDepartment.get(u.departmentId ?? '') ?? [];
                 return (
                   <div key={u.uid} className="flex flex-col items-center gap-4 bg-executive-blue/[0.01] p-4 rounded-2xl border border-executive-blue/[0.03]">
                     <OrgNodeCard user={u} tasks={tasks} onSelect={setSelectedUser} />
@@ -417,13 +442,13 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
           </div>
 
           {/* Staff without matching department managers */}
-          {users.filter(u => u.role === 'Staff' && (!u.departmentId || !users.some(m => m.role === 'Manager' && m.departmentId === u.departmentId))).length > 0 && (
+          {independentStaff.length > 0 && (
             <>
               <div className="w-[1px] h-8 bg-executive-blue/15" />
               <div className="flex flex-col items-center gap-2">
                 <span className="text-[8px] font-bold uppercase tracking-[0.3em] text-text-tertiary bg-surface-glass border border-surface-border px-2.5 py-1 rounded-full">Bağımsız Kadro</span>
                 <div className="flex flex-wrap justify-center gap-3 mt-2">
-                  {users.filter(u => u.role === 'Staff' && (!u.departmentId || !users.some(m => m.role === 'Manager' && m.departmentId === u.departmentId))).map(u => (
+                  {independentStaff.map(u => (
                     <OrgNodeCard key={u.uid} user={u} tasks={tasks} onSelect={setSelectedUser} isMini />
                   ))}
                 </div>
@@ -437,7 +462,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
       <Modal isOpen={!!selectedUser} onClose={() => setSelectedUser(null)} title="Kadro Profili" size="lg">
         {selectedUser && (() => {
           const rc = roleConfig[selectedUser.role];
-          const userAllTasks = tasks.filter(t => t.assigneeId === selectedUser.uid || t.assigneeId === selectedUser.email);
+          const userAllTasks = selectedUserAllTasks;
           const completedTasks = userAllTasks.filter(t => t.status === 'COMPLETED');
           const completedWithSla = completedTasks.filter(t => {
             const totalPaused = t.totalPausedTime || 0;
@@ -608,7 +633,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                       </div>
                     ) : userLogs.length > 0 ? (
                       userLogs.map((log, i) => {
-                        const relatedTask = tasks.find(t => t.id === log.taskId);
+                        const relatedTask = tasksById.get(log.taskId);
                         const hasChanges = log.changes && Object.keys(log.changes).length > 0;
 
                         return (

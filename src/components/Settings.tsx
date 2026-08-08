@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Download, AlertCircle, CheckCircle2, Database, RotateCcw, ShieldCheck, Smartphone, Bell, Settings as SettingsIcon, Clock } from 'lucide-react';
 import { Task, User } from '../types';
 import { cn } from '../lib/utils';
-import { db, doc, writeBatch, collection, getDocs, query, setDoc, addDoc } from '../firebase';
+import { db, doc, writeBatch, collection, getDocs, query, orderBy, limit, startAfter, setDoc, addDoc } from '../firebase';
 import { taskService } from '../services/taskService';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { getSLAConfigForPriority } from '../lib/sla';
@@ -18,6 +18,32 @@ interface SettingsProps {
   triggerToast?: (title: string, body: string, type?: 'info' | 'success' | 'warning' | 'danger') => void;
   currentUser?: User | null;
   isLoading?: boolean;
+}
+
+const AUDIT_LOG_EXPORT_PAGE_SIZE = 500;
+
+/**
+ * Tam yedek/arşiv dışa aktarma butonları için audit_logs koleksiyonunun
+ * TAMAMINI okur — bir yedeğin eksik veri içermesi kabul edilemez olduğundan
+ * limit() ile kısıtlanamaz. Bunun yerine tek bir sınırsız getDocs() yerine
+ * (büyük koleksiyonlarda zaman aşımı/yanıt boyutu riski taşır) imleç (cursor)
+ * tabanlı, sabit boyutlu sayfalarla okunur — toplam veri aynı kalır, yalnızca
+ * tek seferlik büyük bir istek yerine art arda küçük, güvenilir istekler yapılır.
+ */
+async function fetchAllAuditLogs(): Promise<Array<{ id: string } & Record<string, unknown>>> {
+  const results: Array<{ id: string } & Record<string, unknown>> = [];
+  let cursor: import('firebase/firestore').QueryDocumentSnapshot | null = null;
+  for (;;) {
+    const constraints: import('firebase/firestore').QueryConstraint[] = cursor
+      ? [orderBy('timestamp'), startAfter(cursor), limit(AUDIT_LOG_EXPORT_PAGE_SIZE)]
+      : [orderBy('timestamp'), limit(AUDIT_LOG_EXPORT_PAGE_SIZE)];
+    const snapshot = await getDocs(query(collection(db, 'audit_logs'), ...constraints));
+    if (snapshot.empty) break;
+    results.push(...snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    if (snapshot.docs.length < AUDIT_LOG_EXPORT_PAGE_SIZE) break;
+    cursor = snapshot.docs[snapshot.docs.length - 1] ?? null;
+  }
+  return results;
 }
 
 const SettingsSkeleton = () => (
@@ -240,8 +266,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
     }
     setImportStatus({ type: 'loading', message: 'Dizge Verileri Yedekleniyor...' });
     try {
-      const snapshot = await getDocs(query(collection(db, 'audit_logs')));
-      const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const logs = await fetchAllAuditLogs();
 
       const backup = {
         tasks, users, blockers, auditLogs: logs,
@@ -381,8 +406,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
     setIsArchiving(true);
     setImportStatus({ type: 'loading', message: 'Denetim İzleri İndiriliyor...' });
     try {
-      const snapshot = await getDocs(query(collection(db, 'audit_logs')));
-      const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const logs = await fetchAllAuditLogs();
 
       if (logs.length === 0) {
         setImportStatus({ type: 'success', message: 'Dışa aktarılacak denetim izi bulunamadı.' });
