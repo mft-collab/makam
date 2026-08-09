@@ -154,8 +154,8 @@ export default defineConfig(({ mode }) => {
       coverage: {
         provider: 'v8',
         reporter: ['text', 'json', 'html'],
-        include: ['src/lib/**', 'src/services/**'],
-        exclude: ['src/test/**', 'node_modules/**'],
+        include: ['src/lib/**', 'src/services/**', 'src/hooks/**', 'src/components/**'],
+        exclude: ['src/test/**', 'src/components/ui/**', 'node_modules/**'],
       },
     },
   };

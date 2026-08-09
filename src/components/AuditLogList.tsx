@@ -5,9 +5,10 @@ import { AuditLog, Task, User, TaskStatus } from '../types';
 import { Button } from './ui/Button';
 import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
-import { STATUS_LABELS, ROLE_LABELS, PRIORITY_LABELS } from '../constants';
+import { STATUS_LABELS, ROLE_LABELS } from '../constants';
 import { db, collection, getDocs, query, where, orderBy, limit, startAfter } from '../firebase';
 import { useUIStore } from '../store/uiStore';
+import { AUDIT_FIELD_LABELS, formatAuditValue } from '../lib/auditLabels';
 
 interface AuditLogListProps {
   tasks: Task[];
@@ -212,45 +213,15 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
                   {log.changes ? (
                     <div className="flex flex-col gap-1.5 w-full max-w-[340px]">
                       {Object.entries(log.changes).map(([field, diff]) => {
-                        const fieldLabel = {
-                          title: 'Başlık',
-                          description: 'Açıklama',
-                          assigneeId: 'Sorumlu',
-                          coordinatorId: 'İrtibatlı',
-                          priority: 'Öncelik',
-                          deadline: 'Son Tarih',
-                          evidence: 'Kanıt',
-                          tags: 'Etiketler',
-                          estimatedHours: 'Tahmini Süre',
-                          status: 'Durum',
-                          deleted: 'Silindi'
-                        }[field] || field;
-
-                        const truncateValue = (val: unknown) => {
-                          if (val === null || val === undefined) return '-';
-                          // Ham enum değerleri (ör. öncelik/durum) İngilizce saklanır —
-                          // denetim izinde okunabilir olması için Türkçe etikete çevrilir.
-                          if (field === 'priority' && typeof val === 'string' && val in PRIORITY_LABELS) {
-                            return PRIORITY_LABELS[val as keyof typeof PRIORITY_LABELS];
-                          }
-                          if (field === 'status' && typeof val === 'string' && val in STATUS_LABELS) {
-                            return STATUS_LABELS[val as TaskStatus];
-                          }
-                          if (field === 'deleted' && typeof val === 'boolean') {
-                            return val ? 'Evet' : 'Hayır';
-                          }
-                          if (typeof val === 'object') return JSON.stringify(val).slice(0, 30);
-                          const str = String(val);
-                          return str.length > 20 ? str.slice(0, 20) + '...' : str;
-                        };
+                        const fieldLabel = AUDIT_FIELD_LABELS[field] ?? field;
 
                         return (
                           <div key={field} className="flex flex-col gap-0.5 text-[9px] bg-executive-blue/[0.02] border border-executive-blue/[0.04] p-1.5 rounded-lg">
                             <span className="font-bold text-[8px] text-text-tertiary uppercase tracking-wider">{fieldLabel}</span>
                             <div className="flex items-center gap-1 text-[10px] text-text-muted">
-                              <span className="line-through opacity-60 truncate max-w-[120px]">{truncateValue(diff.old)}</span>
+                              <span className="line-through opacity-60 truncate max-w-[120px]">{formatAuditValue(field, diff.old)}</span>
                               <ArrowRight className="w-2.5 h-2.5 flex-shrink-0" />
-                              <span className="font-medium text-text-heading truncate max-w-[120px]">{truncateValue(diff.new)}</span>
+                              <span className="font-medium text-text-heading truncate max-w-[120px]">{formatAuditValue(field, diff.new)}</span>
                             </div>
                           </div>
                         );

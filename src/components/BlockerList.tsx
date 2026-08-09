@@ -7,7 +7,7 @@ import { Modal } from './ui/Modal';
 import { Badge } from './ui/Badge';
 import { cn, formatTimeAgo } from '../lib/utils';
 import { motion } from 'motion/react';
-import { PRIORITY_BADGE_VARIANT } from '../constants';
+import { PRIORITY_BADGE_VARIANT, PRIORITY_LABELS } from '../constants';
 
 const PRIORITY_WEIGHTS: Record<string, number> = { Urgent: 3, High: 2, Medium: 1, Low: 0 };
 
@@ -89,9 +89,7 @@ const BlockerCard = ({ blocker, index, tasksById, usersById, isAdmin, isSystemAd
               <>
                 <span className="text-[9px] text-text-tertiary/40">•</span>
                 <Badge variant={PRIORITY_BADGE_VARIANT[task.priority]}>
-                  {task.priority === 'Urgent' ? 'Acil' :
-                   task.priority === 'High' ? 'Yüksek' :
-                   task.priority === 'Medium' ? 'Orta' : 'Düşük'}
+                  {PRIORITY_LABELS[task.priority]}
                 </Badge>
                 {task.deadline > 0 && (
                   <Badge variant={task.deadline < Date.now() ? 'danger' : 'default'} icon={<Clock className="w-2.5 h-2.5" />}>

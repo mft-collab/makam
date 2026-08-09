@@ -17,7 +17,9 @@ vi.mock('../firebase', () => ({
   query: vi.fn(),
   where: vi.fn(),
   orderBy: vi.fn(),
+  or: vi.fn(),
   limit: vi.fn(),
+  startAfter: vi.fn(),
   writeBatch: vi.fn(() => ({
     update: vi.fn(),
     delete: vi.fn(),

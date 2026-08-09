@@ -214,7 +214,7 @@ describe('taskService', () => {
 
       await expect(
         taskService.createTask({ title: 'Alt görev', parentId: 'parent-1', assigneeId: 'manager-uid' }, 'user-1')
-      ).rejects.toThrow(/yalnızca memur/);
+      ).rejects.toThrow(/yalnızca Memur/);
 
       expect(firebase.addDoc).not.toHaveBeenCalled();
     }, 10_000);

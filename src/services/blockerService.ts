@@ -54,10 +54,14 @@ export const blockerService = {
   },
 
   async editBlocker(blockerId: string, reason: string) {
-    await updateDoc(doc(db, 'blockers', blockerId), { reason });
+    await runWithRetry(async () => {
+      await updateDoc(doc(db, 'blockers', blockerId), { reason });
+    });
   },
 
   async deleteBlocker(blockerId: string) {
-    await deleteDoc(doc(db, 'blockers', blockerId));
+    await runWithRetry(async () => {
+      await deleteDoc(doc(db, 'blockers', blockerId));
+    });
   }
 };

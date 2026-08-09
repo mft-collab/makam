@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Task, User } from '../types';
-import { PRIORITY_LABELS } from '../constants';
+import { PRIORITY_LABELS, ROLE_LABELS } from '../constants';
 import { cn } from '../lib/utils';
 import { FileText, Target, Users, Calendar, AlertCircle } from 'lucide-react';
 
@@ -186,7 +186,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
             >
               <option value="">İrtibatlı Seçiniz (İsteğe Bağlı)</option>
               {coordinatorUsers.map(m => (
-                <option key={m.uid} value={m.uid}>{m.fullName} — {m.role === 'Manager' ? 'Yönetici' : 'Personel'}</option>
+                <option key={m.uid} value={m.uid}>{m.fullName} — {ROLE_LABELS[m.role]}</option>
               ))}
             </select>
              {errors.coordinatorId ? (

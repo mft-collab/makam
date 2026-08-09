@@ -1,11 +1,12 @@
 import { initializeApp, FirebaseError } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithCustomToken, signOut, onAuthStateChanged, connectAuthEmulator } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, where, or, orderBy, limit, startAfter, addDoc, serverTimestamp, getDocFromServer, runTransaction, writeBatch, getCountFromServer, increment, connectFirestoreEmulator } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, where, or, orderBy, limit, startAfter, addDoc, getDocFromServer, runTransaction, writeBatch, increment, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getMessaging, isSupported } from 'firebase/messaging';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import firebaseConfigJson from '../firebase-applet-config.json';
 import { logger } from './lib/logger';
+import { useUIStore } from './store/uiStore';
 
 // Detect if environment variables are "suspicious" (e.g., databaseId is a URL)
 const envDatabaseId = import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID;
@@ -83,6 +84,16 @@ async function testConnection() {
       logger.error("Current Database ID:", databaseId);
       logger.error("Current Project ID:", firebaseConfig.projectId);
       logger.error("Please verify that your firestoreDatabaseId matches the one in Firebase Console.");
+      // Bu hata daha önce yalnızca konsola yazılıyordu — yanlış databaseId/projectId
+      // durumunda kullanıcı sebepsiz boş bir ekranla baş başa kalıyordu (Firestore
+      // hiçbir zaman veri döndürmüyor ama görünürde hiçbir hata da yok). Artık
+      // görünür bir toast ile de bildiriliyor ki en azından "bir şey bozuk"
+      // sinyali kullanıcıya/desteğe ulaşsın.
+      useUIStore.getState().addToast({
+        title: '⚠️ Bağlantı Yapılandırma Hatası',
+        body: 'Sunucuya bağlanılamıyor. Uygulama yapılandırması hatalı olabilir — lütfen sistem yöneticinize bildirin.',
+        type: 'danger'
+      });
     } else {
       // Other errors are fine, might just be a missing document
       logger.debug('Firestore connection test finished with:', error instanceof Error ? error.message : String(error));
@@ -91,4 +102,4 @@ async function testConnection() {
 }
 setTimeout(testConnection, 2000); // Wait a bit for initialization
 
-export { signInWithPopup, signInWithCustomToken, signOut, onAuthStateChanged, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, where, or, orderBy, limit, startAfter, addDoc, serverTimestamp, ref, uploadBytes, getDownloadURL, runTransaction, writeBatch, getCountFromServer, increment, FirebaseError };
+export { signInWithPopup, signInWithCustomToken, signOut, onAuthStateChanged, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, where, or, orderBy, limit, startAfter, addDoc, ref, uploadBytes, getDownloadURL, runTransaction, writeBatch, increment, FirebaseError };

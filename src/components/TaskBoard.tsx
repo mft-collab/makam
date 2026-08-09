@@ -1,7 +1,7 @@
 import React, { useCallback, useState, useMemo, type ReactElement } from 'react';
 import { Plus, Search, Layers, Clock, ArrowRight, CheckCircle2, AlertTriangle, AlertCircle, ShieldCheck, Zap, Info, Filter, X } from 'lucide-react';
 import { List, type RowComponentProps } from 'react-window';
-import { Task, User, TaskStatus } from '../types';
+import { Task, User } from '../types';
 import { cn } from '../lib/utils';
 import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_BADGE_VARIANT } from '../constants';
 import { format } from 'date-fns';
@@ -27,39 +27,22 @@ interface TaskRowData {
   tasks: Task[];
   usersById: Map<string, User>;
   onViewTask: (task: Task) => void;
-  onUpdateTaskStatus?: (taskId: string, newStatus: TaskStatus) => void;
 }
 
-function MobileTaskRow({ index, style, ariaAttributes, tasks, usersById, onViewTask, onUpdateTaskStatus }: RowComponentProps<TaskRowData>): ReactElement | null {
+function MobileTaskRow({ index, style, ariaAttributes, tasks, usersById, onViewTask }: RowComponentProps<TaskRowData>): ReactElement | null {
   const task = tasks[index];
   if (!task) return null;
   const assignee = usersById.get(task.assigneeId);
   const isCrisis = isTaskInCrisis(task, Date.now());
   return (
     <div style={style} {...ariaAttributes}>
-      {/* #9 — Swipe gesture: sola = Tamamlandı, sağa = Engellendi */}
-      <motion.div
-        drag="x"
-        dragConstraints={{ left: -80, right: 80 }}
-        dragElastic={0.3}
-        onDragEnd={(_, info) => {
-          if (info.offset.x < -60 && onUpdateTaskStatus && task.status !== 'COMPLETED') {
-            onUpdateTaskStatus(task.id, 'COMPLETED');
-          } else if (info.offset.x > 60 && onUpdateTaskStatus && task.status !== 'BLOCKED') {
-            onUpdateTaskStatus(task.id, 'BLOCKED');
-          }
-        }}
+      <div
         onClick={() => onViewTask(task)}
         className={cn(
           'flex items-start gap-3 p-3.5 h-full box-border cursor-pointer hover:bg-makam-glass transition-all group relative overflow-hidden border-b border-makam-border/30',
           isCrisis && 'bg-status-danger/[0.04]'
         )}
       >
-        {/* Swipe hint bg */}
-        <div className="absolute inset-0 -z-10 flex">
-          <div className="flex-1 bg-status-success/10 opacity-0 group-active:opacity-100 transition-opacity" />
-          <div className="flex-1 bg-status-danger/10 opacity-0 group-active:opacity-100 transition-opacity" />
-        </div>
         {/* Status dot */}
         <div className={cn(
           'w-2 h-2 rounded-full mt-1.5 flex-shrink-0',
@@ -84,7 +67,7 @@ function MobileTaskRow({ index, style, ariaAttributes, tasks, usersById, onViewT
           </div>
         </div>
         <ArrowRight className="w-3.5 h-3.5 text-text-tertiary group-hover:text-executive-blue mt-1 flex-shrink-0" />
-      </motion.div>
+      </div>
     </div>
   );
 }
@@ -195,14 +178,13 @@ interface TaskBoardProps {
   currentUser: User | null;
   onAddTask: () => void;
   onViewTask: (task: Task) => void;
-  onUpdateTaskStatus?: (taskId: string, newStatus: TaskStatus) => void;
   /** Firestore'dan ilk veri yüklenene kadar true */
   isLoading?: boolean;
 }
 
 export const TaskBoard = ({
   tasks, users, currentUser,
-  onAddTask, onViewTask, onUpdateTaskStatus,
+  onAddTask, onViewTask,
   isLoading = false,
 }: TaskBoardProps) => {
   const [search, setSearch] = useState('');
@@ -258,8 +240,8 @@ export const TaskBoard = ({
 
   const rowKey = useCallback((index: number, data: TaskRowData) => data.tasks[index]?.id ?? index, []);
   const mobileRowProps = useMemo<TaskRowData>(
-    () => ({ tasks: filteredTasks, usersById, onViewTask, onUpdateTaskStatus }),
-    [filteredTasks, usersById, onViewTask, onUpdateTaskStatus]
+    () => ({ tasks: filteredTasks, usersById, onViewTask }),
+    [filteredTasks, usersById, onViewTask]
   );
   const desktopRowProps = useMemo<TaskRowData>(
     () => ({ tasks: filteredTasks, usersById, onViewTask }),

@@ -14,7 +14,7 @@ interface GuideModalProps {
 const FLOW_STEPS: { label: string; note?: string }[] = [
   { label: 'Talimat Verildi' },
   { label: 'İcra Aşamasında' },
-  { label: 'Onay Sürecinde', note: 'yalnız Personel/Müdür tamamlaması sonrası' },
+  { label: 'Onay Sürecinde', note: 'yalnız Memur/Müdür tamamlaması sonrası' },
   { label: 'İcra Edildi' },
 ];
 
@@ -55,7 +55,7 @@ export const GuideModal = ({ isOpen, onClose }: GuideModalProps) => {
             </div>
             <p className="text-[11px] text-text-muted font-light leading-relaxed mt-1">
               Kadro, kendisine ayrılmış her talimatı önce <strong className="font-medium text-text-heading">SÜRECİ BAŞLAT</strong> ile
-              icraya alır. Yönetici rolü dışındaki personel tamamladığında talimat doğrudan kapanmaz,
+              icraya alır. Müftü rolü dışındaki kadro tamamladığında talimat doğrudan kapanmaz,
               önce Makam onayına sunulur. Bir engel çıkarsa talimat <strong className="font-medium text-text-heading">Engellendi</strong> durumuna
               alınır ve engel giderilene kadar mühlet sayacı durur. Bir Müdür, talimatı başka bir Müdür&rsquo;e
               (izin/mazeret gibi durumlarda) devredebilir; bu sırada talimat <strong className="font-medium text-text-heading">Yetki Devri Bekleniyor</strong> durumuna

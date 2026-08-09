@@ -1,6 +1,5 @@
-import { collection, addDoc, query, where, getDocs, updateDoc, setDoc, doc, limit, orderBy, writeBatch } from 'firebase/firestore';
 import { getToken } from 'firebase/messaging';
-import { db, messaging, auth } from '../firebase';
+import { collection, addDoc, query, where, getDocs, updateDoc, setDoc, doc, limit, orderBy, writeBatch, db, messaging, auth } from '../firebase';
 import type { Notification as AppNotification, User } from '../types';
 
 enum OperationType {

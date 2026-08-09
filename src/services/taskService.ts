@@ -39,6 +39,14 @@ async function transitionTaskInTransaction(
     evidenceType?: Task['evidenceType'];
     assigneeId?: string;
     expectedVersion?: number;
+    /** Çevrimdışı kuyruktan senkronize edilen geçişler için: geçişin sunucuya
+     *  YAZILDIĞI an değil, kullanıcının çevrimdışıyken bu aksiyonu GERÇEKTEN
+     *  yaptığı an (offlineQueue'nun `mutation.timestamp`'i). Verilmezse
+     *  (çevrimiçi çağrılarda olduğu gibi) `Date.now()`'a düşer. Bu olmadan,
+     *  ör. bir görev 14:00'de çevrimdışı BLOCKED'a alınıp 17:00'de senkronize
+     *  edildiğinde `pausedAt` 17:00 olarak işaretlenir ve gerçek 3 saatlik
+     *  duraklama SLA hesabına hiç yansımaz (deadline haksız yere daralır). */
+    timestampOverride?: number;
   }
 ): Promise<Task> {
   const taskRef = doc(db, 'tasks', taskId);
@@ -49,7 +57,7 @@ async function transitionTaskInTransaction(
   }
 
   const task = snapshot.data() as Task;
-  const now = Date.now();
+  const now = options?.timestampOverride ?? Date.now();
 
   // Optimistic Locking Check
   const currentVersion = task.lockVersion || 0;
@@ -162,7 +170,7 @@ export const taskService = {
       if (taskData.parentId) {
         const assigneeSnap = await getDoc(doc(db, 'users', taskData.assigneeId!));
         if (assigneeSnap.exists() && (assigneeSnap.data() as User).role !== 'Staff') {
-          throw new Error('Alt talimatlar yalnızca memur (Personel) rolündeki personele atanabilir.');
+          throw new Error('Alt talimatlar yalnızca Memur rolündeki personele atanabilir.');
         }
       }
 

@@ -12,7 +12,7 @@ import { ROLE_LABELS, STATUS_LABELS } from '../constants';
 import { motion } from 'motion/react';
 import { db, collection, getDocs, query, orderBy, limit } from '../firebase';
 import { useUIStore } from '../store/uiStore';
-import { AUDIT_FIELD_LABELS } from '../lib/auditLabels';
+import { AUDIT_FIELD_LABELS, formatAuditValue } from '../lib/auditLabels';
 import { roleConfig, OrgNodeCard } from './teamList/subcomponents';
 import { Skeleton } from './ui/Skeleton';
 
@@ -656,20 +656,15 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                             {hasChanges ? (
                               <div className="flex flex-col gap-1 pl-1 border-l border-executive-blue/10">
                                 {Object.entries(log.changes!).map(([field, change]) => {
-                                  const oldVal = String(change.old ?? '—');
-                                  const newVal = String(change.new ?? '—');
                                   const label = AUDIT_FIELD_LABELS[field] ?? field;
-                                  const fmtVal = (v: string) =>
-                                    field === 'status' ? (STATUS_LABELS[v as TaskStatus] ?? v) :
-                                    field === 'deleted' ? (v === 'true' ? 'Evet' : 'Hayır') : v;
                                   return (
                                     <div key={field} className="flex items-center gap-1.5 flex-wrap">
                                       <span className="text-[7.5px] font-medium text-text-tertiary uppercase tracking-[0.2em] bg-surface-glass px-1 py-0.5 rounded border border-surface-border">
                                         {label}
                                       </span>
-                                      <span className="text-[8.5px] text-text-tertiary line-through">{fmtVal(oldVal)}</span>
+                                      <span className="text-[8.5px] text-text-tertiary line-through">{formatAuditValue(field, change.old)}</span>
                                       <ArrowRight className="w-2 h-2 text-text-tertiary flex-shrink-0" />
-                                      <span className="text-[8.5px] font-medium text-executive-blue">{fmtVal(newVal)}</span>
+                                      <span className="text-[8.5px] font-medium text-executive-blue">{formatAuditValue(field, change.new)}</span>
                                     </div>
                                   );
                                 })}
@@ -719,9 +714,9 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
           <div className="flex flex-col gap-1.5">
             <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.35em] px-0.5">Yetki Seviyesi</label>
             <Select value={newRole} onChange={(e) => setNewRole(e.target.value as UserRole)} options={[
-              { value: 'Staff', label: 'Personel' },
-              { value: 'Manager', label: 'Müdür' },
-              { value: 'Admin', label: 'Müftü' }
+              { value: 'Staff', label: ROLE_LABELS.Staff },
+              { value: 'Manager', label: ROLE_LABELS.Manager },
+              { value: 'Admin', label: ROLE_LABELS.Admin }
             ]} />
           </div>
           <Input label="Departman / Birim" placeholder="Örn: Operasyon" value={newDept} onChange={(e) => setNewDept(e.target.value)} />
@@ -742,9 +737,9 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
               <div className="flex flex-col gap-1.5">
                 <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.35em] px-0.5">Yetki Seviyesi</label>
                 <Select value={editRole} onChange={(e) => setEditRole(e.target.value as UserRole)} options={[
-                  { value: 'Staff', label: 'Personel' },
-                  { value: 'Manager', label: 'Müdür' },
-                  { value: 'Admin', label: 'Müftü' }
+                  { value: 'Staff', label: ROLE_LABELS.Staff },
+                  { value: 'Manager', label: ROLE_LABELS.Manager },
+                  { value: 'Admin', label: ROLE_LABELS.Admin }
                 ]} />
               </div>
               <Input label="Departman / Birim" value={editDept} onChange={(e) => setEditDept(e.target.value)} />

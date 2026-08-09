@@ -135,7 +135,7 @@ export function AppHeader({
               <select
                 value={globalFocusDept}
                 onChange={(e) => onGlobalFocusDeptChange(e.target.value)}
-                className="text-[9px] uppercase tracking-widest text-text-heading bg-transparent border-none outline-none font-bold cursor-pointer pr-4 focus:ring-0"
+                className="text-[9px] uppercase tracking-widest text-text-heading bg-transparent border-none font-bold cursor-pointer pr-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue rounded"
                 aria-label="Global Odak Birimi Filtresi"
               >
                 <option value="ALL" className="bg-surface-base text-text-heading">Tüm Odaklar</option>

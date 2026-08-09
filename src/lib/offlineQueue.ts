@@ -181,7 +181,7 @@ export const offlineQueue = {
                 const blockerRef = doc(db, 'blockers', mutation.data.id);
                 try {
                   await runTransaction(db, async (transaction) => {
-                    await transitionTaskInTransaction(transaction, taskId, newStatus, userId, { expectedVersion });
+                    await transitionTaskInTransaction(transaction, taskId, newStatus, userId, { expectedVersion, timestampOverride: mutation.timestamp });
                     transaction.set(blockerRef, { ...mutation.data, id: blockerRef.id });
                   });
                 } catch (transitionErr) {
@@ -231,7 +231,7 @@ export const offlineQueue = {
                   const blockerRef = doc(db, 'blockers', mutation.docId);
                   try {
                     await runTransaction(db, async (transaction) => {
-                      await transitionTaskInTransaction(transaction, taskId, newStatus, userId, { expectedVersion });
+                      await transitionTaskInTransaction(transaction, taskId, newStatus, userId, { expectedVersion, timestampOverride: mutation.timestamp });
                       transaction.update(blockerRef, { ...mutation.data });
                     });
                   } catch (transitionErr) {
@@ -246,7 +246,7 @@ export const offlineQueue = {
                   try {
                     await runTransaction(db, async (transaction) => {
                       await transitionTaskInTransaction(transaction, mutation.docId!, newStatus, userId, {
-                        evidence, evidenceType, assigneeId, expectedVersion
+                        evidence, evidenceType, assigneeId, expectedVersion, timestampOverride: mutation.timestamp
                       });
                     });
                   } catch (transitionErr) {

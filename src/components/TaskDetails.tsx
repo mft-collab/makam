@@ -18,7 +18,7 @@ import { EmptyState } from './ui/EmptyState';
 import { Tooltip } from './ui/Tooltip';
 import { db, collection, query, where, getDocs } from '../firebase';
 import { getTimeLeft, getSLAColor, computeChecklistStats } from './taskDetails/helpers';
-import { AUDIT_FIELD_LABELS } from '../lib/auditLabels';
+import { AUDIT_FIELD_LABELS, formatAuditValue } from '../lib/auditLabels';
 
 export type { PrimaryAction } from './taskDetails/helpers';
 export { getPrimaryAction } from './taskDetails/helpers';
@@ -769,21 +769,15 @@ export const TaskDetails = ({
                         {hasChanges ? (
                           <div className="flex flex-col gap-1">
                             {Object.entries(log.changes!).map(([field, change]) => {
-                              const oldVal = String(change.old ?? '-');
-                              const newVal = String(change.new ?? '-');
                               const label = AUDIT_FIELD_LABELS[field] ?? field;
-                              // Durum alanı için STATUS_LABELS, silindi alanı için Evet/Hayır kullan
-                              const fmtVal = (v: string) =>
-                                field === 'status' ? (STATUS_LABELS[v as TaskStatus] ?? v) :
-                                field === 'deleted' ? (v === 'true' ? 'Evet' : 'Hayır') : v;
                               return (
                                 <div key={field} className="flex items-center gap-1.5 flex-wrap">
                                   <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-[0.2em] bg-surface-glass px-1.5 py-0.5 rounded border border-surface-border">
                                     {label}
                                   </span>
-                                  <span className="text-[9px] text-text-tertiary line-through">{fmtVal(oldVal)}</span>
+                                  <span className="text-[9px] text-text-tertiary line-through">{formatAuditValue(field, change.old)}</span>
                                   <ArrowRight className="w-2.5 h-2.5 text-text-tertiary flex-shrink-0" />
-                                  <span className="text-[9px] font-medium text-executive-blue">{fmtVal(newVal)}</span>
+                                  <span className="text-[9px] font-medium text-executive-blue">{formatAuditValue(field, change.new)}</span>
                                 </div>
                               );
                             })}

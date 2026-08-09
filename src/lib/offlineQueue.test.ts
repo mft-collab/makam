@@ -509,5 +509,67 @@ describe('OfflineQueue', () => {
       expect(transactionUpdate).not.toHaveBeenCalled();
       expect(conflictHandler).toHaveBeenCalledOnce();
     });
+
+    // Regresyon kilidi: transitionTaskInTransaction artık senkron ANINDAKİ
+    // Date.now() yerine mutation.timestamp'i (kullanıcının aksiyonu ÇEVRİMDIŞIYKEN
+    // gerçekten yaptığı an) kullanıyor — aksi halde cihaz saatlerce çevrimdışı
+    // kalıp sonra senkronize olduğunda, duraklama süresi hesabı senkron anına
+    // kayar ve SLA deadline'ı haksız yere daralır/genişler.
+    it('BLOCKED\'a girişte pausedAt, senkron anına değil mutasyonun çevrimdışı kuyruğa alındığı ana eşitlenir', async () => {
+      const transactionUpdate = vi.fn();
+      const queuedAt = Date.now() - 3 * 60 * 60 * 1000; // 3 saat önce, çevrimdışıyken kuyruğa alındı
+
+      vi.mocked(firebase.runTransaction).mockImplementationOnce(async (_db: any, fn: any) => {
+        const transaction = {
+          get: vi.fn().mockResolvedValue({
+            exists: () => true,
+            data: () => ({ status: 'IN_PROGRESS', lockVersion: 2, totalPausedTime: 0 }),
+          }),
+          update: transactionUpdate,
+          set: vi.fn(),
+        };
+        return fn(transaction);
+      });
+
+      offlineQueue.saveQueue([{
+        id: 'm1', collectionName: 'tasks', action: 'update', docId: 'task-1', timestamp: queuedAt,
+        statusTransition: { newStatus: 'BLOCKED', userId: 'user-1', expectedVersion: 2 },
+      }]);
+
+      await offlineQueue.sync();
+
+      const [, updateData] = transactionUpdate.mock.calls[0]!;
+      expect(updateData.pausedAt).toBe(queuedAt);
+    });
+
+    it('BLOCKED\'dan çıkışta duraklama süresi, senkron anına kadar geçen zaman değil, kuyruğa alındığı ana kadarki gerçek süre olarak hesaplanır', async () => {
+      const transactionUpdate = vi.fn();
+      const pausedSince = Date.now() - 5 * 60 * 60 * 1000; // görev 5 saat önce (çevrimiçi) BLOCKED'a alınmış
+      const queuedAt = pausedSince + 60 * 60 * 1000; // kullanıcı, 1 saat sonra (çevrimdışı) IN_PROGRESS'e aldı
+
+      vi.mocked(firebase.runTransaction).mockImplementationOnce(async (_db: any, fn: any) => {
+        const transaction = {
+          get: vi.fn().mockResolvedValue({
+            exists: () => true,
+            data: () => ({ status: 'BLOCKED', lockVersion: 3, totalPausedTime: 0, pausedAt: pausedSince, deadline: Date.now() + 100000 }),
+          }),
+          update: transactionUpdate,
+          set: vi.fn(),
+        };
+        return fn(transaction);
+      });
+
+      offlineQueue.saveQueue([{
+        id: 'm1', collectionName: 'tasks', action: 'update', docId: 'task-1', timestamp: queuedAt,
+        statusTransition: { newStatus: 'IN_PROGRESS', userId: 'user-1', expectedVersion: 3 },
+      }]);
+
+      await offlineQueue.sync();
+
+      const [, updateData] = transactionUpdate.mock.calls[0]!;
+      // Gerçek duraklama 1 saat (pausedSince→queuedAt) olmalı; senkron anına kadar
+      // geçen ~5 saat DEĞİL (eski hatalı davranışta bu değer ~5 saate yakın çıkardı).
+      expect(updateData.totalPausedTime).toBe(queuedAt - pausedSince);
+    });
   });
 });

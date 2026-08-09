@@ -3,6 +3,7 @@ import { Task, User } from '../types';
 import { AlertTriangle, X, ShieldAlert } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useModalBehavior } from './ui/Modal';
+import { Button } from './ui/Button';
 
 interface WarningModalProps {
   task: Task;
@@ -93,12 +94,14 @@ export const WarningModal = ({ task, assignee, onClose }: WarningModalProps) => 
              </div>
           </div>
 
-          <button
+          <Button
+            variant="danger"
+            size="lg"
             onClick={onClose}
-            className="mt-4 md:mt-6 px-10 md:px-12 h-12 md:h-14 tracking-[0.3em] bg-status-danger/10 text-status-danger border border-status-danger/20 rounded-full text-[10px] md:text-[11px] font-medium uppercase hover:bg-status-danger/90 hover:text-white transition-all duration-300 w-full md:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger focus-visible:ring-offset-2"
+            className="mt-4 md:mt-6 tracking-[0.3em] text-[10px] md:text-[11px] w-full md:w-auto"
           >
             DİZGEYE DÖN
-          </button>
+          </Button>
         </div>
       </motion.div>
     </div>

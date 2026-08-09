@@ -21,8 +21,9 @@ const db = admin.firestore();
 
 const IDLE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 saat
 
-// Spark (ücretsiz) plan zaman aşımı/kota riskine karşı üst sınır — kalan görevler
-// bir sonraki günlük koşuda (cron zaten her gün tekrar çalışıyor) işlenir.
+// Spark (ücretsiz) plan zaman aşımı/kota riskine karşı üst sınır — koleksiyon
+// bu sınırdan büyükse kalan görevler `system/auditCursor` imleciyle sonraki
+// günlük koşularda sırayla işlenir (bkz. aşağıdaki cursor mantığı).
 const MAX_TASKS_PER_RUN = 500;
 
 export const scheduledDailyAudit = functions
@@ -35,12 +36,48 @@ export const scheduledDailyAudit = functions
     console.log(`[DailyAudit] Başlatıldı: ${new Date(now).toISOString()}`);
 
     try {
-      // 1. Aktif görevleri çek
-      const tasksSnap = await db
-        .collection('tasks')
-        .where('status', 'not-in', ['COMPLETED', 'CANCELLED'])
-        .limit(MAX_TASKS_PER_RUN)
-        .get();
+      // 1. Aktif görevleri çek — sayfalama imleci ile. `not-in` filtresi + limit
+      // tek başına kullanılırsa (önceki hâli) koleksiyon 500'den büyük olduğunda
+      // her gün aynı pencere taranır ve ötesindeki görevler hiç denetlenmez.
+      // İmleç olarak son işlenen dokümanın DocumentSnapshot'ı saklanır —
+      // startAfter(snapshot), sorgunun (not-in filtresiyle) örtük doküman-ID
+      // sıralamasını otomatik kullanır; elle orderBy eşleştirmesi gerekmez ve
+      // Firestore'un "inequality filtresiyle orderBy aynı alanda olmalı"
+      // kısıtına çarpılmaz.
+      const cursorRef = db.collection('system').doc('auditCursor');
+      const cursorSnap = await cursorRef.get();
+      const lastDocId = cursorSnap.exists ? (cursorSnap.data()?.lastDocId as string | undefined) : undefined;
+
+      const baseQuery = () =>
+        db
+          .collection('tasks')
+          .where('status', 'not-in', ['COMPLETED', 'CANCELLED'])
+          .limit(MAX_TASKS_PER_RUN);
+
+      let tasksSnap: admin.firestore.QuerySnapshot;
+      if (lastDocId) {
+        const lastDocSnap = await db.collection('tasks').doc(lastDocId).get();
+        tasksSnap = lastDocSnap.exists
+          ? await baseQuery().startAfter(lastDocSnap).get()
+          : await baseQuery().get(); // imleç dokümanı silinmiş — baştan başla
+      } else {
+        tasksSnap = await baseQuery().get();
+      }
+
+      // Sayfa boşsa imleç koleksiyonun sonuna ulaşmış demektir — baştan başla
+      if (tasksSnap.empty && lastDocId) {
+        tasksSnap = await baseQuery().get();
+      }
+
+      // Bir sonraki koşu için imleci güncelle: tam sayfa geldiyse muhtemelen
+      // daha fazla kayıt var (imleç ilerletilir); kısmi sayfa koleksiyonun
+      // sonuna ulaşıldığı anlamına gelir (imleç silinir, döngü baştan başlar).
+      const lastDoc = tasksSnap.docs[tasksSnap.docs.length - 1];
+      if (lastDoc && tasksSnap.docs.length >= MAX_TASKS_PER_RUN) {
+        await cursorRef.set({ lastDocId: lastDoc.id, updatedAt: now });
+      } else {
+        await cursorRef.delete();
+      }
 
       if (tasksSnap.empty) {
         console.log('[DailyAudit] Aktif görev yok, çıkılıyor.');
@@ -131,7 +168,6 @@ export const scheduledDailyAudit = functions
           type: 'Crisis',
           timestamp: now,
           isRead: false,
-          taskIds: idleTasks.map((d: admin.firestore.QueryDocumentSnapshot) => d.id),
         });
       }
       await notifBatch.commit();

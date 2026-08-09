@@ -105,4 +105,34 @@ describe('blockerService', () => {
       expect(firebase.runTransaction).not.toHaveBeenCalled();
     });
   });
+
+  describe('editBlocker', () => {
+    it('doğru blockerId ile updateDoc çağırır', async () => {
+      await blockerService.editBlocker('blocker-1', 'Yeni sebep');
+
+      expect(firebase.updateDoc).toHaveBeenCalledWith({ id: 'generated-ref-1' }, { reason: 'Yeni sebep' });
+    });
+
+    it('updateDoc her denemede reddederse runWithRetry tükendikten sonra hata fırlatılır', async () => {
+      vi.mocked(firebase.updateDoc).mockRejectedValue(new Error('permission-denied'));
+
+      await expect(blockerService.editBlocker('blocker-1', 'X')).rejects.toThrow('permission-denied');
+      expect(firebase.updateDoc).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe('deleteBlocker', () => {
+    it('doğru blockerId ile deleteDoc çağırır', async () => {
+      await blockerService.deleteBlocker('blocker-1');
+
+      expect(firebase.deleteDoc).toHaveBeenCalledWith({ id: 'generated-ref-1' });
+    });
+
+    it('deleteDoc her denemede reddederse runWithRetry tükendikten sonra hata fırlatılır', async () => {
+      vi.mocked(firebase.deleteDoc).mockRejectedValue(new Error('permission-denied'));
+
+      await expect(blockerService.deleteBlocker('blocker-1')).rejects.toThrow('permission-denied');
+      expect(firebase.deleteDoc).toHaveBeenCalledTimes(3);
+    });
+  });
 });

@@ -536,7 +536,6 @@ export default function App() {
                         tasks={filteredTasksByFocus} users={filteredUsersByFocus} currentUser={user}
                         onAddTask={() => { setParentTaskId(undefined); setIsCreateModalOpen(true); }}
                         onViewTask={(t) => setSelectedTaskId(t.id)}
-                        onUpdateTaskStatus={updateTaskStatus}
                         isLoading={isDataLoading}
                       />
                     )}

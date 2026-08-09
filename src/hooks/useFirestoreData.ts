@@ -156,7 +156,7 @@ export function useFirestoreData(user: User | null, onError: (err: any, type: st
           setStats(docSnap.data() as any);
         }
       },
-      (e) => console.error("Stats read error", e)
+      (e) => onError(e, 'list', 'system/stats')
     );
 
     return () => {
