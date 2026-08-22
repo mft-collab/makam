@@ -25,7 +25,17 @@ const Reports = lazy(() => import('./components/Reports').then(m => ({ default: 
 const Settings = lazy(() => import('./components/Settings').then(m => ({ default: m.Settings })));
 import { Modal } from './components/ui/Modal';
 import { TaskFormModal } from './components/TaskFormModal';
-import { TaskDetails, TaskDetailsFooter, getPrimaryAction } from './components/TaskDetails';
+// TaskDetails, uygulamanın en büyük bileşenidir (~1000 satır) ve yalnızca bir
+// görev detayına tıklandığında Modal içinde render edilir — ilk sayfa
+// yüklemesinde hiç gerekli değil. Diğer tüm route/panel ağırlığındaki
+// bileşenler (Dashboard/TaskBoard/... yukarıda) lazy() ile yükleniyor,
+// bu ikisi de aynı sınır kuralına tabi (bkz. kod denetimi). getPrimaryAction
+// ise Modal'ın footer prop'unu SENKRON hesaplamak için kullanılan saf bir
+// fonksiyon olduğundan (bir bileşen değil) lazy() arkasına alınamaz —
+// zaten küçük olan taskDetails/helpers.ts'ten statik import edilir.
+const TaskDetails = lazy(() => import('./components/TaskDetails').then(m => ({ default: m.TaskDetails })));
+const TaskDetailsFooter = lazy(() => import('./components/taskDetails/Footer').then(m => ({ default: m.TaskDetailsFooter })));
+import { getPrimaryAction } from './components/taskDetails/helpers';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { NotificationPrompt } from './components/NotificationPrompt';
 import { ExecutiveToast } from './components/ExecutiveToast';
@@ -43,9 +53,10 @@ import { WarningModal } from './components/WarningModal';
 import { conflictDetectionService } from './services/conflictDetectionService';
 import { logError } from './services/errorLoggingService';
 import { useAppHandlers } from './services/useAppHandlers';
-import { useFirestoreData } from './hooks/useFirestoreData';
+import { useFirestoreData, fetchTaskById } from './hooks/useFirestoreData';
 import { useNotifications } from './hooks/useNotifications';
 import { useOfflineQueue } from './hooks/useOfflineQueue';
+import { applyOfflineMutations } from './lib/offlineQueue';
 import { useSLASync } from './hooks/useSLASync';
 import { useIdleTimer } from './hooks/useIdleTimer';
 import { useSelfHealing } from './hooks/useSelfHealing';
@@ -211,21 +222,12 @@ export default function App() {
 
   const { tasks: firestoreTasks, users, blockers: firestoreBlockers, isLoading: isDataLoading } = useFirestoreData(user, handleFirestoreError);
 
-  // Derived tasks state — offline queue üzerine Firestore verisi
+  // Derived tasks/blockers state — offline kuyruktaki bekleyen mutasyonlar
+  // Firestore verisinin üzerine bindirilir (bkz. lib/offlineQueue.ts
+  // applyOfflineMutations — tasks ve blockers için eskiden burada neredeyse
+  // birebir kopyalanmış iki ayrı IIFE vardı, bkz. kod denetimi).
   const tasks = (() => {
-    let result = [...firestoreTasks];
-    offlineMutations.forEach(mutation => {
-      if (mutation.collectionName === 'tasks') {
-        if (mutation.action === 'create') {
-          if (!result.some(t => t.id === mutation.data?.id)) result.push(mutation.data);
-        } else if (mutation.action === 'update' || mutation.action === 'set') {
-          const idx = result.findIndex(t => t.id === mutation.docId);
-          if (idx !== -1) result[idx] = { ...result[idx], ...mutation.data };
-        } else if (mutation.action === 'delete') {
-          result = result.filter(t => t.id !== mutation.docId);
-        }
-      }
-    });
+    const result = applyOfflineMutations(firestoreTasks, offlineMutations, 'tasks');
     result.sort((a, b) => b.updatedAt - a.updatedAt);
     return result;
   })();
@@ -233,23 +235,8 @@ export default function App() {
   tasksRef.current = tasks;
   usersRef.current = users;
 
-  // Derived blockers state
-  const blockers = (() => {
-    let result = [...firestoreBlockers];
-    offlineMutations.forEach(mutation => {
-      if (mutation.collectionName === 'blockers') {
-        if (mutation.action === 'create') {
-          if (!result.some(b => b.id === mutation.data?.id)) result.push(mutation.data);
-        } else if (mutation.action === 'update' || mutation.action === 'set') {
-          const idx = result.findIndex(b => b.id === mutation.docId);
-          if (idx !== -1) result[idx] = { ...result[idx], ...mutation.data };
-        } else if (mutation.action === 'delete') {
-          result = result.filter(b => b.id !== mutation.docId);
-        }
-      }
-    });
-    return result.filter(b => !b.isResolved);
-  })();
+  const blockers = applyOfflineMutations(firestoreBlockers, offlineMutations, 'blockers')
+    .filter(b => !b.isResolved);
 
   // ─── Global Focus Filter (Birim Odak Filtresi) ───────────────────────────
   const [globalFocusDept, setGlobalFocusDept] = useState<string>('ALL');
@@ -294,12 +281,14 @@ export default function App() {
     return blockers.filter(b => focusTaskIds.has(b.taskId));
   }, [blockers, globalFocusDept, filteredTasksByFocus]);
 
-  // On-demand task fetch (CQRS — lokal listede yoksa)
+  // On-demand task fetch (CQRS — lokal listede yoksa). fetchTaskById,
+  // useFirestoreData'daki diğer tüm task okumalarıyla AYNI zod doğrulamasından
+  // geçer — burada doğrudan getDoc çağırmak bu tek yolu şemasız bırakırdı.
   useEffect(() => {
     if (!selectedTaskId) { setFetchedTask(null); return; }
     if (tasks.find(t => t.id === selectedTaskId)) { setFetchedTask(null); return; }
-    getDoc(doc(db, 'tasks', selectedTaskId))
-      .then(snap => setFetchedTask(snap.exists() ? { id: snap.id, ...snap.data() } as Task : null))
+    fetchTaskById(selectedTaskId)
+      .then(setFetchedTask)
       .catch(() => setFetchedTask(null));
   }, [selectedTaskId, tasks]);
 
@@ -594,43 +583,51 @@ export default function App() {
               />
             </Modal>
 
-            {/* Görev Detay Modalı */}
-            <Modal
-              isOpen={!!selectedTaskId && !isEditModalOpen && !isCreateModalOpen}
-              onClose={() => setSelectedTaskId(null)}
-              title="Talimat Detayı & İcra"
-              size="xl"
-              layoutId={selectedTask ? `task-card-${selectedTask.id}` : undefined}
-              footer={selectedTask && getPrimaryAction(selectedTask, user) ? (
-                <TaskDetailsFooter
-                  task={selectedTask}
-                  currentUser={user}
-                  onStatusChange={(status, evidence, type) => updateTaskStatus(selectedTask.id, status, evidence, type)}
-                />
-              ) : undefined}
-            >
-              {Boolean(selectedTask) && (
-                <TaskDetails
-                  task={selectedTask!}
-                  tasks={tasks}
-                  users={users}
-                  currentUser={user!}
-                  blockers={blockers.filter(b => b.taskId === selectedTask!.id)}
-                  onAddBlocker={(reason) => selectedTask && addBlocker(selectedTask.id, reason)}
-                  onResolveBlocker={resolveBlocker}
-                  onAddSubTask={(parentId, title) => { setParentTaskId(parentId); setInitialTitle(title); setIsCreateModalOpen(true); }}
-                  onAddComment={(text) => selectedTask && addComment(selectedTask.id, text)}
-                  onViewTask={(t) => setSelectedTaskId(t.id)}
-                  onEdit={() => setIsEditModalOpen(true)}
-                  onDelete={() => selectedTask && deleteTask(selectedTask.id)}
-                  onClearCoordinator={() => selectedTask && updateTask(selectedTask.id, { coordinatorId: undefined })}
-                  onShowCertificate={setActiveCertificateTask}
-                  onShowWarning={setActiveWarningTask}
-                  onUpdateTask={(data) => selectedTask && updateTask(selectedTask.id, data)}
-                  onDelegateTask={(newAssigneeId) => selectedTask && delegateTask(selectedTask.id, newAssigneeId)}
-                />
-              )}
-            </Modal>
+            {/* Görev Detay Modalı — TaskDetails/TaskDetailsFooter lazy() olduğundan
+                bu Suspense sınırı, footer prop'u dahil ikisini de kapsar (Suspense
+                lexical iç içelikten değil, render ağacındaki soydan bağımsızdır). */}
+            <Suspense fallback={
+              <div className="flex items-center justify-center p-16 min-h-[300px]">
+                <div className="w-6 h-6 border-2 border-executive-gold/20 border-t-executive-gold rounded-full animate-spin" />
+              </div>
+            }>
+              <Modal
+                isOpen={!!selectedTaskId && !isEditModalOpen && !isCreateModalOpen}
+                onClose={() => setSelectedTaskId(null)}
+                title="Talimat Detayı & İcra"
+                size="xl"
+                layoutId={selectedTask ? `task-card-${selectedTask.id}` : undefined}
+                footer={selectedTask && getPrimaryAction(selectedTask, user) ? (
+                  <TaskDetailsFooter
+                    task={selectedTask}
+                    currentUser={user}
+                    onStatusChange={(status, evidence, type) => updateTaskStatus(selectedTask.id, status, evidence, type)}
+                  />
+                ) : undefined}
+              >
+                {Boolean(selectedTask) && (
+                  <TaskDetails
+                    task={selectedTask!}
+                    tasks={tasks}
+                    users={users}
+                    currentUser={user!}
+                    blockers={blockers.filter(b => b.taskId === selectedTask!.id)}
+                    onAddBlocker={(reason) => selectedTask && addBlocker(selectedTask.id, reason)}
+                    onResolveBlocker={resolveBlocker}
+                    onAddSubTask={(parentId, title) => { setParentTaskId(parentId); setInitialTitle(title); setIsCreateModalOpen(true); }}
+                    onAddComment={(text) => selectedTask && addComment(selectedTask.id, text)}
+                    onViewTask={(t) => setSelectedTaskId(t.id)}
+                    onEdit={() => setIsEditModalOpen(true)}
+                    onDelete={() => selectedTask && deleteTask(selectedTask.id)}
+                    onClearCoordinator={() => selectedTask && updateTask(selectedTask.id, { coordinatorId: undefined })}
+                    onShowCertificate={setActiveCertificateTask}
+                    onShowWarning={setActiveWarningTask}
+                    onUpdateTask={(data) => selectedTask && updateTask(selectedTask.id, data)}
+                    onDelegateTask={(newAssigneeId) => selectedTask && delegateTask(selectedTask.id, newAssigneeId)}
+                  />
+                )}
+              </Modal>
+            </Suspense>
 
             {/* Belgeler - Detay Modalının Dışında */}
             {activeCertificateTask && (

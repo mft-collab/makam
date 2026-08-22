@@ -7,6 +7,7 @@ import { cn } from '../lib/utils';
 import { User } from '../types';
 import { ROLE_LABELS } from '../constants';
 import { Logo } from './Logo';
+import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import { PremiumIcon } from './ui/PremiumIcon';
 import { Avatar } from './ui/Avatar';
 import { AboutModal } from './AboutModal';
@@ -27,6 +28,7 @@ interface MenuItem {
 
 export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProps) => {
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
+  const resolvedTheme = useResolvedTheme();
 
   const primaryItems: MenuItem[] = [
     { id: 'dashboard', label: 'Harekat Merkezi', icon: ShieldCheck, roles: ['Admin', 'Manager', 'Staff'] },
@@ -69,7 +71,10 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
       />
       <span className={cn(
         'font-normal text-[13px] tracking-wide transition-colors duration-300',
-        activeTab === item.id ? 'text-executive-gold font-medium' : 'text-text-muted group-hover:text-text-body'
+        // text-executive-gold (#C5A059) düz metin olarak açık zeminlerde
+        // ~2.2:1 kontrast veriyor (axe-core authenticated e2e testi bulgusu)
+        // — tema-duyarlı --gold-text token'ı kullanılıyor (bkz. index.css).
+        activeTab === item.id ? 'text-[color:var(--gold-text)] font-medium' : 'text-text-muted group-hover:text-text-body'
       )}>
         {item.label}
       </span>
@@ -97,7 +102,11 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
           className="relative z-10 w-full flex items-center justify-center outline-none transition-transform hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
           aria-label="Dizge Hakkında"
         >
-          <Logo variant="dark" size="md" className="drop-shadow-[0_4px_12px_rgba(197,160,89,0.12)]" />
+          {/* variant sabit 'dark' idi — light temada bg-surface-glass açık bir
+              zemine döndüğünde logo metni (beyaz) neredeyse görünmez oluyordu
+              (~1.14:1 kontrast, axe-core authenticated e2e testi bulgusu).
+              Login/AboutModal/App.tsx'teki gibi çözümlenmiş temayı izliyor. */}
+          <Logo variant={resolvedTheme} size="md" className="drop-shadow-[0_4px_12px_rgba(197,160,89,0.12)]" />
           <div className="absolute -right-2 -top-2 bg-executive-gold text-brand-obsidian text-[8px] font-bold px-1.5 py-0.5 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300">v2.2.0</div>
         </button>
       </div>
@@ -134,7 +143,7 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
             <span className="text-[14px] font-normal text-text-heading truncate tracking-tight leading-none font-display">{user?.fullName}</span>
             <div className="flex items-center gap-1.5 mt-1">
               <span className="w-1 h-1 rounded-full bg-status-success" />
-              <span className="text-[8px] text-executive-gold font-medium uppercase tracking-[0.22em]">{user ? ROLE_LABELS[user.role] : ''}</span>
+              <span className="text-[8px] text-[color:var(--gold-text)] font-medium uppercase tracking-[0.22em]">{user ? ROLE_LABELS[user.role] : ''}</span>
             </div>
           </div>
         </div>

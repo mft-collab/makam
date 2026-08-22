@@ -264,8 +264,8 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
                   <stop offset="100%" stopColor="var(--color-executive-blue)" stopOpacity="0.35" />
                 </linearGradient>
                 <linearGradient id="chartCompleted" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#82C29C" />
-                  <stop offset="100%" stopColor="#1B7A51" />
+                  <stop offset="0%" stopColor="var(--chart-completed)" stopOpacity="0.8" />
+                  <stop offset="100%" stopColor="var(--chart-completed)" stopOpacity="0.35" />
                 </linearGradient>
               </defs>
               <XAxis
@@ -274,7 +274,7 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
                 fontSize={9}
                 tickLine={false}
                 axisLine={false}
-                tick={{ dy: 8, fill: '#94A3B8', fontWeight: 400 }}
+                tick={{ dy: 8, fill: 'var(--text-light)', fontWeight: 400 }}
               />
               <YAxis hide />
               <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(22, 21, 19, 0.01)' }} />
@@ -288,7 +288,7 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
         <div className="flex flex-wrap items-center gap-3 mt-2 pt-2 border-t border-executive-blue/[0.04]">
           {[
             { color: 'var(--color-executive-blue)', label: 'Yeni Talimat' },
-            { color: '#1B7A51', label: 'İcra Edilen' },
+            { color: 'var(--chart-completed)', label: 'İcra Edilen' },
           ].map(({ color, label }) => (
             <div key={label} className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />

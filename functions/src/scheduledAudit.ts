@@ -117,11 +117,29 @@ export const scheduledDailyAudit = functions
 
       for (const taskDoc of idleTasks) {
         const task = taskDoc.data();
+
+        // pausedAt/totalPausedTime senkronizasyonu — src/services/taskService.ts
+        // (transitionTaskInTransaction) ile AYNI kural: bir görev BLOCKED/
+        // AWAITING_APPROVAL/PENDING_DELEGATION iken (hedef durum ne olursa olsun,
+        // burada CRISIS'e) geçerse, o ana kadar duraklamış geçen süre
+        // totalPausedTime'a eklenir ve pausedAt sıfırlanır. Bu yapılmazsa pausedAt
+        // eski (BLOCKED anındaki) değerinde kalıcı olarak takılı kalır ve SLA
+        // sayacı görev fiilen ilerlese bile sonsuza dek "duraklatıldı" görünür
+        // (bkz. src/lib/sla.ts getRemainingTime — yalnızca pausedAt'in dolu olup
+        // olmadığına bakar, status'e bakmaz).
+        const wasPausing = task.status === 'BLOCKED' || task.status === 'AWAITING_APPROVAL' || task.status === 'PENDING_DELEGATION';
+        const pauseUpdate: Record<string, unknown> = {};
+        if (wasPausing && task.pausedAt) {
+          pauseUpdate.totalPausedTime = (task.totalPausedTime || 0) + (now - task.pausedAt);
+          pauseUpdate.pausedAt = null;
+        }
+
         batch.update(taskDoc.ref, {
           status: 'CRISIS',
           updatedAt: now,
           changedBy: 'system:scheduledDailyAudit',
           lockVersion: admin.firestore.FieldValue.increment(1),
+          ...pauseUpdate,
         });
         writeCount++;
 

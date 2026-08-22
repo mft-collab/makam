@@ -1,4 +1,5 @@
 import type { Task, User as UserType, TaskStatus } from '../../types';
+import { getRemainingTime } from '../../lib/sla';
 
 /* ── Birincil Aksiyon ─────────────────────────────────────────────────────
    Mevcut duruma ve role göre tek bir birincil durum geçişi. Modal footer'ında
@@ -44,16 +45,20 @@ export interface TimeLeftResult {
 export const getTimeLeft = (task: Task, now: number): TimeLeftResult | null => {
   if (task.status === 'COMPLETED' || task.status === 'CANCELLED') return null;
 
-  // Efektif deadline: orijinal deadline + toplam duraklatma süresi
-  const totalPaused = task.totalPausedTime || 0;
-  const effectiveDeadline = task.deadline + totalPaused;
+  // Çekirdek hesaplama (effectiveDeadline = deadline + totalPausedTime, pausedAt
+  // varsa referans noktası o ana sabitlenir) src/lib/sla.ts'teki getRemainingTime'dan
+  // gelir — burada AYRICA yeniden hesaplanmaz. Bu dosya yalnızca UI'a özgü etiket
+  // metnini ve durum sözlüğünü (paused/expired/warning/safe) bunun üzerine bindirir.
+  // Eskiden burası aynı mantığı bağımsız olarak yeniden yazıyordu — SLA
+  // duraklama hesabında yapılacak bir düzeltme kolayca yalnızca birine
+  // uygulanıp diğerini eskimiş bırakabiliyordu (bkz. kod denetimi).
+  const { timeLeftMs, status: coreStatus } = getRemainingTime(
+    task.deadline,
+    task.totalPausedTime || 0,
+    task.pausedAt ?? null,
+    now
+  );
 
-  // Eğer görev şu an duraklatılmış ise (BLOCKED/AWAITING_APPROVAL)
-  // kalan süreyi pause anından hesapla
-  const pausedAt = task.pausedAt ?? null;
-  const referenceTime = pausedAt ? pausedAt : now;
-
-  const timeLeftMs = effectiveDeadline - referenceTime;
   const absMs = Math.abs(timeLeftMs);
   const absDays = Math.floor(absMs / 86400000);
   const absHours = Math.floor((absMs % 86400000) / 3600000);
@@ -70,7 +75,7 @@ export const getTimeLeft = (task: Task, now: number): TimeLeftResult | null => {
     label = `${absMins}dk kaldı`;
   }
 
-  const isPaused = Boolean(pausedAt);
+  const isPaused = coreStatus === 'paused';
   return {
     timeLeftMs,
     label: isPaused ? `${label} (Duraklatıldı)` : label,

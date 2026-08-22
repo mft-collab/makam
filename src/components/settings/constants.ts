@@ -1,11 +1,16 @@
 import { z } from 'zod';
+import { UserRoleSchema, TaskStatusSchema, TaskPrioritySchema } from '../../types';
 
 // ── Yedek Doğrulama Şemaları (Restore) ──────────────────────────────────────
+// role/status/priority değerleri types.ts'teki KANONİK enum'lardan alınır —
+// burada elle kopyalanmış bağımsız bir liste tutulursa, types.ts'e yeni bir
+// durum eklendiğinde bu şema güncellenmediği sürece tamamen geçerli, güncel
+// bir MAKAM yedeği bile reddedilir (bkz. Settings.tsx handleImport).
 export const userBackupSchema = z.object({
   uid: z.string(),
   fullName: z.string(),
   email: z.string().email(),
-  role: z.enum(['Admin', 'Manager', 'Staff'])
+  role: UserRoleSchema
 });
 
 export const taskBackupSchema = z.object({
@@ -14,8 +19,8 @@ export const taskBackupSchema = z.object({
   description: z.string(),
   creatorId: z.string(),
   assigneeId: z.string(),
-  status: z.enum(['ASSIGNED', 'PENDING_DELEGATION', 'IN_PROGRESS', 'BLOCKED', 'AWAITING_APPROVAL', 'COMPLETED', 'CANCELLED', 'CRISIS']),
-  priority: z.enum(['Low', 'Medium', 'High', 'Urgent']),
+  status: TaskStatusSchema,
+  priority: TaskPrioritySchema,
   deadline: z.any(),
   createdAt: z.any(),
   updatedAt: z.any()

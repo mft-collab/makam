@@ -35,8 +35,18 @@ interface DataState {
   /** Bu oturumda Firestore'dan en az bir kez canlı veri geldi mi? IDB'den
    *  rehydration asenkron olduğundan, canlı onSnapshot verisi IDB okumasından
    *  ÖNCE gelebilir — bu durumda rehydration'ın bayat önbellek verisiyle taze
-   *  veriyi ezmesini engellemek için kullanılır (bkz. merge()). */
-  hasLiveData: boolean;
+   *  veriyi ezmesini engellemek için kullanılır (bkz. mergeDataState()).
+   *  ALAN BAZINDA ayrı ayrı izlenir: tasks/users/blockers/stats dört bağımsız
+   *  Firestore dinleyicisidir ve farklı hızlarda döner. Tek bir paylaşılan
+   *  bayrak kullanılırsa, hızlı dönen bir dinleyici (ör. küçük system/stats
+   *  dokümanı) bayrağı erkenden true yapıp, henüz kendi canlı verisi gelmemiş
+   *  DİĞER alanların (ör. tasks) IDB önbelleğinden geri yüklenmesini de
+   *  engelleyebilir — kullanıcı geçici olarak "hiç görev yok" boş ekranıyla
+   *  karşılaşır. */
+  hasLiveTasks: boolean;
+  hasLiveUsers: boolean;
+  hasLiveBlockers: boolean;
+  hasLiveStats: boolean;
   taskLimit: number;
   setTasks: (tasks: Task[]) => void;
   setUsers: (users: User[]) => void;
@@ -48,12 +58,20 @@ interface DataState {
 
 // IDB okuması Firestore'un ilk canlı anlık görüntüsünden daha uzun sürerse,
 // rehydration bu sırada zaten gelmiş taze veriyi bayat önbellekle ezebilir.
-// hasLiveData bayrağı bu oturumda canlı veri gelip gelmediğini işaretler;
-// geldiyse rehydration'ın üzerine yazması engellenir. Ayrı export edilmiştir —
-// böylece asenkron persist/rehydrate akışını tetiklemeden doğrudan test edilebilir.
+// hasLive* bayrakları bu oturumda HER alan için ayrı ayrı canlı veri gelip
+// gelmediğini işaretler; bir alan için geldiyse yalnızca O ALANIN rehydration'ı
+// engellenir, henüz canlı verisi gelmemiş diğer alanlar IDB önbelleğinden
+// normal şekilde geri yüklenmeye devam eder. Ayrı export edilmiştir — böylece
+// asenkron persist/rehydrate akışını tetiklemeden doğrudan test edilebilir.
 export function mergeDataState(persistedState: unknown, currentState: DataState): DataState {
-  if (currentState.hasLiveData) return currentState;
-  return { ...currentState, ...(persistedState as Partial<DataState>) };
+  const persisted = (persistedState as Partial<DataState>) ?? {};
+  return {
+    ...currentState,
+    tasks: currentState.hasLiveTasks ? currentState.tasks : (persisted.tasks ?? currentState.tasks),
+    users: currentState.hasLiveUsers ? currentState.users : (persisted.users ?? currentState.users),
+    blockers: currentState.hasLiveBlockers ? currentState.blockers : (persisted.blockers ?? currentState.blockers),
+    stats: currentState.hasLiveStats ? currentState.stats : (persisted.stats ?? currentState.stats),
+  };
 }
 
 export const useDataStore = create<DataState>()(
@@ -64,12 +82,15 @@ export const useDataStore = create<DataState>()(
       blockers: [],
       stats: null,
       isHydrated: false,
-      hasLiveData: false,
+      hasLiveTasks: false,
+      hasLiveUsers: false,
+      hasLiveBlockers: false,
+      hasLiveStats: false,
       taskLimit: 200,
-      setTasks: (tasks) => set({ tasks, hasLiveData: true }),
-      setUsers: (users) => set({ users, hasLiveData: true }),
-      setBlockers: (blockers) => set({ blockers, hasLiveData: true }),
-      setStats: (stats) => set({ stats, hasLiveData: true }),
+      setTasks: (tasks) => set({ tasks, hasLiveTasks: true }),
+      setUsers: (users) => set({ users, hasLiveUsers: true }),
+      setBlockers: (blockers) => set({ blockers, hasLiveBlockers: true }),
+      setStats: (stats) => set({ stats, hasLiveStats: true }),
       setHydrated: () => set({ isHydrated: true }),
       loadMoreTasks: () => set((state) => ({ taskLimit: state.taskLimit + 200 })),
     }),

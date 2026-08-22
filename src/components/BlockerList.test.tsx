@@ -127,76 +127,89 @@ describe('BlockerList', () => {
   });
 
   describe('etkileşimler', () => {
+    // Bare userEvent.click/type/clear çağrılarının her biri örtük olarak KENDİ
+    // userEvent.setup() örneğini oluşturur — ardışık etkileşimlerde (özellikle
+    // clear→type→click) pointer/keyboard durumu çağrılar arası taşınmaz.
+    // Testing Library v14 dokümantasyonu tek bir paylaşılan `user` örneği
+    // kullanmayı önerir (bkz. TaskFormModal.test.tsx'teki aynı desen) — bu,
+    // CI'da (yoğun paralel worker yükü altında) gözlenen ama yerelde
+    // tekrarlanamayan bir "Düzenle" akışı test kırılganlığını giderir.
     it('karta tıklamak ilgili görev bulunabiliyorsa onViewTask(task) çağırır', async () => {
+      const user = userEvent.setup();
       const task = makeTask();
       const { onViewTask } = renderList({ tasks: [task], blockers: [makeBlocker({ reason: 'Tıklanabilir engel' })] });
 
-      await userEvent.click(screen.getByText('Tıklanabilir engel'));
+      await user.click(screen.getByText('Tıklanabilir engel'));
 
       expect(onViewTask).toHaveBeenCalledWith(task);
     });
 
     it('"Çözüldü" butonuna tıklamak onResolve\'u çağırır ama karta tıklama (onViewTask) tetiklenmez', async () => {
+      const user = userEvent.setup();
       const task = makeTask();
       const { onResolve, onViewTask } = renderList({ tasks: [task], blockers: [makeBlocker({ id: 'blocker-9' })], isAdmin: true });
 
-      await userEvent.click(screen.getByText('Çözüldü'));
+      await user.click(screen.getByText('Çözüldü'));
 
       expect(onResolve).toHaveBeenCalledWith('blocker-9');
       expect(onViewTask).not.toHaveBeenCalled();
     });
 
     it('"Düzenle" akışı: modal sebep ile önceden doldurulur, kaydet onEditBlocker(id, trimmedReason) çağırır ve modalı kapatır', async () => {
+      const user = userEvent.setup();
       const task = makeTask();
       const { onEditBlocker } = renderList({
         tasks: [task], blockers: [makeBlocker({ id: 'blocker-9', reason: 'Orijinal sebep' })], isAdmin: true,
       });
 
-      await userEvent.click(screen.getByTitle('Düzenle'));
+      await user.click(screen.getByTitle('Düzenle'));
       const input = await screen.findByDisplayValue('Orijinal sebep');
-      await userEvent.clear(input);
-      await userEvent.type(input, '  Güncellenmiş sebep  ');
-      await userEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+      await user.clear(input);
+      await user.type(input, '  Güncellenmiş sebep  ');
+      await user.click(screen.getByRole('button', { name: 'Kaydet' }));
 
-      expect(onEditBlocker).toHaveBeenCalledWith('blocker-9', 'Güncellenmiş sebep');
+      await waitFor(() => expect(onEditBlocker).toHaveBeenCalledWith('blocker-9', 'Güncellenmiş sebep'));
       await waitFor(() => expect(screen.queryByText('Engeli Düzenle')).not.toBeInTheDocument());
     });
 
     it('"Düzenle" akışında İptal, onEditBlocker çağırmadan modalı kapatır', async () => {
+      const user = userEvent.setup();
       const task = makeTask();
       const { onEditBlocker } = renderList({ tasks: [task], blockers: [makeBlocker()], isAdmin: true });
 
-      await userEvent.click(screen.getByTitle('Düzenle'));
+      await user.click(screen.getByTitle('Düzenle'));
       await screen.findByText('Engeli Düzenle');
-      await userEvent.click(screen.getByRole('button', { name: 'İptal' }));
+      await user.click(screen.getByRole('button', { name: 'İptal' }));
 
       expect(onEditBlocker).not.toHaveBeenCalled();
       await waitFor(() => expect(screen.queryByText('Engeli Düzenle')).not.toBeInTheDocument());
     });
 
     it('"Sil" akışı: onay modalında "Sil" onaylanınca onDeleteBlocker(id) çağrılır', async () => {
+      const user = userEvent.setup();
       const task = makeTask();
       const { onDeleteBlocker } = renderList({
         tasks: [task], blockers: [makeBlocker({ id: 'blocker-9' })], isAdmin: true, isSystemAdmin: true,
       });
 
-      await userEvent.click(screen.getByTitle('Sil'));
+      await user.click(screen.getByTitle('Sil'));
       await screen.findByText('Bu engeli silmek istediğinize emin misiniz?');
       const dialog = screen.getByRole('dialog');
-      await userEvent.click(within(dialog).getByRole('button', { name: 'Sil' }));
+      await user.click(within(dialog).getByRole('button', { name: 'Sil' }));
 
       expect(onDeleteBlocker).toHaveBeenCalledWith('blocker-9');
     });
 
     it('"Sil" akışında İptal, onDeleteBlocker çağırmadan modalı kapatır', async () => {
+      const user = userEvent.setup();
       const task = makeTask();
       const { onDeleteBlocker } = renderList({
         tasks: [task], blockers: [makeBlocker()], isAdmin: true, isSystemAdmin: true,
       });
 
-      await userEvent.click(screen.getByTitle('Sil'));
+      await user.click(screen.getByTitle('Sil'));
       await screen.findByText('Bu engeli silmek istediğinize emin misiniz?');
-      await userEvent.click(screen.getByRole('button', { name: 'İptal' }));
+      await user.click(screen.getByRole('button', { name: 'İptal' }));
 
       expect(onDeleteBlocker).not.toHaveBeenCalled();
     });

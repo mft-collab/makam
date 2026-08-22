@@ -59,9 +59,24 @@ export const blockerService = {
     });
   },
 
-  async deleteBlocker(blockerId: string) {
+  async deleteBlocker(blockerId: string, taskId?: string, otherActiveCount?: number, userId?: string, expectedVersion?: number) {
+    const blockerRef = doc(db, 'blockers', blockerId);
+
+    if (taskId !== undefined && otherActiveCount === 0 && userId !== undefined) {
+      // Son aktif engel siliniyorsa: engel dokümanının silinmesi + görevin
+      // IN_PROGRESS'e dönmesi (ve pausedAt/totalPausedTime'ın transitionTaskInTransaction
+      // tarafından temizlenmesi) TEK transaction'da — biri başarısız olursa diğeri de olmaz.
+      await runWithRetry(async () => {
+        await runTransaction(db, async (transaction) => {
+          await transitionTaskInTransaction(transaction, taskId, 'IN_PROGRESS', userId, { expectedVersion });
+          transaction.delete(blockerRef);
+        });
+      });
+      return;
+    }
+
     await runWithRetry(async () => {
-      await deleteDoc(doc(db, 'blockers', blockerId));
+      await deleteDoc(blockerRef);
     });
   }
 };

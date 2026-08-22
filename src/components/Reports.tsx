@@ -220,7 +220,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
       IN_PROGRESS:          { label: 'İşlemde',   color: 'var(--color-executive-blue)', count: 0 },
       AWAITING_APPROVAL:    { label: 'Onayda',    color: '#B38F46', count: 0 },
       BLOCKED:              { label: 'Engelli',   color: '#A8201A', count: 0 },
-      COMPLETED:            { label: 'Tamam',     color: '#1B7A51', count: 0 },
+      COMPLETED:            { label: 'Tamam',     color: 'var(--chart-completed)', count: 0 },
     };
     filteredTasks.forEach(t => {
       const statusObj = map[t.status];
@@ -350,8 +350,8 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
           <div className="h-[180px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={slaComplianceTrend} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
-                <XAxis dataKey="name" fontSize={8} tickLine={false} axisLine={false} tick={{ fill: '#94A3B8' }} />
-                <YAxis domain={[0, 100]} fontSize={8} tickLine={false} axisLine={false} tick={{ fill: '#94A3B8' }}
+                <XAxis dataKey="name" fontSize={8} tickLine={false} axisLine={false} tick={{ fill: 'var(--text-light)' }} />
+                <YAxis domain={[0, 100]} fontSize={8} tickLine={false} axisLine={false} tick={{ fill: 'var(--text-light)' }}
                   tickFormatter={(v) => `%${v}`} />
                 <Tooltip
                   contentStyle={{
@@ -411,7 +411,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                   formatter={(v: any, name: any) => [v, name]}
                 />
                 <Legend iconSize={8} iconType="circle"
-                  formatter={(v) => <span style={{ fontSize: 9, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.15em' }}>{v}</span>}
+                  formatter={(v) => <span style={{ fontSize: 9, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>{v}</span>}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -442,12 +442,12 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                     <stop offset="100%" stopColor="var(--color-executive-blue)" stopOpacity="0.35" />
                   </linearGradient>
                   <linearGradient id="barCompleted" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#82C29C" />
-                    <stop offset="100%" stopColor="#1B7A51" />
+                    <stop offset="0%" stopColor="var(--chart-completed)" stopOpacity="0.8" />
+                    <stop offset="100%" stopColor="var(--chart-completed)" stopOpacity="0.35" />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="name" fontSize={9} tickLine={false} axisLine={false} tick={{ fill: '#94A3B8' }} />
-                <YAxis fontSize={8} tickLine={false} axisLine={false} tick={{ fill: '#94A3B8' }} />
+                <XAxis dataKey="name" fontSize={9} tickLine={false} axisLine={false} tick={{ fill: 'var(--text-light)' }} />
+                <YAxis fontSize={8} tickLine={false} axisLine={false} tick={{ fill: 'var(--text-light)' }} />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: 'var(--color-surface-base)',
@@ -464,7 +464,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                 <Bar dataKey="assigned" name="Aktif" fill="url(#barActive)" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="completed" name="Tamamlanan" fill="url(#barCompleted)" radius={[4, 4, 0, 0]} />
                 <Legend iconSize={8} iconType="circle"
-                  formatter={(v) => <span style={{ fontSize: 9, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.15em' }}>{v}</span>}
+                  formatter={(v) => <span style={{ fontSize: 9, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>{v}</span>}
                 />
               </BarChart>
             </ResponsiveContainer>

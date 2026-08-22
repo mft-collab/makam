@@ -10,7 +10,7 @@ import { Badge } from './ui/Badge';
 import { cn, formatTimeAgo } from '../lib/utils';
 import { ROLE_LABELS, STATUS_LABELS } from '../constants';
 import { motion } from 'motion/react';
-import { db, collection, getDocs, query, orderBy, limit } from '../firebase';
+import { auditLogService } from '../services/auditLogService';
 import { useUIStore } from '../store/uiStore';
 import { AUDIT_FIELD_LABELS, formatAuditValue } from '../lib/auditLabels';
 import { roleConfig, OrgNodeCard } from './teamList/subcomponents';
@@ -83,14 +83,11 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
     const fetchUserLogs = async () => {
       setLoadingLogs(true);
       try {
-        const q = query(
-          collection(db, 'audit_logs'),
-          orderBy('timestamp', 'desc'),
-          limit(80)
-        );
-        const snapshot = await getDocs(q);
-        const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AuditLog));
-        setUserLogs(logs.filter(log => log.changedBy === selectedUser.uid || log.changedBy === selectedUser.email));
+        // Sunucu tarafında changedBy'a göre filtrelenir (uid VEYA email) —
+        // önceki hâli son 80 GLOBAL kaydı çekip istemcide filtreliyordu, az
+        // işlem yapan/pasif personelin geçmişi bu yüzden eksik görünebiliyordu.
+        const logs = await auditLogService.queryUserLogs(selectedUser.uid, selectedUser.email);
+        setUserLogs(logs);
       } catch (error) {
         console.error('Error fetching user logs:', error);
         addToast({ title: '⚠️ Denetim İzi Yüklenemedi', body: 'Personel geçmişi getirilirken bir hata oluştu.', type: 'danger' });

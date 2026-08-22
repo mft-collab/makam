@@ -37,6 +37,13 @@
     "src/**/*.test.ts",
     "src/**/*.test.tsx",
     "src/**/*.spec.ts",
-    "src/**/*.spec.tsx"
+    "src/**/*.spec.tsx",
+    // functions/ ayrı bir TS projesidir (kendi tsconfig.json + node_modules,
+    // bkz. CLAUDE.md) — burada include edilmediği için hiçbir zaman sorun
+    // gibi görünmüyordu (tsconfig'in include'u yoksa TS varsayılan olarak
+    // TÜM alt dizinleri tarar), ama CI'da yalnızca kök node_modules kurulu
+    // olduğundan `tsc --noEmit` functions/src/*.ts'i derlemeye çalışıp
+    // "Cannot find module 'firebase-functions/v1'" ile patlıyordu.
+    "functions/**"
   ]
 }

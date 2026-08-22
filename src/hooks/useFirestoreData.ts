@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
-import { 
-  collection, 
+import {
+  collection,
   doc,
-  query, 
+  getDoc,
+  query,
   where,
   or,
-  orderBy, 
+  orderBy,
   limit,
-  onSnapshot, 
-  db 
+  onSnapshot,
+  db
 } from '../firebase';
 import { Task, User, TaskBlocker, AuditLog, TaskSchema, UserSchema } from '../types';
 import { useDataStore } from '../store/dataStore';
@@ -27,6 +28,20 @@ function validateOrPassthrough<T>(schema: { safeParse: (data: unknown) => { succ
     return raw;
   }
   return result.data as T;
+}
+
+/**
+ * Yerel `tasks` listesinde (taskLimit sınırı, rol bazlı sorgu vb. yüzünden)
+ * bulunmayan tek bir görevi tek seferlik okur — App.tsx'teki "CQRS on-demand
+ * fetch" bu fonksiyonu kullanır. Aşağıdaki onSnapshot tabanlı listener'la
+ * AYNI zod doğrulamasından geçer; aksi halde bu tek yol şemasız ham veriyi
+ * doğrudan UI'a (getPrimaryAction gibi iş mantığına) sızdırabilirdi.
+ */
+export async function fetchTaskById(taskId: string): Promise<Task | null> {
+  const snap = await getDoc(doc(db, 'tasks', taskId));
+  if (!snap.exists()) return null;
+  const raw = { id: snap.id, ...snap.data() } as Task;
+  return validateOrPassthrough(TaskSchema, raw, snap.id, 'tasks');
 }
 
 export function useFirestoreData(user: User | null, onError: (err: any, type: string, path: string) => void) {

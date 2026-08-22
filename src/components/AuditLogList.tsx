@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ShieldCheck, ArrowRight, Loader2 } from 'lucide-react';
-import type { QueryDocumentSnapshot, DocumentData, QueryConstraint } from 'firebase/firestore';
+import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { AuditLog, Task, User, TaskStatus } from '../types';
 import { Button } from './ui/Button';
 import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
 import { STATUS_LABELS, ROLE_LABELS } from '../constants';
-import { db, collection, getDocs, query, where, orderBy, limit, startAfter } from '../firebase';
+import { auditLogService } from '../services/auditLogService';
 import { useUIStore } from '../store/uiStore';
 import { AUDIT_FIELD_LABELS, formatAuditValue } from '../lib/auditLabels';
 
@@ -31,23 +31,17 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
   // Aktör ve tarih aralığı filtreleri sunucu tarafında (Firestore sorgusu) uygulanır —
   // yalnızca yüklenmiş sayfada arama yapmak, henüz getirilmemiş eski kayıtları
   // yanlışlıkla "kayıt yok" gibi göstererek denetim aramalarını yanıltabilirdi.
-  const buildQuery = (cursor: QueryDocumentSnapshot<DocumentData> | null) => {
-    const constraints: QueryConstraint[] = [];
-    if (selectedUser !== 'ALL') constraints.push(where('changedBy', '==', selectedUser));
-    if (dateFrom) constraints.push(where('timestamp', '>=', new Date(dateFrom).getTime()));
-    if (dateTo) constraints.push(where('timestamp', '<=', new Date(dateTo + 'T23:59:59.999').getTime()));
-    constraints.push(orderBy('timestamp', 'desc'));
-    if (cursor) constraints.push(startAfter(cursor));
-    constraints.push(limit(15));
-    return query(collection(db, 'audit_logs'), ...constraints);
-  };
-
   const fetchLogs = async (isFirstLoad = false, cursor: QueryDocumentSnapshot<DocumentData> | null = null) => {
     if (loading) return;
     setLoading(true);
     try {
-      const snapshot = await getDocs(buildQuery(cursor));
-      const newLogs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AuditLog));
+      const { logs: newLogs, lastDoc, hasMore: more } = await auditLogService.fetchFiltered({
+        changedBy: selectedUser !== 'ALL' ? selectedUser : undefined,
+        fromMs: dateFrom ? new Date(dateFrom).getTime() : undefined,
+        toMs: dateTo ? new Date(dateTo + 'T23:59:59.999').getTime() : undefined,
+        pageSize: 15,
+        cursor
+      });
 
       if (isFirstLoad) {
         setLogsState(newLogs);
@@ -55,12 +49,8 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
         setLogsState(prev => [...prev, ...newLogs]);
       }
 
-      if (snapshot.docs.length < 15) {
-        setHasMore(false);
-      } else {
-        setHasMore(true);
-        setLastVisibleDoc(snapshot.docs[snapshot.docs.length - 1] ?? null);
-      }
+      setHasMore(more);
+      if (more) setLastVisibleDoc(lastDoc);
     } catch (error) {
       console.error('Error fetching audit logs:', error);
       addToast({ title: '⚠️ Denetim İzi Yüklenemedi', body: 'Kayıtlar getirilirken bir hata oluştu. Lütfen tekrar deneyin.', type: 'danger' });

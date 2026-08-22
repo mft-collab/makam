@@ -161,7 +161,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
+
     steps:
       - name: Kodu İndir
         uses: actions/checkout@v4
@@ -172,13 +172,19 @@ jobs:
           name: dist
           path: dist/
 
+      - name: Firebase CLI Kur
+        run: npm install -g firebase-tools
+
+      # NOT: FirebaseExtended/action-hosting-deploy@v0 (servis hesabı JSON
+      # anahtarı) yerine `firebase login:ci` ile üretilen kişisel bir CI
+      # token'ı kullanılıyor — servis hesabı anahtarı üretimi GCP proje kotasına
+      # takılmıştı, CI token'ı bu kotadan bağımsız. Proje hedefi .firebaserc'teki
+      # "default": "makam-1453"'ten geliyor, ayrıca bir PROJECT_ID secret'ı
+      # gerekmiyor.
       - name: Firebase Hosting'e Deploy Et
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          channelId: live
-          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+        run: firebase deploy --only hosting --token "$FIREBASE_TOKEN" --non-interactive
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
   # ─── 4. Pull Request Preview Deploy ────────────────────────────────────────
   preview:
@@ -186,7 +192,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     if: github.event_name == 'pull_request'
-    
+
     steps:
       - name: Kodu İndir
         uses: actions/checkout@v4
@@ -197,10 +203,14 @@ jobs:
           name: dist
           path: dist/
 
+      - name: Firebase CLI Kur
+        run: npm install -g firebase-tools
+
+      # PR başına otomatik preview kanalı oluşturur (ücretsiz Firebase Hosting
+      # özelliği) — kanal adı PR numarasına sabitlenir ki aynı PR'a yapılan
+      # sonraki push'lar aynı kanalı güncellesin, her seferinde yeni kanal
+      # açmasın. 7 gün sonra otomatik silinir.
       - name: Firebase Preview Channel Deploy
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
-          # PR başına otomatik preview URL oluşturur — ücretsiz Firebase Hosting özelliği
+        run: firebase hosting:channel:deploy "pr-${{ github.event.pull_request.number }}" --token "$FIREBASE_TOKEN" --expires 7d --non-interactive
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}

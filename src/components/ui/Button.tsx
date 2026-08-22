@@ -16,8 +16,14 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       // otomatik olarak daha açık bir tona geçer (bkz. index.css)
       danger: 'bg-status-danger/10 text-status-danger hover:bg-status-danger/15 border border-status-danger/20 shadow-sm',
       ghost: 'bg-transparent hover:bg-executive-blue/[0.02] text-text-muted hover:text-executive-blue border-transparent',
-      gold: 'bg-executive-gold text-white hover:bg-executive-gold-hover shadow-lg shadow-executive-gold/20',
-      success: 'bg-status-success text-white hover:opacity-90 shadow-lg shadow-status-success/10',
+      // text-white yerine tema-duyarlı token'lar kullanılır: altın zemin
+      // (--color-executive-gold) her iki temada da AYNI kalır ama light modda
+      // sabit beyaz metin ~2.5:1 kontrast verirdi (bkz. .makam-button-primary'nin
+      // kullandığı --btn-primary-text); success zemini ise dark modda pastel bir
+      // tona (#34D399) döndüğünden sabit beyaz orada ~1.92:1'e düşerdi (bkz.
+      // --status-success-text). İkisi de index.css'te AA-uyumlu tanımlı.
+      gold: 'bg-executive-gold text-[color:var(--btn-primary-text)] hover:bg-executive-gold-hover shadow-lg shadow-executive-gold/20',
+      success: 'bg-status-success text-[color:var(--status-success-text)] hover:opacity-90 shadow-lg shadow-status-success/10',
     };
 
     const sizes = {
