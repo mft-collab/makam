@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within, waitFor } from '@testing-library/react';
+import { render, screen, within, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BlockerList } from './BlockerList';
 import type { Task, TaskBlocker, User } from '../types';
@@ -164,16 +164,16 @@ describe('BlockerList', () => {
 
       await user.click(screen.getByTitle('Düzenle'));
       const input = await screen.findByDisplayValue('Orijinal sebep');
-      await user.clear(input);
-      await user.type(input, '  Güncellenmiş sebep  ');
-      // "Kaydet" bir <form onSubmit> submit butonu ve input `required` —
-      // tıklamadan önce yazılan değerin DOM'a GERÇEKTEN committed olduğunu
-      // doğrulamadan tıklarsak (userEvent.setup() ile bile), CI'nin yoğun
-      // paralel yükü altında click submit event'i input hâlâ ara bir durumdayken
-      // (ör. required constraint validation'ı tetikleyip) sessizce engellenebilir
-      // — hiçbir hata fırlatmadan submit hiç olmaz. Burada varsayım yerine
-      // gözlenebilir DOM durumunu bekliyoruz.
-      await waitFor(() => expect(input).toHaveValue('  Güncellenmiş sebep  '));
+      // userEvent.clear()/type() (tuş-tuş simülasyon, aralarda gerçek zaman
+      // geçiren) CI'de iki kez farklı şekilde kırıldı — ikinci seferinde
+      // input tamamen boş kaldı (type() hiç karakter yazmamış gibi). Bu
+      // testin amacı klavye mekaniğini değil "düzenlenmiş değer trim'lenip
+      // onEditBlocker'a gidiyor mu"yu doğrulamak olduğundan, controlled
+      // input'un tek bir senkron change event'iyle doldurulması hem daha
+      // belirlenimli hem de bileşenin gerçekten önemsediği tek şeyle
+      // (onChange'in aldığı nihai value) birebir eşleşiyor.
+      fireEvent.change(input, { target: { value: '  Güncellenmiş sebep  ' } });
+      expect(input).toHaveValue('  Güncellenmiş sebep  ');
       await user.click(screen.getByRole('button', { name: 'Kaydet' }));
 
       await waitFor(() => expect(onEditBlocker).toHaveBeenCalledWith('blocker-9', 'Güncellenmiş sebep'));
