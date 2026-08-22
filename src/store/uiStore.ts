@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector, persist } from 'zustand/middleware';
-import type { Task, TaskStatus } from '../types';
+import type { TaskStatus } from '../types';
 
 interface TaskFilter {
   status: TaskStatus | 'ALL';
@@ -17,13 +17,6 @@ export interface ToastItem {
 }
 
 interface UIStore {
-  // Modal durumları
-  isTaskFormOpen: boolean;
-  isTaskDetailOpen: boolean;
-  isSettingsOpen: boolean;
-  editingTask: Task | null;
-  selectedTask: Task | null;
-
   // Görev form modalı (App seviyesi)
   isCreateModalOpen: boolean;
   isEditModalOpen: boolean;
@@ -52,12 +45,6 @@ interface UIStore {
 
   // Aksiyonlar — mevcut
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
-  openTaskForm: (task?: Task) => void;
-  closeTaskForm: () => void;
-  openTaskDetail: (task: Task) => void;
-  closeTaskDetail: () => void;
-  openSettings: () => void;
-  closeSettings: () => void;
   setActiveTab: (tab: string) => void;
   setFilter: (partial: Partial<TaskFilter>) => void;
   resetFilter: () => void;
@@ -84,65 +71,35 @@ const DEFAULT_FILTER: TaskFilter = {
 export const useUIStore = create<UIStore>()(
   persist(
     subscribeWithSelector((set) => ({
-      // Modal durumları
-    isTaskFormOpen: false,
-    isTaskDetailOpen: false,
-    isSettingsOpen: false,
-    editingTask: null,
-    selectedTask: null,
+      // App seviyesi görev modalları
+      isCreateModalOpen: false,
+      isEditModalOpen: false,
+      parentTaskId: undefined,
+      initialTitle: undefined,
+      selectedTaskId: null,
 
-    // App seviyesi görev modalları
-    isCreateModalOpen: false,
-    isEditModalOpen: false,
-    parentTaskId: undefined,
-    initialTitle: undefined,
-    selectedTaskId: null,
+      // Bildirim paneli
+      showNotifications: false,
 
-    // Bildirim paneli
-    showNotifications: false,
+      // Tab
+      activeTab: 'dashboard',
 
-    // Tab
-    activeTab: 'dashboard',
+      // Filtreleme
+      filter: DEFAULT_FILTER,
 
-    // Filtreleme
-    filter: DEFAULT_FILTER,
+      // Toastlar
+      toasts: [],
 
-    // Toastlar
-    toasts: [],
+      // Offline
+      isOffline: typeof window !== 'undefined' ? !window.navigator.onLine : false,
+      offlineQueueLength: 0,
 
-    // Offline
-    isOffline: typeof window !== 'undefined' ? !window.navigator.onLine : false,
-    offlineQueueLength: 0,
+      // Tema
+      theme: 'system',
 
-    // Tema
-    theme: 'system',
+      // ─── Tema ───────────────────────────────────────────────────────────────
 
-    // ─── Mevcut Modal Aksiyonları ────────────────────────────────────────────
-
-    setTheme: (theme) => set({ theme }),
-
-    openTaskForm: (task) => set({
-      isTaskFormOpen: true,
-      editingTask: task ?? null,
-    }),
-
-    closeTaskForm: () => set({
-      isTaskFormOpen: false,
-      editingTask: null,
-    }),
-
-    openTaskDetail: (task) => set({
-      isTaskDetailOpen: true,
-      selectedTask: task,
-    }),
-
-    closeTaskDetail: () => set({
-      isTaskDetailOpen: false,
-      selectedTask: null,
-    }),
-
-    openSettings: () => set({ isSettingsOpen: true }),
-    closeSettings: () => set({ isSettingsOpen: false }),
+      setTheme: (theme) => set({ theme }),
 
     // ─── Tab ────────────────────────────────────────────────────────────────
 

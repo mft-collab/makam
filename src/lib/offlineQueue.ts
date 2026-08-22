@@ -61,9 +61,69 @@ export interface OfflineMutation {
   };
 }
 
+/**
+ * Bir koleksiyonun taban listesine (Firestore'dan gelen) bekleyen offline
+ * mutasyonları uygular — App.tsx'teki türetilmiş tasks/blockers state'i bu
+ * fonksiyonu kullanır. Aynı if/else if yapısı eskiden App.tsx içinde tasks
+ * ve blockers için ayrı ayrı, neredeyse birebir kopyalanmıştı (bkz. kod
+ * denetimi) — üçüncü bir offline-senkronlu koleksiyon eklendiğinde artık
+ * bu desen tekrar elle kopyalanmak zorunda değil.
+ */
+export function applyOfflineMutations<T extends { id: string }>(
+  base: T[],
+  mutations: OfflineMutation[],
+  collectionName: string
+): T[] {
+  let result = [...base];
+  mutations.forEach(mutation => {
+    if (mutation.collectionName !== collectionName) return;
+    if (mutation.action === 'create') {
+      if (!result.some(item => item.id === mutation.data?.id)) result.push(mutation.data);
+    } else if (mutation.action === 'update' || mutation.action === 'set') {
+      const idx = result.findIndex(item => item.id === mutation.docId);
+      if (idx !== -1) result[idx] = { ...result[idx], ...mutation.data };
+    } else if (mutation.action === 'delete') {
+      result = result.filter(item => item.id !== mutation.docId);
+    }
+  });
+  return result;
+}
+
 const QUEUE_KEY = 'makam_offline_mutations';
 
 let isSyncing = false;
+
+/**
+ * Aynı offline oturumda bir görevi hedefleyen birden fazla FARKLI TÜR mutasyon
+ * (düz update, statusTransition, linkedTaskTransition) kuyruğa alındığında
+ * hepsi enqueue anındaki AYNI eski lockVersion'ı taşır. Sync sırasıyla
+ * işlendiği için, bir görev mutasyonu başarıyla sunucu lockVersion'ını
+ * artırdığında bu artık kuyruktaki AYNI görevi hedefleyen SONRAKİ
+ * mutasyonların expectedVersion'ını da güncelliyoruz — aksi halde ikinci
+ * mutasyon artık eskimiş bir versiyonla sahte VERSION_MISMATCH alıp
+ * retry'sız kalıcı olarak düşürülür. Bu, aşağıdaki tempId remapping ile
+ * aynı "ileriye bak ve kuyruktaki bekleyen öğeleri yamalayarak" deseni izler.
+ */
+function propagateVersionBump(
+  workingQueue: OfflineMutation[],
+  fromIndex: number,
+  taskId: string,
+  newVersion: number
+) {
+  for (let j = fromIndex + 1; j < workingQueue.length; j++) {
+    const item = workingQueue[j]!;
+    if (item.collectionName === 'tasks' && item.docId === taskId) {
+      if (item.statusTransition) {
+        item.statusTransition.expectedVersion = newVersion;
+      } else if (item.expectedVersion !== undefined) {
+        item.expectedVersion = newVersion;
+      }
+    }
+    if (item.collectionName === 'blockers' && item.linkedTaskTransition?.taskId === taskId) {
+      item.linkedTaskTransition.expectedVersion = newVersion;
+    }
+  }
+}
 
 export const offlineQueue = {
   getQueue(): OfflineMutation[] {
@@ -180,10 +240,12 @@ export const offlineQueue = {
                 // (ör. aynı oturumda çözme) sunucuda var olmayan bir ID'ye yazmaya çalışır.
                 const blockerRef = doc(db, 'blockers', mutation.data.id);
                 try {
-                  await runTransaction(db, async (transaction) => {
-                    await transitionTaskInTransaction(transaction, taskId, newStatus, userId, { expectedVersion, timestampOverride: mutation.timestamp });
+                  const prevTask = await runTransaction(db, async (transaction) => {
+                    const t = await transitionTaskInTransaction(transaction, taskId, newStatus, userId, { expectedVersion, timestampOverride: mutation.timestamp });
                     transaction.set(blockerRef, { ...mutation.data, id: blockerRef.id });
+                    return t;
                   });
+                  propagateVersionBump(workingQueue, i, taskId, (prevTask.lockVersion || 0) + 1);
                 } catch (transitionErr) {
                   if (conflictDetectionService.detectConflict(transitionErr, taskId, 'Talimat', expectedVersion ?? 0)) {
                     hadConflict = true;
@@ -230,10 +292,12 @@ export const offlineQueue = {
                   const { taskId, newStatus, userId, expectedVersion } = mutation.linkedTaskTransition;
                   const blockerRef = doc(db, 'blockers', mutation.docId);
                   try {
-                    await runTransaction(db, async (transaction) => {
-                      await transitionTaskInTransaction(transaction, taskId, newStatus, userId, { expectedVersion, timestampOverride: mutation.timestamp });
+                    const prevTask = await runTransaction(db, async (transaction) => {
+                      const t = await transitionTaskInTransaction(transaction, taskId, newStatus, userId, { expectedVersion, timestampOverride: mutation.timestamp });
                       transaction.update(blockerRef, { ...mutation.data });
+                      return t;
                     });
+                    propagateVersionBump(workingQueue, i, taskId, (prevTask.lockVersion || 0) + 1);
                   } catch (transitionErr) {
                     if (conflictDetectionService.detectConflict(transitionErr, taskId, 'Talimat', expectedVersion ?? 0)) {
                       hadConflict = true;
@@ -244,11 +308,12 @@ export const offlineQueue = {
                 } else if (mutation.collectionName === 'tasks' && mutation.statusTransition) {
                   const { newStatus, userId, evidence, evidenceType, assigneeId, expectedVersion } = mutation.statusTransition;
                   try {
-                    await runTransaction(db, async (transaction) => {
-                      await transitionTaskInTransaction(transaction, mutation.docId!, newStatus, userId, {
+                    const prevTask = await runTransaction(db, async (transaction) =>
+                      transitionTaskInTransaction(transaction, mutation.docId!, newStatus, userId, {
                         evidence, evidenceType, assigneeId, expectedVersion, timestampOverride: mutation.timestamp
-                      });
-                    });
+                      })
+                    );
+                    propagateVersionBump(workingQueue, i, mutation.docId!, (prevTask.lockVersion || 0) + 1);
                   } catch (transitionErr) {
                     if (conflictDetectionService.detectConflict(transitionErr, mutation.docId!, 'Talimat', expectedVersion ?? 0)) {
                       hadConflict = true;
@@ -271,7 +336,7 @@ export const offlineQueue = {
                       updatedAt: Date.now(),
                       lockVersion: currentVersion + 1
                     });
-                    return { conflict: false };
+                    return { conflict: false, newVersion: currentVersion + 1 };
                   });
                   if (result.conflict) {
                     conflictDetectionService.detectConflict(
@@ -287,6 +352,9 @@ export const offlineQueue = {
                     hadConflict = true;
                     break;
                   }
+                  if (result.newVersion !== undefined) {
+                    propagateVersionBump(workingQueue, i, mutation.docId, result.newVersion);
+                  }
                 } else {
                   await updateDoc(doc(db, mutation.collectionName, mutation.docId), {
                     ...mutation.data,
@@ -297,7 +365,26 @@ export const offlineQueue = {
               break;
             case 'delete':
               if (mutation.docId) {
-                await deleteDoc(doc(db, mutation.collectionName, mutation.docId));
+                if (mutation.collectionName === 'blockers' && mutation.linkedTaskTransition) {
+                  const { taskId, newStatus, userId, expectedVersion } = mutation.linkedTaskTransition;
+                  const blockerRef = doc(db, 'blockers', mutation.docId);
+                  try {
+                    const prevTask = await runTransaction(db, async (transaction) => {
+                      const t = await transitionTaskInTransaction(transaction, taskId, newStatus, userId, { expectedVersion, timestampOverride: mutation.timestamp });
+                      transaction.delete(blockerRef);
+                      return t;
+                    });
+                    propagateVersionBump(workingQueue, i, taskId, (prevTask.lockVersion || 0) + 1);
+                  } catch (transitionErr) {
+                    if (conflictDetectionService.detectConflict(transitionErr, taskId, 'Talimat', expectedVersion ?? 0)) {
+                      hadConflict = true;
+                      break;
+                    }
+                    throw transitionErr;
+                  }
+                } else {
+                  await deleteDoc(doc(db, mutation.collectionName, mutation.docId));
+                }
               }
               break;
           }

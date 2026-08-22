@@ -38,3 +38,21 @@ export function cleanData<T extends object>(obj: T): T {
   });
   return result;
 }
+
+/**
+ * Bir Blob'u kullanıcının tarayıcısına dosya olarak indirir (geçici bir
+ * object URL + görünmez <a> elemanı üzerinden). exportService.ts (CSV) ve
+ * Settings.tsx (tam sistem yedeği + denetim izi arşivi) içinde üç kez
+ * neredeyse birebir kopyalanmış bir desen olduğundan tek yere toplandı —
+ * bkz. kod denetimi.
+ */
+export function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}

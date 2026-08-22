@@ -572,15 +572,19 @@ describe('useAppHandlers', () => {
       expect(blockerService.deleteBlocker).not.toHaveBeenCalled();
     });
 
-    it('online + son aktif engel + görev BLOCKED: deleteBlocker + taskService.updateTaskStatus(IN_PROGRESS) ikisi de çağrılır', async () => {
+    it('online + son aktif engel + görev BLOCKED: engel silme + görevin IN_PROGRESS\'e dönmesi TEK atomik blockerService.deleteBlocker çağrısıyla yapılır', async () => {
+      // Eskiden bu iki ayrı sıralı çağrıyla (blockerService.deleteBlocker + ayrı
+      // bir taskService.updateTaskStatus) yapılıyordu — biri başarısız olursa
+      // diğeri de olmayacak şekilde TEK transaction'a birleştirildi (bkz. kod
+      // denetimi: görev çözülecek engeli olmadan BLOCKED'da kilitli kalabiliyordu).
       const task = makeTask({ status: 'BLOCKED', lockVersion: 4 });
       const blocker = makeBlocker();
       const { handlers } = setup({ tasks: [task], blockers: [blocker] });
 
       await act(async () => { await handlers.deleteBlocker('blocker-1'); });
 
-      expect(blockerService.deleteBlocker).toHaveBeenCalledWith('blocker-1');
-      expect(taskService.updateTaskStatus).toHaveBeenCalledWith('task-1', 'IN_PROGRESS', 'BLOCKED', 'user-1', undefined, undefined, 4);
+      expect(blockerService.deleteBlocker).toHaveBeenCalledWith('blocker-1', 'task-1', 0, 'user-1', 4);
+      expect(taskService.updateTaskStatus).not.toHaveBeenCalled();
     });
 
     it('online + görevde başka aktif engel kalıyorsa: taskService.updateTaskStatus çağrılmaz', async () => {
@@ -614,7 +618,11 @@ describe('useAppHandlers', () => {
       expect(onError).toHaveBeenCalledWith(expect.any(Error), 'delete', 'blockers/blocker-1');
     });
 
-    it('offline + son aktif engel + görev BLOCKED: engel silme VE görev geçişi AYRI iki enqueue çağrısıyla kuyruğa alınır', async () => {
+    it('offline + son aktif engel + görev BLOCKED: engel silme + görev geçişi TEK enqueue çağrısıyla (linkedTaskTransition) kuyruğa alınır', async () => {
+      // Eskiden ayrı bir 'tasks'/'update' mutasyonu ham status alanı güncelliyordu
+      // ve statusTransition taşımadığından sync'te transitionTaskInTransaction hiç
+      // çağrılmıyordu — pausedAt asla temizlenmiyordu (bkz. kod denetimi). Artık
+      // tek bir 'blockers'/'delete' mutasyonu linkedTaskTransition ile kuyruklanıyor.
       goOffline();
       const task = makeTask({ status: 'BLOCKED', lockVersion: 4 });
       const blocker = makeBlocker();
@@ -622,9 +630,11 @@ describe('useAppHandlers', () => {
 
       await act(async () => { await handlers.deleteBlocker('blocker-1'); });
 
-      expect(offlineQueue.enqueue).toHaveBeenCalledWith('blockers', 'delete', undefined, 'blocker-1');
-      expect(offlineQueue.enqueue).toHaveBeenCalledWith('tasks', 'update', { status: 'IN_PROGRESS', updatedAt: expect.any(Number) }, 'task-1', 4);
-      expect(offlineQueue.enqueue).toHaveBeenCalledTimes(2);
+      expect(offlineQueue.enqueue).toHaveBeenCalledWith(
+        'blockers', 'delete', undefined, 'blocker-1', undefined,
+        { taskId: 'task-1', newStatus: 'IN_PROGRESS', userId: 'user-1', expectedVersion: 4 }
+      );
+      expect(offlineQueue.enqueue).toHaveBeenCalledTimes(1);
     });
 
     it('offline + başka aktif engel kalıyorsa: sadece engel silme kuyruğa alınır, görev geçişi tetiklenmez', async () => {

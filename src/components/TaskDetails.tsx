@@ -16,7 +16,7 @@ import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { EmptyState } from './ui/EmptyState';
 import { Tooltip } from './ui/Tooltip';
-import { db, collection, query, where, getDocs } from '../firebase';
+import { auditLogService } from '../services/auditLogService';
 import { getTimeLeft, getSLAColor, computeChecklistStats } from './taskDetails/helpers';
 import { AUDIT_FIELD_LABELS, formatAuditValue } from '../lib/auditLabels';
 
@@ -125,13 +125,7 @@ export const TaskDetails = ({
       setLoadingLogs(true);
       setLogsError(false);
       try {
-        const q = query(
-          collection(db, 'audit_logs'),
-          where('taskId', '==', task.id)
-        );
-        const snapshot = await getDocs(q);
-        const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AuditLog));
-        list.sort((a, b) => b.timestamp - a.timestamp);
+        const list = await auditLogService.queryTaskLogs(task.id);
         if (cancelled) return;
         logsCacheRef.current[task.id] = list;
         setLocalLogs(list);

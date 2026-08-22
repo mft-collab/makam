@@ -31,7 +31,12 @@
   --shadow-base: rgba(0, 0, 0, 0.04);
   --btn-secondary-bg: rgba(255, 255, 255, 0.8);
   --color-executive-blue-dynamic: #161513;
-  --btn-primary-text: #ffffff;
+  /* .makam-button-primary yalnızca --color-executive-gold (#C5A059) zemininde
+     kullanılır ve bu zemin light/dark arasında AYNI kalır. Önceki #ffffff
+     buradaki kontrastı ~2.5:1'e düşürüyordu (AA eşiği 4.5:1'in çok altında) —
+     axe-core bu sınıf ihlalini dark modda (aşağıda #161513 ile) daha önce
+     düzeltmiş ama light mod atlanmış. Aynı koyu tonla eşitlendi (~7.4:1). */
+  --btn-primary-text: #161513;
   
   --base-tracking: 0;
   --heading-tracking: 0;
@@ -43,6 +48,10 @@
   --status-warning: #B45309;
   --status-danger: #DC2626;
   --status-info: #2563EB;
+  /* Button variant="success" gibi DOLU status-success zemin üzerine yazılan
+     metin için — dark modda status-success pastel bir tona (#34D399) döndüğü
+     için sabit beyaz metin orada AA'yı ihlal eder (bkz. .dark bloğu). */
+  --status-success-text: #ffffff;
 
   /* Dashboard "Son 7 Gün" grafiği seri renkleri — dataviz validatöründen
      geçirilmiş (lightness bandı, chroma tabanı, CVD ayrımı, zemin kontrastı).
@@ -79,6 +88,9 @@
   --status-warning: #FCD34D; /* amber-300 */
   --status-danger: #F87171; /* red-400 */
   --status-info: #60A5FA; /* blue-400 */
+  /* #34D399 açık pastel bir zemindir — sabit beyaz metin ~1.92:1 kontrast
+     verir (AA'yı ciddi ihlal eder). Koyu ink ile ~7:1'in üzerinde. */
+  --status-success-text: #161513;
 
   /* Karanlık zemin (#0A0A09) için grafik seri adımları — aynı ton aileleri,
      karanlık mod lightness bandına (L 0.48–0.67) çekilmiş adımlar. */

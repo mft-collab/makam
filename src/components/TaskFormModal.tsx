@@ -2,7 +2,7 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Task, User } from '../types';
+import { Task, User, TaskPrioritySchema } from '../types';
 import { PRIORITY_LABELS, ROLE_LABELS } from '../constants';
 import { cn } from '../lib/utils';
 import { FileText, Target, Users, Calendar, AlertCircle } from 'lucide-react';
@@ -12,7 +12,7 @@ const taskSchema = z.object({
   description: z.string().min(1, 'Açıklama zorunludur.').trim(),
   assigneeId: z.string().min(1, 'Sorumlu seçimi zorunludur.'),
   coordinatorId: z.string().optional(),
-  priority: z.enum(['Low', 'Medium', 'High', 'Urgent']),
+  priority: TaskPrioritySchema,
   deadline: z.string().min(1, 'Mühlet seçilmelidir.')
 }).refine(data => {
   if (data.coordinatorId && data.coordinatorId === data.assigneeId) {

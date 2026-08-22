@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import type { Task, User } from '../types';
 import { STATUS_LABELS, PRIORITY_LABELS } from '../constants';
+import { downloadBlob } from '../lib/utils';
 
 interface ExportFilter {
   from?: Date;
@@ -240,13 +241,5 @@ export function exportTasksToCSV(
 
   const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
   const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `makam-rapor-${format(new Date(), 'yyyy-MM-dd')}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  downloadBlob(blob, `makam-rapor-${format(new Date(), 'yyyy-MM-dd')}.csv`);
 }

@@ -14,9 +14,10 @@ import { blockerService } from './blockerService';
 import { offlineQueue } from '../lib/offlineQueue';
 import { getSLAConfigForPriority, calculateDeadline } from '../lib/sla';
 import { useUIStore } from '../store/uiStore';
+import { STATUS_LABELS } from '../constants';
 import type { Task, TaskStatus, TaskBlocker, User, UserRole } from '../types';
 
-// ─── Statü emoji + etiket haritaları ─────────────────────────────────────────
+// ─── Statü emoji haritası ─────────────────────────────────────────────────────
 const STATUS_EMOJI: Partial<Record<TaskStatus, string>> = {
   COMPLETED:        '✅',
   IN_PROGRESS:      '🔄',
@@ -24,15 +25,6 @@ const STATUS_EMOJI: Partial<Record<TaskStatus, string>> = {
   AWAITING_APPROVAL:'⏳',
   CRISIS:           '🚨',
   CANCELLED:        '🗑',
-};
-
-const STATUS_LABELS_TR: Partial<Record<TaskStatus, string>> = {
-  COMPLETED:        'İcra Edildi',
-  IN_PROGRESS:      'İcra Aşamasında',
-  BLOCKED:          'Engellenmiş',
-  AWAITING_APPROVAL:'Onay Sürecinde',
-  CRISIS:           'Kriz — Gecikmiş',
-  CANCELLED:        'Lağvedildi',
 };
 
 // ─── Tip tanımları ────────────────────────────────────────────────────────────
@@ -131,7 +123,7 @@ export function useAppHandlers({
       }
       addToast({
         title: `${STATUS_EMOJI[newStatus] ?? '📋'} Talimat Durumu Güncellendi`,
-        body: `"${oldTask?.title?.slice(0, 40) ?? 'Talimat'}" → ${STATUS_LABELS_TR[newStatus] ?? newStatus}`,
+        body: `"${oldTask?.title?.slice(0, 40) ?? 'Talimat'}" → ${STATUS_LABELS[newStatus] ?? newStatus}`,
         type: newStatus === 'COMPLETED' ? 'success' : (newStatus === 'BLOCKED' || newStatus === 'CRISIS') ? 'danger' : 'info',
         taskId,
       });
@@ -349,23 +341,36 @@ export function useAppHandlers({
     const blocker = blockers.find(b => b.id === blockerId);
     if (!blocker) return;
 
+    const others = blockers.filter(b => b.taskId === blocker.taskId && b.id !== blockerId && !b.isResolved);
+    const task = tasks.find(t => t.id === blocker.taskId);
+    const isLastActiveBlocker = others.length === 0 && task?.status === 'BLOCKED';
+
     if (isOfflineNow()) {
-      offlineQueue.enqueue('blockers', 'delete', undefined, blockerId);
-      const others = blockers.filter(b => b.taskId === blocker.taskId && b.id !== blockerId && !b.isResolved);
-      if (others.length === 0) {
-        const task = tasks.find(t => t.id === blocker.taskId);
-        if (task?.status === 'BLOCKED') offlineQueue.enqueue('tasks', 'update', { status: 'IN_PROGRESS', updatedAt: Date.now() }, blocker.taskId, task.lockVersion);
+      if (isLastActiveBlocker) {
+        // Engel silme + görevin IN_PROGRESS'e dönmesi TEK mutasyonda birleştirilir —
+        // sync sırasında blockerService.deleteBlocker ile aynı transaction'da uygulanır
+        // (pausedAt/totalPausedTime transitionTaskInTransaction tarafından temizlenir;
+        // ham bir 'update' mutasyonu kullanılırsa bu temizlik hiç çalışmaz ve SLA
+        // sayacı kalıcı olarak "duraklatıldı" görünmeye devam eder).
+        offlineQueue.enqueue(
+          'blockers', 'delete', undefined, blockerId, undefined,
+          { taskId: blocker.taskId, newStatus: 'IN_PROGRESS', userId: user.uid, expectedVersion: task?.lockVersion }
+        );
+      } else {
+        offlineQueue.enqueue('blockers', 'delete', undefined, blockerId);
       }
       toast('🗑 Çevrimdışı Risk Silindi', 'Risk unsuru kaldırılması lokal sıraya eklendi.', 'warning', blocker.taskId);
       return;
     }
 
     try {
-      await blockerService.deleteBlocker(blockerId);
-      const others = blockers.filter(b => b.taskId === blocker.taskId && b.id !== blockerId && !b.isResolved);
-      if (others.length === 0) {
-        const task = tasks.find(t => t.id === blocker.taskId);
-        if (task?.status === 'BLOCKED') await taskService.updateTaskStatus(blocker.taskId, 'IN_PROGRESS', 'BLOCKED', user.uid, undefined, undefined, task.lockVersion);
+      if (isLastActiveBlocker) {
+        // Engel silme + görevin IN_PROGRESS'e dönmesi TEK transaction'da (bkz.
+        // blockerService.deleteBlocker) — biri başarısız olursa diğeri de olmaz,
+        // görev çözülecek engeli olmadan BLOCKED'da kilitli kalmaz.
+        await blockerService.deleteBlocker(blockerId, blocker.taskId, 0, user.uid, task?.lockVersion);
+      } else {
+        await blockerService.deleteBlocker(blockerId);
       }
     } catch (err) {
       onError(err, 'delete', `blockers/${blockerId}`);

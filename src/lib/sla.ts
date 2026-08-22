@@ -149,11 +149,10 @@ export function calculateDeadline(startDate: Date, config: SLAConfigEntry | numb
   }
 }
 
-export function getRemainingTime(deadline: number, totalPausedTime: number = 0, pausedAt?: number | null): { 
-  timeLeftMs: number; 
+export function getRemainingTime(deadline: number, totalPausedTime: number = 0, pausedAt?: number | null, now: number = Date.now()): {
+  timeLeftMs: number;
   status: 'normal' | 'near-breach' | 'breached' | 'paused';
 } {
-  const now = Date.now();
   const effectiveDeadline = deadline + totalPausedTime;
   
   if (pausedAt) {

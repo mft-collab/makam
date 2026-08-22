@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Download, AlertCircle, CheckCircle2, Database, RotateCcw, ShieldCheck, Smartphone, Bell, Settings as SettingsIcon, Clock } from 'lucide-react';
-import { Task, User } from '../types';
-import { cn } from '../lib/utils';
-import { db, doc, writeBatch, collection, getDocs, query, orderBy, limit, startAfter, setDoc, addDoc } from '../firebase';
+import { Task, User, TaskBlocker } from '../types';
+import { cn, downloadBlob } from '../lib/utils';
+import { db, doc, writeBatch, getDoc, setDoc, addDoc, collection, increment } from '../firebase';
 import { taskService } from '../services/taskService';
+import { auditLogService } from '../services/auditLogService';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { getSLAConfigForPriority } from '../lib/sla';
 import { SettingsCard, ActionButton, StatusBanner } from './settings/SharedUI';
@@ -14,37 +15,13 @@ import { Skeleton } from './ui/Skeleton';
 interface SettingsProps {
   tasks: Task[];
   users: User[];
-  blockers: any[];
+  blockers: TaskBlocker[];
   triggerToast?: (title: string, body: string, type?: 'info' | 'success' | 'warning' | 'danger') => void;
   currentUser?: User | null;
   isLoading?: boolean;
 }
 
 const AUDIT_LOG_EXPORT_PAGE_SIZE = 500;
-
-/**
- * Tam yedek/arşiv dışa aktarma butonları için audit_logs koleksiyonunun
- * TAMAMINI okur — bir yedeğin eksik veri içermesi kabul edilemez olduğundan
- * limit() ile kısıtlanamaz. Bunun yerine tek bir sınırsız getDocs() yerine
- * (büyük koleksiyonlarda zaman aşımı/yanıt boyutu riski taşır) imleç (cursor)
- * tabanlı, sabit boyutlu sayfalarla okunur — toplam veri aynı kalır, yalnızca
- * tek seferlik büyük bir istek yerine art arda küçük, güvenilir istekler yapılır.
- */
-async function fetchAllAuditLogs(): Promise<Array<{ id: string } & Record<string, unknown>>> {
-  const results: Array<{ id: string } & Record<string, unknown>> = [];
-  let cursor: import('firebase/firestore').QueryDocumentSnapshot | null = null;
-  for (;;) {
-    const constraints: import('firebase/firestore').QueryConstraint[] = cursor
-      ? [orderBy('timestamp'), startAfter(cursor), limit(AUDIT_LOG_EXPORT_PAGE_SIZE)]
-      : [orderBy('timestamp'), limit(AUDIT_LOG_EXPORT_PAGE_SIZE)];
-    const snapshot = await getDocs(query(collection(db, 'audit_logs'), ...constraints));
-    if (snapshot.empty) break;
-    results.push(...snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-    if (snapshot.docs.length < AUDIT_LOG_EXPORT_PAGE_SIZE) break;
-    cursor = snapshot.docs[snapshot.docs.length - 1] ?? null;
-  }
-  return results;
-}
 
 const SettingsSkeleton = () => (
   <div className="flex flex-col gap-5 py-4 max-w-[1440px] mx-auto" aria-label="Ayarlar yükleniyor..." role="status">
@@ -266,7 +243,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
     }
     setImportStatus({ type: 'loading', message: 'Dizge Verileri Yedekleniyor...' });
     try {
-      const logs = await fetchAllAuditLogs();
+      const logs = await auditLogService.fetchAllPaged(AUDIT_LOG_EXPORT_PAGE_SIZE);
 
       const backup = {
         tasks, users, blockers, auditLogs: logs,
@@ -275,14 +252,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
         system: 'MAKAM Stratejik Yönetim',
       };
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = `MAKAM-Backup-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, `MAKAM-Backup-${new Date().toISOString().split('T')[0]}.json`);
       setImportStatus({ type: 'success', message: 'Dizge yedeği başarıyla indirildi.' });
     } catch (err) {
       console.error('Export failed:', err);
@@ -336,12 +306,13 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
 
         setImportStatus({ type: 'loading', message: 'Dizge Geri Yükleniyor...' });
 
-        const items: { ref: any; data: any }[] = [];
+        const userItems: { ref: any; data: any }[] = [];
         if (Array.isArray(data.users)) {
           data.users.forEach((u: any) => {
-            if (u.uid) items.push({ ref: doc(db, 'users', u.uid), data: pick(cleanDataObj(u), ['uid', 'fullName', 'email', 'role', 'departmentId', 'photoURL', 'fcmTokens']) });
+            if (u.uid) userItems.push({ ref: doc(db, 'users', u.uid), data: pick(cleanDataObj(u), ['uid', 'fullName', 'email', 'role', 'departmentId', 'photoURL', 'fcmTokens']) });
           });
         }
+        const taskItems: { id: string; ref: any; data: any }[] = [];
         if (Array.isArray(data.tasks)) {
           data.tasks.forEach((t: any) => {
             if (t.id) {
@@ -349,26 +320,64 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
               s.deadline  = toTs(s.deadline);
               s.createdAt = toTs(s.createdAt);
               s.updatedAt = toTs(s.updatedAt);
-              items.push({ ref: doc(db, 'tasks', t.id), data: s });
+              taskItems.push({ id: t.id, ref: doc(db, 'tasks', t.id), data: s });
             }
           });
         }
+        const blockerItems: { ref: any; data: any }[] = [];
         if (Array.isArray(data.blockers)) {
           data.blockers.forEach((b: any) => {
             if (b.id) {
               const { id, ...rest } = cleanDataObj(b);
               rest.createdAt = toTs(rest.createdAt);
               if (rest.resolvedAt) rest.resolvedAt = toTs(rest.resolvedAt);
-              items.push({ ref: doc(db, 'blockers', id), data: rest });
+              blockerItems.push({ ref: doc(db, 'blockers', id), data: rest });
             }
           });
         }
 
+        // system/stats agregat sayaçları (Dashboard'un canlı okuduğu totalTasks/
+        // status_*) taskService'in create/transitionTask/updateTask/deleteTask
+        // fonksiyonlarında increment() ile güncellenir. Restore burada bunların
+        // hiçbirini çağırmadan doğrudan writeBatch yazdığından, restore edilen
+        // her görev için ESKİ durumu (varsa) okuyup gerçek delta'yı kendimiz
+        // hesaplıyor ve AYNI batch'e ekliyoruz — aksi halde sayaçlar restore
+        // sonrası kalıcı olarak gerçek veriden sapar ve hiçbir normal işlemle
+        // kendiliğinden düzelmez (her normal işlem yalnızca kendi deltasını uygular).
+        const statsDelta: Record<string, number> = {};
+        for (const item of taskItems) {
+          const prevSnap = await getDoc(item.ref);
+          const newStatus = item.data.status as string | undefined;
+          if (!prevSnap.exists()) {
+            statsDelta.totalTasks = (statsDelta.totalTasks ?? 0) + 1;
+            if (newStatus) statsDelta[`status_${newStatus}`] = (statsDelta[`status_${newStatus}`] ?? 0) + 1;
+          } else {
+            const prevStatus = (prevSnap.data() as { status?: string }).status;
+            if (newStatus && prevStatus !== newStatus) {
+              if (prevStatus) statsDelta[`status_${prevStatus}`] = (statsDelta[`status_${prevStatus}`] ?? 0) - 1;
+              statsDelta[`status_${newStatus}`] = (statsDelta[`status_${newStatus}`] ?? 0) + 1;
+            }
+          }
+        }
+
+        const items = [...userItems, ...taskItems, ...blockerItems];
         const CHUNK = 50;
         for (let i = 0; i < items.length; i += CHUNK) {
           const chunk = items.slice(i, i + CHUNK);
           const batch = writeBatch(db);
           chunk.forEach(it => batch.set(it.ref, it.data, { merge: true }));
+          // Sayaç deltası tek seferlik, tüm chunk'lardan bağımsız bir işlem
+          // olarak yalnızca SON chunk'a eklenir — increment() atomik ve
+          // birikimli olduğundan hangi chunk'ta gönderildiği sonucu etkilemez.
+          if (i + CHUNK >= items.length && Object.keys(statsDelta).length > 0) {
+            const statsPayload: Record<string, ReturnType<typeof increment>> = {};
+            Object.entries(statsDelta).forEach(([key, value]) => {
+              if (value !== 0) statsPayload[key] = increment(value);
+            });
+            if (Object.keys(statsPayload).length > 0) {
+              batch.set(doc(db, 'system', 'stats'), statsPayload, { merge: true });
+            }
+          }
           await batch.commit();
           setImportStatus({ type: 'loading', message: `Veri Yazılıyor... %${Math.round(((i + chunk.length) / items.length) * 100)}` });
         }
@@ -406,7 +415,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
     setIsArchiving(true);
     setImportStatus({ type: 'loading', message: 'Denetim İzleri İndiriliyor...' });
     try {
-      const logs = await fetchAllAuditLogs();
+      const logs = await auditLogService.fetchAllPaged(AUDIT_LOG_EXPORT_PAGE_SIZE);
 
       if (logs.length === 0) {
         setImportStatus({ type: 'success', message: 'Dışa aktarılacak denetim izi bulunamadı.' });
@@ -421,14 +430,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
         system: 'MAKAM Stratejik Yönetim Denetim Arşivi',
       };
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `MAKAM-Logs-Backup-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, `MAKAM-Logs-Backup-${new Date().toISOString().split('T')[0]}.json`);
 
       // Dışa aktarma işleminin kendisi denetim izine kaydedilir (kayıtlar silinmez)
       await addDoc(collection(db, 'audit_logs'), {
