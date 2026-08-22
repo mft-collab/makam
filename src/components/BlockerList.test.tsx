@@ -166,6 +166,14 @@ describe('BlockerList', () => {
       const input = await screen.findByDisplayValue('Orijinal sebep');
       await user.clear(input);
       await user.type(input, '  Güncellenmiş sebep  ');
+      // "Kaydet" bir <form onSubmit> submit butonu ve input `required` —
+      // tıklamadan önce yazılan değerin DOM'a GERÇEKTEN committed olduğunu
+      // doğrulamadan tıklarsak (userEvent.setup() ile bile), CI'nin yoğun
+      // paralel yükü altında click submit event'i input hâlâ ara bir durumdayken
+      // (ör. required constraint validation'ı tetikleyip) sessizce engellenebilir
+      // — hiçbir hata fırlatmadan submit hiç olmaz. Burada varsayım yerine
+      // gözlenebilir DOM durumunu bekliyoruz.
+      await waitFor(() => expect(input).toHaveValue('  Güncellenmiş sebep  '));
       await user.click(screen.getByRole('button', { name: 'Kaydet' }));
 
       await waitFor(() => expect(onEditBlocker).toHaveBeenCalledWith('blocker-9', 'Güncellenmiş sebep'));
