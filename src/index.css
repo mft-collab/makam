@@ -37,7 +37,15 @@
      axe-core bu sınıf ihlalini dark modda (aşağıda #161513 ile) daha önce
      düzeltmiş ama light mod atlanmış. Aynı koyu tonla eşitlendi (~7.4:1). */
   --btn-primary-text: #161513;
-  
+
+  /* --color-executive-gold (#C5A059) DÜZ METİN olarak açık zeminler üzerinde
+     kullanıldığında (Sidebar'daki aktif nav etiketi, rol rozeti gibi) ~2.1-2.5:1
+     kontrast veriyor — axe-core'un authenticated e2e testinde bulduğu ciddi bir
+     AA ihlali. Dark modda aynı ton (~8:1) neredeyse hiçbir zaman sorun değil,
+     bu yüzden yalnızca light modda --color-amber-800'e (koyu, okunaklı bir
+     altın tonu) düşürülüyor. Kullanım: text-[color:var(--gold-text)]. */
+  --gold-text: #78350F;
+
   --base-tracking: 0;
   --heading-tracking: 0;
   
@@ -79,7 +87,10 @@
   --btn-secondary-bg: rgba(20, 20, 18, 0.8);
   --color-executive-blue-dynamic: #F5F3EF;
   --btn-primary-text: #161513;
-  
+  /* Dark modda koyu zemin üzerinde standart altın ton zaten ~8:1 kontrast
+     veriyor — light moddaki gibi koyultmaya gerek yok. */
+  --gold-text: #C5A059;
+
   --base-tracking: 0;
   --heading-tracking: 0;
   
