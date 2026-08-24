@@ -28,6 +28,13 @@
   --glass-bg: rgba(252, 251, 249, 0.65);
   --card-bg: rgba(255, 255, 255, 0.8);
   --input-bg: rgba(255, 255, 255, 0.8);
+  /* Modal panelinin kendisi zaten --bg-elevated (beyaz/neredeyse-siyah) —
+     --glass-bg/--input-bg de aynı tona çok yakın olduğundan panel üstündeki
+     kutular (TaskFormModal vb.) görünmez oluyordu (bkz. kod denetimi).
+     --field-surface bilinçli olarak panelin TERSİ yönde kayan bir ton: açık
+     modda hafifçe koyulaşır (girinti hissi), karanlık modda hafifçe açılır
+     (yükselti hissi) — böylece panelden her iki temada da net ayrışır. */
+  --field-surface: rgba(22, 21, 19, 0.035);
   --shadow-base: rgba(0, 0, 0, 0.04);
   --btn-secondary-bg: rgba(255, 255, 255, 0.8);
   --color-executive-blue-dynamic: #161513;
@@ -83,6 +90,7 @@
   --glass-bg: rgba(20, 20, 18, 0.65);
   --card-bg: rgba(20, 20, 18, 0.65);
   --input-bg: rgba(20, 20, 18, 0.75);
+  --field-surface: rgba(255, 255, 255, 0.06);
   --shadow-base: rgba(0, 0, 0, 0.8);
   --btn-secondary-bg: rgba(20, 20, 18, 0.8);
   --color-executive-blue-dynamic: #F5F3EF;
@@ -181,6 +189,7 @@
   
   --color-makam-glass: var(--glass-bg);
   --color-makam-card: var(--card-bg);
+  --color-field-surface: var(--field-surface);
 
   --color-text-heading: var(--text-heading);
   --color-text-body: var(--text-main);

@@ -141,7 +141,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
           </label>
           <textarea
             className={cn(
-              "w-full min-h-[140px] resize-none bg-surface-elevated border border-makam-border/10 text-text-heading placeholder:text-text-muted/30 rounded-xl px-5 py-4 text-[14px] font-light leading-relaxed transition-all outline-none focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
+              "w-full min-h-[140px] resize-none bg-field-surface border border-makam-border/20 text-text-heading placeholder:text-text-muted/30 rounded-xl px-5 py-4 text-[14px] font-light leading-relaxed transition-all outline-none focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
               errors.description && "border-status-danger/50"
             )}
             placeholder="İşin detaylarını ve başarı kriterlerini tanımlayın..."
@@ -155,7 +155,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
           <div className="flex flex-col gap-3">
              <label className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.18em] px-1 flex items-center gap-2.5">
                <Users className="w-3.5 h-3.5 text-executive-blue stroke-[1.2]" />
-               İcra Makamı
+               Sorumlu
              </label>
              {isSubTask && (
                <p className="text-[9px] text-status-warning/80 px-1 tracking-wide flex items-center gap-1.5">
@@ -163,10 +163,10 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
                  Alt talimatlar yalnızca memurlara atanabilir.
                </p>
              )}
-             <select 
+             <select
               {...register('assigneeId')}
               className={cn(
-                "w-full bg-surface-elevated border border-makam-border/10 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
+                "w-full bg-field-surface border border-makam-border/20 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
                 errors.assigneeId && "border-status-danger/50"
               )}
             >
@@ -183,10 +183,10 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
                <Users className="w-3.5 h-3.5 text-text-muted/40 stroke-[1.2]" />
                İrtibatlı
              </label>
-             <select 
+             <select
               {...register('coordinatorId')}
               className={cn(
-                "w-full bg-surface-elevated border border-makam-border/10 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
+                "w-full bg-field-surface border border-makam-border/20 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
                 errors.coordinatorId && "border-status-danger/50"
               )}
             >
@@ -209,9 +209,9 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
                <AlertCircle className="w-3.5 h-3.5 text-executive-gold stroke-[1.2]" />
                Öncelik
              </label>
-             <select 
+             <select
               {...register('priority')}
-              className="w-full bg-surface-elevated border border-makam-border/10 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5"
+              className="w-full bg-field-surface border border-makam-border/20 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5"
             >
               {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
@@ -219,29 +219,25 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
             </select>
             {errors.priority && <span className="text-status-danger text-[10px] px-1 uppercase tracking-wider">{errors.priority.message}</span>}
           </div>
-        </div>
 
-        {/* Tarih */}
-        <div className="flex flex-col gap-3">
-          <label htmlFor="task-deadline" className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.18em] px-1 flex items-center gap-2.5">
-            <Calendar className="w-3.5 h-3.5 text-executive-blue stroke-[1.2]" />
-            SLA Mühleti
-          </label>
-          <div
-            className={cn(
-              "w-fit min-w-[180px] flex items-center gap-3 bg-surface-elevated border border-makam-border/10 rounded-xl px-4 py-3 transition-all focus-within:border-executive-blue/30 focus-within:ring-4 focus-within:ring-executive-blue/5",
-              errors.deadline && "border-status-danger/50"
-            )}
-          >
-            <Calendar className="w-3.5 h-3.5 text-executive-blue/60 stroke-[1.2] flex-shrink-0" aria-hidden="true" />
+          <div className="flex flex-col gap-3">
+            <label htmlFor="task-deadline" className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.18em] px-1 flex items-center gap-2.5">
+              <Calendar className="w-3.5 h-3.5 text-executive-blue stroke-[1.2]" />
+              SLA Mühleti
+            </label>
             <DatePicker
               id="task-deadline"
               value={deadline}
               onChange={(v) => setValue('deadline', v, { shouldValidate: true, shouldDirty: true })}
               ariaLabel="SLA mühleti"
+              icon={<Calendar className="w-3.5 h-3.5 text-executive-blue/60 stroke-[1.2] flex-shrink-0" aria-hidden="true" />}
+              triggerClassName={cn(
+                "w-full flex items-center gap-3 bg-field-surface border border-makam-border/20 rounded-xl px-4 py-3 text-[13px] transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
+                errors.deadline && "border-status-danger/50"
+              )}
             />
+            {errors.deadline && <span className="text-status-danger text-[10px] px-1 uppercase tracking-wider">{errors.deadline.message}</span>}
           </div>
-          {errors.deadline && <span className="text-status-danger text-[10px] px-1 uppercase tracking-wider">{errors.deadline.message}</span>}
         </div>
       </div>
 

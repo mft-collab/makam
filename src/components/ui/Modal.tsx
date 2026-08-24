@@ -13,6 +13,13 @@ import { cn } from '../../lib/utils';
      (ref-count mantığı). */
 let modalStack: symbol[] = [];
 
+/** Takvim gibi `useModalBehavior` kullanmayan hafif açılır panellerin de aynı
+ *  "yalnızca en üstteki Escape'i işler" kuralına katılabilmesi için dışa
+ *  açılan yardımcılar (bkz. DatePicker.tsx). */
+export const pushModalStack = (id: symbol) => { modalStack.push(id); };
+export const popModalStack = (id: symbol) => { modalStack = modalStack.filter(entry => entry !== id); };
+export const isTopOfModalStack = (id: symbol) => modalStack[modalStack.length - 1] === id;
+
 interface ModalBehaviorOptions {
   isOpen: boolean;
   onClose: () => void;

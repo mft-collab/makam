@@ -7,6 +7,7 @@ import {
 } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { cn } from '../../lib/utils';
+import { pushModalStack, popModalStack, isTopOfModalStack } from './Modal';
 
 const WEEKDAY_LABELS = ['Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct', 'Pz'];
 const VALUE_FORMAT = 'yyyy-MM-dd';
@@ -22,14 +23,20 @@ interface DatePickerProps {
   onChange: (value: string) => void;
   ariaLabel: string;
   className?: string;
+  /** Verilirse tetikleyici buton içinde etiketten önce render edilir (ör. boyalı kutu tetikleyicileri). */
+  icon?: React.ReactNode;
+  /** Tetikleyici butonun kendi className'ine eklenir — dış, tıklamaya tepki vermeyen bir "kutu" sarmalayıcısı yerine kutu stilini doğrudan tıklanabilir alana uygulamak için. */
+  triggerClassName?: string;
 }
 
 /** Markaya özgü, bağımlılıksız açılır takvim — native `<input type="date">`'in
  *  tarayıcıdan tarayıcıya değişen OS takvim popup'ının yerini alır. */
-export const DatePicker = ({ id, value, onChange, ariaLabel, className }: DatePickerProps) => {
+export const DatePicker = ({ id, value, onChange, ariaLabel, className, icon, triggerClassName }: DatePickerProps) => {
   const selected = parseValue(value);
   const [isOpen, setIsOpen] = useState(false);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(selected ?? new Date()));
+  const stackIdRef = useRef<symbol | null>(null);
+  if (stackIdRef.current === null) stackIdRef.current = Symbol('date-picker');
   // Takvim gövdesinin yaklaşık yüksekliği (başlık + hafta günleri + 6 satır gün hücresi).
   // Modal gibi `overflow-y-auto` ile kırpılan konteynerler içinde tetikleyicinin altında
   // yeterli yer yoksa (ör. formun en alt alanı), takvim yukarı açılır (bkz. kod denetimi:
@@ -40,15 +47,21 @@ export const DatePicker = ({ id, value, onChange, ariaLabel, className }: DatePi
 
   useEffect(() => {
     if (!isOpen) return;
+    // Modal içine yerleştirilen bir DatePicker açıkken Esc, dış Modal'ın da
+    // kendini kapatmasına yol açmasın diye paylaşılan modalStack'e katılıyoruz
+    // (bkz. Modal.tsx: yalnızca stack'in tepesindeki Esc'i işler).
+    const stackId = stackIdRef.current!;
+    pushModalStack(stackId);
     const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) setIsOpen(false);
     };
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsOpen(false);
+      if (e.key === 'Escape' && isTopOfModalStack(stackId)) setIsOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleKeyDown);
     return () => {
+      popModalStack(stackId);
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
@@ -86,8 +99,12 @@ export const DatePicker = ({ id, value, onChange, ariaLabel, className }: DatePi
         aria-haspopup="dialog"
         aria-expanded={isOpen}
         aria-label={ariaLabel}
-        className="text-[11px] text-text-heading bg-transparent outline-none border-none cursor-pointer font-medium rounded focus-visible:ring-2 focus-visible:ring-executive-blue"
+        className={cn(
+          "text-[11px] text-text-heading bg-transparent outline-none border-none cursor-pointer font-medium rounded focus-visible:ring-2 focus-visible:ring-executive-blue",
+          triggerClassName
+        )}
       >
+        {icon}
         {selected ? format(selected, 'd MMM yyyy', { locale: tr }) : '—'}
       </button>
 
