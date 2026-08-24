@@ -3,6 +3,8 @@ import { Task, User } from '../types';
 import { Award, X, ShieldCheck } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useModalBehavior } from './ui/Modal';
+import { Button } from './ui/Button';
+import { formatLongDate } from '../lib/utils';
 
 interface CertificateModalProps {
   task: Task;
@@ -73,7 +75,7 @@ export const CertificateModal = ({ task, assignee, onClose }: CertificateModalPr
           <div className="flex flex-col md:flex-row items-center justify-between w-full px-4 md:px-12 pt-4 gap-8 md:gap-0">
              <div className="flex flex-col items-center md:items-start gap-2">
                 <span className="text-[10px] text-text-muted font-medium uppercase tracking-[0.3em]">TARİH</span>
-                <span className="text-[14px] text-text-heading font-light font-serif">{new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                <span className="text-[14px] text-text-heading font-light font-serif">{formatLongDate()}</span>
              </div>
              <div className="flex flex-col items-center gap-3 shrink-0">
                 <div className="w-16 h-16 md:w-20 md:h-20 rounded-full border border-executive-gold/20 flex items-center justify-center relative">
@@ -90,12 +92,14 @@ export const CertificateModal = ({ task, assignee, onClose }: CertificateModalPr
              </div>
           </div>
 
-          <button
+          <Button
+            variant="primary"
+            size="lg"
             onClick={onClose}
-            className="makam-button-primary mt-4 md:mt-6 px-10 md:px-12 h-12 md:h-14 tracking-[0.3em] w-full md:w-auto text-[10px] md:text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-2"
+            className="mt-4 md:mt-6 tracking-[0.3em] text-[10px] md:text-[11px] w-full md:w-auto"
           >
             DİZGEYE DÖN
-          </button>
+          </Button>
         </div>
       </motion.div>
     </div>

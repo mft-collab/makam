@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { AlertCircle, Sun, Moon, Monitor, Building, BookOpen } from 'lucide-react';
 import { Logo } from './Logo';
 import { Avatar } from './ui/Avatar';
@@ -9,7 +9,6 @@ import { GuideModal } from './GuideModal';
 import { ROLE_LABELS } from '../constants';
 import { useUIStore } from '../store/uiStore';
 import type { User, Notification } from '../types';
-import { offlineQueue } from '../lib/offlineQueue';
 
 interface Props {
   user: User;
@@ -20,6 +19,12 @@ interface Props {
   globalFocusDept: string;
   onGlobalFocusDeptChange: (dept: string) => void;
   departments: string[];
+  /** App.tsx'teki useOfflineQueue()'dan gelir — bu bileşen artık kendi
+   *  bağımsız online/offline listener'ını kurmuyor (bkz. kod denetimi:
+   *  eskiden App.tsx'in zaten hesapladığı aynı durumun ikinci bir kopyası
+   *  burada ayrıca izleniyordu). */
+  isOffline: boolean;
+  queueLength: number;
 }
 
 export function AppHeader({
@@ -30,7 +35,9 @@ export function AppHeader({
   setShowNotifications,
   globalFocusDept,
   onGlobalFocusDeptChange,
-  departments
+  departments,
+  isOffline,
+  queueLength
 }: Props) {
   // Selector bazlı okuma — bu bileşen sticky/her zaman görünür olduğundan
   // whole-store `useUIStore()` toasts/filter/activeTab gibi ilgisiz her alan
@@ -38,31 +45,9 @@ export function AppHeader({
   // gereksiz yeniden render'a yol açıyordu.
   const theme = useUIStore(s => s.theme);
   const setTheme = useUIStore(s => s.setTheme);
-  const [isOnline, setIsOnline] = useState(typeof window !== 'undefined' ? window.navigator.onLine : true);
-  const [queueCount, setQueueCount] = useState(0);
+  const isOnline = !isOffline;
+  const queueCount = queueLength;
   const [isGuideOpen, setIsGuideOpen] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    const updateQueueCount = () => {
-      setQueueCount(offlineQueue.getQueue().length);
-    };
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    window.addEventListener('makam_queue_changed', updateQueueCount);
-
-    updateQueueCount();
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-      window.removeEventListener('makam_queue_changed', updateQueueCount);
-    };
-  }, []);
 
   const handleToggleTheme = () => {
     if (theme === 'light') setTheme('dark');

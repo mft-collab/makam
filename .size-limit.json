@@ -30,6 +30,12 @@
     "limit": "40 KB"
   },
   {
+    "name": "Date-fns vendor paketi",
+    "path": "dist/assets/vendor-date-*.js",
+    "gzip": true,
+    "limit": "12 KB"
+  },
+  {
     "name": "CSS",
     "path": "dist/assets/*.css",
     "gzip": true,

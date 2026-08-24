@@ -1,7 +1,12 @@
 import React from 'react';
 import { cn } from '../../lib/utils';
 
-import { motion, useMotionTemplate, useMotionValue } from 'motion/react';
+import { motion, useMotionTemplate, useMotionValue, type MotionStyle, type MotionValue } from 'motion/react';
+
+// motion.div'in style prop'u CSS custom property (--mouse-x vb.) tanımını
+// içermiyor; framer-motion'ın MotionStyle'ını bozmadan bu alanları eklemek
+// için dar kapsamlı bir intersection tipi — `as any` yerine.
+type CardMotionStyle = MotionStyle & Record<`--${string}`, string | number | MotionValue<string>>;
 
 interface CardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
   title?: React.ReactNode;
@@ -14,7 +19,7 @@ export const Card = ({ title, description, footer, children, className, spotligh
   // HTML drag/animation event handler'ları motion.div'in kendi prop'larıyla çakıştığı için
   // bilinçli olarak ayıklanıyor (restProps'a sızmamaları gerekiyor) — silme, davranışı bozar.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { onAnimationStart, onDrag, onDragStart, onDragEnd, ...restProps } = props as any;
+  const { onAnimationStart, onDrag, onDragStart, onDragEnd, ...restProps } = props;
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
 
@@ -44,7 +49,7 @@ export const Card = ({ title, description, footer, children, className, spotligh
       style={{
         '--mouse-x': useMotionTemplate`${mouseX}px`,
         '--mouse-y': useMotionTemplate`${mouseY}px`,
-      } as any}
+      } as CardMotionStyle}
       {...restProps}
     >
       <motion.div

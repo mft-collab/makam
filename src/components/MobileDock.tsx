@@ -8,6 +8,7 @@ import {
 import { cn } from '../lib/utils';
 import { User } from '../types';
 import { triggerHaptic } from '../lib/haptics';
+import { TAB_ROLES } from '../constants';
 
 interface DockItem {
   id: string;
@@ -17,13 +18,13 @@ interface DockItem {
 }
 
 const ALL_ITEMS: DockItem[] = [
-  { id: 'dashboard', label: 'Harekat',   icon: ShieldCheck,   roles: ['Admin', 'Manager', 'Staff'] },
-  { id: 'tasks',     label: 'Talimatlar', icon: CheckSquare,  roles: ['Admin', 'Manager', 'Staff'] },
-  { id: 'blockers',  label: 'Engeller',  icon: AlertTriangle, roles: ['Admin', 'Manager'] },
-  { id: 'team',      label: 'Kadro',     icon: Users,         roles: ['Admin', 'Manager'] },
-  { id: 'reports',   label: 'Raporlar',  icon: BarChart3,     roles: ['Admin'] },
-  { id: 'audit',     label: 'Denetim',   icon: Database,      roles: ['Admin'] },
-  { id: 'settings',  label: 'Ayarlar',   icon: Settings,      roles: ['Admin'] },
+  { id: 'dashboard', label: 'Harekat',   icon: ShieldCheck,   roles: TAB_ROLES.dashboard },
+  { id: 'tasks',     label: 'Talimatlar', icon: CheckSquare,  roles: TAB_ROLES.tasks },
+  { id: 'blockers',  label: 'Engeller',  icon: AlertTriangle, roles: TAB_ROLES.blockers },
+  { id: 'team',      label: 'Kadro',     icon: Users,         roles: TAB_ROLES.team },
+  { id: 'reports',   label: 'Raporlar',  icon: BarChart3,     roles: TAB_ROLES.reports },
+  { id: 'audit',     label: 'Denetim',   icon: Database,      roles: TAB_ROLES.audit },
+  { id: 'settings',  label: 'Ayarlar',   icon: Settings,      roles: TAB_ROLES.settings },
 ];
 
 const MAX_VISIBLE = 4;

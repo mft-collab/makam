@@ -4,6 +4,7 @@ import { AlertTriangle, X, ShieldAlert } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useModalBehavior } from './ui/Modal';
 import { Button } from './ui/Button';
+import { formatLongDate } from '../lib/utils';
 
 interface WarningModalProps {
   task: Task;
@@ -77,7 +78,7 @@ export const WarningModal = ({ task, assignee, onClose }: WarningModalProps) => 
           <div className="flex flex-col md:flex-row items-center justify-between w-full px-4 md:px-12 pt-4 gap-8 md:gap-0">
              <div className="flex flex-col items-center md:items-start gap-2">
                 <span className="text-[10px] text-text-muted font-medium uppercase tracking-[0.3em]">TEBLİĞ TARİHİ</span>
-                <span className="text-[14px] text-text-heading font-light font-serif">{new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                <span className="text-[14px] text-text-heading font-light font-serif">{formatLongDate()}</span>
              </div>
              <div className="flex flex-col items-center gap-3 shrink-0">
                 <div className="w-16 h-16 md:w-20 md:h-20 rounded-full border border-status-danger/20 flex items-center justify-center relative">

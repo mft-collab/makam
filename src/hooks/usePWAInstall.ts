@@ -38,11 +38,6 @@ export function usePWAInstall() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
 
-    // Initial check in case it fired before hook loaded
-    if (window.hasOwnProperty('beforeinstallprompt')) {
-      logger.debug('window has beforeinstallprompt already');
-    }
-
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);

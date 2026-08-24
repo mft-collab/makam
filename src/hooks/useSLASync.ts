@@ -24,8 +24,16 @@ function normalize(val: any, defaultVal: number, defaultUnit: 'days' | 'hours') 
 }
 
 export function useSLASync(user: User | null) {
+  // Yalnızca uid'e (primitive) bağımlı — user nesnesi, kullanıcının Firestore
+  // dokümanındaki SLA ile alakasız her değişiklikte (fotoğraf, fcmTokens vb.)
+  // yeni bir referansla set ediliyor (bkz. App.tsx); tüm `user` nesnesini
+  // dependency array'e koymak bu tür alakasız güncellemelerde gereksiz
+  // resubscribe'a yol açardı — useFirestoreData.ts'teki aynı desen (bkz. kod
+  // denetimi).
+  const uid = user?.uid;
+
   useEffect(() => {
-    if (!user) return;
+    if (!uid) return;
 
     const slaDocRef = doc(db, 'system', 'sla_config');
     const unsubscribe = onSnapshot(
@@ -47,5 +55,5 @@ export function useSLASync(user: User | null) {
     );
 
     return () => unsubscribe();
-  }, [user]);
+  }, [uid]);
 }

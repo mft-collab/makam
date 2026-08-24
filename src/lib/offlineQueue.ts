@@ -1,6 +1,7 @@
 import {
   db,
   doc,
+  getDoc,
   setDoc,
   deleteDoc,
   collection,
@@ -12,8 +13,8 @@ import {
 import { logger } from './logger';
 import { conflictDetectionService } from '../services/conflictDetectionService';
 import { useUIStore } from '../store/uiStore';
-import { transitionTaskInTransaction } from '../services/taskService';
-import type { Task, TaskStatus } from '../types';
+import { transitionTaskInTransaction, updateTaskInTransaction, taskService } from '../services/taskService';
+import type { Task, TaskStatus, User } from '../types';
 
 // Sunucu bu hata kodlarıyla reddettiğinde yeniden deneme sonucu asla değişmez
 // (ör. firestore.rules'taki bir iş kuralı ihlali veya bozuk veri) — kuyrukta
@@ -59,6 +60,17 @@ export interface OfflineMutation {
     assigneeId?: string;
     expectedVersion?: number;
   };
+  /** 'tasks' 'create'/'update' (durum-dışı, business-kurallı) mutasyonları için:
+   *  bu mutasyonu senkronda ham addDoc/updateDoc yerine online taskService.createTask/
+   *  updateTaskInTransaction üzerinden — BİREBİR AYNI iş-kuralı (Admin-koordinatör/
+   *  irtibatlı kısıtı, alt-talimat-yalnızca-Staff), audit_logs kaydı ve system/stats
+   *  güncellemesiyle — uygulamak için gereken "değiştiren kullanıcı" kimliği.
+   *  Verilmezse (eski/legacy kuyruk öğeleri) ham addDoc/updateDoc'a düşülür. */
+  actorId?: string;
+  /** 'tasks' 'update' + actorId mutasyonları için: enqueue anındaki görev anlık
+   *  görüntüsü — audit-log diff'inin "eski değer" tabanı olarak kullanılır
+   *  (online updateTask'taki oldTask parametresiyle aynı rol). */
+  oldTaskSnapshot?: Task;
 }
 
 /**
@@ -125,6 +137,26 @@ function propagateVersionBump(
   }
 }
 
+/**
+ * Bir 'create' mutasyonu sunucuda gerçek bir ID aldığında, kuyrukta ondan
+ * SONRA gelen ve enqueue anında geçici (temp) ID'yi referans alan öğeleri
+ * (docId veya data içindeki herhangi bir alan) gerçek ID ile yamalar. Hem
+ * generic addDoc yolunda hem taskService.createTask yolunda kullanılır.
+ */
+function remapTempId(workingQueue: OfflineMutation[], fromIndex: number, tempIdValue: string | undefined, realId: string | undefined) {
+  if (!tempIdValue || !realId || tempIdValue === realId) return;
+  logger.debug(`[Offline Queue] Remapping ${tempIdValue} -> ${realId}`);
+  for (let j = fromIndex + 1; j < workingQueue.length; j++) {
+    const item = workingQueue[j]!;
+    if (item.docId === tempIdValue) item.docId = realId;
+    if (item.data && typeof item.data === 'object') {
+      for (const key of Object.keys(item.data)) {
+        if (item.data[key] === tempIdValue) item.data[key] = realId;
+      }
+    }
+  }
+}
+
 export const offlineQueue = {
   getQueue(): OfflineMutation[] {
     try {
@@ -153,7 +185,9 @@ export const offlineQueue = {
     docId?: string,
     expectedVersion?: number,
     linkedTaskTransition?: OfflineMutation['linkedTaskTransition'],
-    statusTransition?: OfflineMutation['statusTransition']
+    statusTransition?: OfflineMutation['statusTransition'],
+    actorId?: string,
+    oldTaskSnapshot?: Task
   ) {
     const queue = this.getQueue();
 
@@ -177,6 +211,8 @@ export const offlineQueue = {
         existing.data = { ...existing.data, ...data };
         existing.timestamp = Date.now();
         if (existing.expectedVersion === undefined) existing.expectedVersion = expectedVersion;
+        if (existing.actorId === undefined) existing.actorId = actorId;
+        if (existing.oldTaskSnapshot === undefined) existing.oldTaskSnapshot = oldTaskSnapshot;
         this.saveQueue(queue);
         logger.debug(`[Offline Queue] Coalesced update mutation for ${collectionName}/${docId}`);
         return;
@@ -192,7 +228,9 @@ export const offlineQueue = {
       timestamp: Date.now(),
       expectedVersion,
       linkedTaskTransition,
-      statusTransition
+      statusTransition,
+      actorId,
+      oldTaskSnapshot
     };
     queue.push(mutation);
     this.saveQueue(queue);
@@ -255,6 +293,15 @@ export const offlineQueue = {
                 }
                 break;
               }
+              if (mutation.collectionName === 'tasks' && mutation.actorId) {
+                // Business-kurallı oluşturma — online taskService.createTask ile aynı
+                // yoldan: Admin-koordinatör/irtibatlı ve alt-talimat-yalnızca-Staff
+                // kısıtları, audit_logs kaydı ve system/stats artırımı offline
+                // oluşturmada da uygulanır (bkz. taskService.ts).
+                const newTaskId = await taskService.createTask(mutation.data, mutation.actorId, { timestampOverride: mutation.timestamp });
+                remapTempId(workingQueue, i, mutation.data?.id, newTaskId);
+                break;
+              }
               const docRef = await addDoc(collection(db, mutation.collectionName), {
                 ...mutation.data,
                 createdAt: mutation.data.createdAt || mutation.timestamp,
@@ -266,19 +313,7 @@ export const offlineQueue = {
               // Belirli alan adlarını (id/taskId/parentId/...) sabit kodlamak yerine data
               // nesnesindeki HER alanı tarar — yeni bir referans alanı (ör. relatedTaskId)
               // eklendiğinde bu mantığın ayrıca güncellenmesi gerekmez.
-              const tempId = mutation.data?.id;
-              if (tempId && docRef.id && tempId !== docRef.id) {
-                logger.debug(`[Offline Queue] Remapping ${tempId} -> ${docRef.id}`);
-                for (let j = i + 1; j < workingQueue.length; j++) {
-                  const item = workingQueue[j]!;
-                  if (item.docId === tempId) item.docId = docRef.id;
-                  if (item.data && typeof item.data === 'object') {
-                    for (const key of Object.keys(item.data)) {
-                      if (item.data[key] === tempId) item.data[key] = docRef.id;
-                    }
-                  }
-                }
-              }
+              remapTempId(workingQueue, i, mutation.data?.id, docRef.id);
               break;
             }
             case 'set':
@@ -316,6 +351,30 @@ export const offlineQueue = {
                     propagateVersionBump(workingQueue, i, mutation.docId!, (prevTask.lockVersion || 0) + 1);
                   } catch (transitionErr) {
                     if (conflictDetectionService.detectConflict(transitionErr, mutation.docId!, 'Talimat', expectedVersion ?? 0)) {
+                      hadConflict = true;
+                      break;
+                    }
+                    throw transitionErr;
+                  }
+                } else if (mutation.collectionName === 'tasks' && mutation.actorId) {
+                  // Business-kurallı genel güncelleme — online taskService.updateTask
+                  // ile aynı çekirdek mantık (updateTaskInTransaction) üzerinden:
+                  // Admin-koordinatör kısıtı, audit_logs kaydı ve (durum alanı
+                  // varsa) stats deltası offline'da da uygulanır.
+                  if (mutation.data?.coordinatorId) {
+                    const coordSnap = await getDoc(doc(db, 'users', mutation.data.coordinatorId));
+                    if (coordSnap.exists() && (coordSnap.data() as User).role === 'Admin') {
+                      throw new Error('Admin rolündeki kullanıcı koordinatör olarak atanamaz.');
+                    }
+                  }
+                  const oldTaskForDiff = mutation.oldTaskSnapshot ?? ({ lockVersion: mutation.expectedVersion } as Task);
+                  try {
+                    const prevTask = await runTransaction(db, (transaction) =>
+                      updateTaskInTransaction(transaction, mutation.docId!, mutation.data, oldTaskForDiff, mutation.actorId!, { timestampOverride: mutation.timestamp })
+                    );
+                    propagateVersionBump(workingQueue, i, mutation.docId!, (prevTask.lockVersion || 0) + 1);
+                  } catch (transitionErr) {
+                    if (conflictDetectionService.detectConflict(transitionErr, mutation.docId!, oldTaskForDiff.title ?? 'Talimat', mutation.expectedVersion ?? 0)) {
                       hadConflict = true;
                       break;
                     }

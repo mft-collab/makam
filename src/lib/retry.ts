@@ -1,3 +1,5 @@
+import { logger } from './logger';
+
 /**
  * Exponential Backoff Transaction and Mutation retry wrapper for network resiliency.
  */
@@ -14,12 +16,12 @@ export async function runWithRetry<T>(
     } catch (error) {
       attempt++;
       if (attempt >= maxRetries) {
-        console.error(`[Retry Engine] All ${maxRetries} attempts failed. Throwing error.`, error);
+        logger.error(`[Retry Engine] All ${maxRetries} attempts failed. Throwing error.`, error);
         throw error;
       }
-      
+
       const delay = initialDelay * Math.pow(2, attempt - 1);
-      console.warn(`[Retry Engine] Attempt ${attempt} failed. Retrying in ${delay}ms...`, error);
+      logger.warn(`[Retry Engine] Attempt ${attempt} failed. Retrying in ${delay}ms...`, error);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }

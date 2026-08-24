@@ -29,6 +29,43 @@ export function formatTimeAgo(timestamp: number | Timestamp, status?: string) {
   return 'Yeni';
 }
 
+// ─── Tarih/saat formatlama ────────────────────────────────────────────────
+// Ortak tr-TR formatlayıcılar — eskiden AuditLogList/BlockerList/TeamList/
+// WarningModal/CertificateModal/Dashboard her biri kendi çıplak
+// toLocaleDateString/toLocaleString/toLocaleTimeString çağrısını bağımsız
+// olarak yazıyordu (bkz. kod denetimi). date-fns kullanan yerler (LocalTime,
+// TaskBoard, TaskDetails, Reports) bilinçli olarak buraya taşınmadı — zaten
+// tutarlı, ayrı bir formatlama kütüphanesi kullanıyorlar.
+
+function toMillis(timestamp: number | Timestamp): number {
+  return timestamp instanceof Timestamp ? timestamp.toMillis() : timestamp;
+}
+
+/** "24.08.2026" — kısa tarih. */
+export function formatDate(timestamp: number | Timestamp): string {
+  return new Date(toMillis(timestamp)).toLocaleDateString('tr-TR');
+}
+
+/** "24.08.2026 14:35:00" — tarih + saat. */
+export function formatDateTime(timestamp: number | Timestamp): string {
+  return new Date(toMillis(timestamp)).toLocaleString('tr-TR');
+}
+
+/** "24 Ağustos 2026" — uzun biçim tarih (belge/sertifika başlıkları için). */
+export function formatLongDate(timestamp: number | Timestamp = Date.now()): string {
+  return new Date(toMillis(timestamp)).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+/** "14:35" — yalnızca saat. */
+export function formatTime(timestamp: number | Timestamp): string {
+  return new Date(toMillis(timestamp)).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+}
+
+/** "24.08.2026 14:35" — tarih + saat (saniyesiz, formatDateTime'dan farkı budur). */
+export function formatDateTimeShort(timestamp: number | Timestamp): string {
+  return new Date(toMillis(timestamp)).toLocaleDateString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+}
+
 export function cleanData<T extends object>(obj: T): T {
   const result: any = { ...obj };
   Object.keys(result).forEach(key => {

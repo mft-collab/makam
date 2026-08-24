@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Proje
 
-MAKAM — kurumsal görev/blocker/SLA takip uygulaması. React 19 + TypeScript + Firebase üzerine kurulu, offline-first bir PWA. Firebase **Spark (ücretsiz) plan** sınırları göz önünde bulundurularak tasarlanmıştır; Cloud Functions ve yeni entegrasyonlar bu kısıtla uyumlu olmalı.
+MAKAM — kurumsal görev/blocker/SLA takip uygulaması. React 19 + TypeScript + Firebase üzerine kurulu, offline-first bir PWA. Firebase **Spark (ücretsiz) plan**ın kullanım kotaları (Firestore okuma/yazma, depolama, bant genişliği) göz önünde bulundurularak tasarlanmıştır — yeni entegrasyonlar bu kotalarla uyumlu olmalı. Not: Cloud Functions'ın kendisi (arka plan tetikleyicileri dahil) Firebase/GCP tarafında teknik olarak faturalandırmalı bir hesap (Blaze) gerektirir; buradaki "Spark" vurgusu "Blaze'de ama Spark'ın ücretsiz kota sınırları içinde kalınacak şekilde tasarlanmış" anlamına gelir (bkz. `functions/src/`'teki sayfalama/toplu-işlem korumaları).
 
 ## Komutlar
 
@@ -26,7 +26,7 @@ E2E (Playwright):
 - `npx playwright test` → `tests/e2e/core.spec.ts`, gerçek Firebase projesine karşı, yalnızca kimlik doğrulama gerektirmeyen Login ekranını (yükleme + a11y) kapsar.
 - `npm run test:e2e:emulator` → Firebase Emulator Suite'i (Auth+Firestore) ayağa kaldırır, `scripts/seedE2E.ts` ile test verisi tohumlar, `tests/e2e/authenticated.spec.ts`'i çalıştırır, sonunda emulator'ları kapatır. Gerçek projeye dokunmaz. Gerektirir: Java 11+. Kimlik doğrulama, `src/App.tsx`'teki `isUsingFirebaseEmulator` bypass'ı ile custom auth token üzerinden yapılır — yalnızca `vite dev` + `VITE_USE_FIREBASE_EMULATOR=true` ile aktiftir, prod build'de asla çalışmaz.
 
-CI (`.github/workflows/ci.yml`) sırası: `security` (gitleaks + `npm audit --audit-level=critical`) → `quality` (lint + eslint + test) → `build` → `performance` (size + lighthouse) → `deploy`/`preview`.
+CI (`.github/workflows/ci.yml`) sırası: `security` (gitleaks + `npm audit --audit-level=critical`) → `quality` (lint + eslint + test) → `build` → `performance` (size + lighthouse) → `deploy`/`preview`. Notlar: `deploy` işi yalnızca `firebase deploy --only hosting` çalıştırır — Cloud Functions deploy'u bu pipeline'ın dışındadır (manuel: `cd functions && npm run deploy`). Emulator tabanlı authenticated e2e testleri (`test:e2e:emulator`) ayrı bir workflow'da (`.github/workflows/e2e.yml`) çalışır ve `deploy` işini engellemez.
 
 ## Mimari
 
@@ -38,7 +38,7 @@ CI (`.github/workflows/ci.yml`) sırası: `security` (gitleaks + `npm audit --au
 
 **Offline-first**: Mutasyonlar önce `src/lib/offlineQueue.ts` (`localStorage` tabanlı kuyruk) üzerinden kaydedilir, bağlantı geldiğinde senkronize edilir. Kuyruk (küçük/geçici mutasyon listesi) ile `dataStore`'un IndexedDB persist'i (büyük state) bilinçli olarak ayrı katmanlardır. Eşzamanlı çakışan güncellemeler `lockVersion` alanı ile optimistic locking olarak tespit edilir (`VERSION_MISMATCH`, bkz. `src/services/conflictDetectionService.ts`).
 
-**Görev durum makinesi** (`TaskStatus`, bkz. `firestore.rules` `isValidTransition`): `ASSIGNED → IN_PROGRESS | BLOCKED | CANCELLED | PENDING_DELEGATION`, `IN_PROGRESS → BLOCKED | AWAITING_APPROVAL | COMPLETED | CANCELLED | CRISIS | PENDING_DELEGATION`, `BLOCKED → IN_PROGRESS | CANCELLED`, `AWAITING_APPROVAL → COMPLETED | IN_PROGRESS | CANCELLED`, `CRISIS → IN_PROGRESS | CANCELLED | COMPLETED | AWAITING_APPROVAL`. Geçiş kuralları hem client (`useAppHandlers.ts`) hem de Firestore Rules'ta ayrı ayrı uygulanır — birini değiştirirken diğerini de güncelleyin.
+**Görev durum makinesi** (`TaskStatus`, bkz. `firestore.rules` `isValidTransition`): `ASSIGNED → IN_PROGRESS | BLOCKED | CANCELLED | PENDING_DELEGATION`, `IN_PROGRESS → BLOCKED | AWAITING_APPROVAL | COMPLETED | CANCELLED | CRISIS | PENDING_DELEGATION`, `BLOCKED → IN_PROGRESS | CANCELLED`, `AWAITING_APPROVAL → COMPLETED | IN_PROGRESS | CANCELLED`, `CRISIS → IN_PROGRESS | CANCELLED | COMPLETED | AWAITING_APPROVAL`. Geçiş kuralları hem client (`src/lib/taskStateMachine.ts` → `transitionTaskInTransaction`, bkz. `taskService.ts`) hem de Firestore Rules'ta ayrı ayrı uygulanır — birini değiştirirken diğerini de güncelleyin. İstisna: `functions/src/scheduledAudit.ts`, atıl-görev denetiminde Admin SDK ile (rules'ı bypass ederek) bu tablonun dışındaki durumlardan da (BLOCKED/AWAITING_APPROVAL/PENDING_DELEGATION) doğrudan `CRISIS`'e geçiş yapabilir — bilinçli, yalnızca sistem tetiklemeli bir istisnadır, client hiçbir zaman bunu manuel tetikleyemez.
 
 **Firestore güvenlik kuralları** (`firestore.rules`): default-deny, custom claims tabanlı rol kontrolü (Admin/Manager/Staff), departman bazlı görünürlük, alan bazlı (field-level) yazma izinleri ve yukarıdaki state-machine doğrulaması burada da ayrıca uygulanır. `@firebase/eslint-plugin-security-rules` bu dosyayı `npm run eslint` kapsamında lint eder.
 

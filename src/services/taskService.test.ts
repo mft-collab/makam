@@ -179,7 +179,8 @@ describe('taskService', () => {
   });
 
   describe('taskService.delegateTask', () => {
-    it('yeni sorumluyu atar ve durumu PENDING_DELEGATION yapar', async () => {
+    it('yeni sorumluyu atar ve durumu PENDING_DELEGATION yapar (hedef Müdür ise)', async () => {
+      vi.mocked(firebase.getDoc).mockResolvedValue({ exists: () => true, data: () => ({ role: 'Manager' }) } as any);
       let capturedTransaction: any;
       vi.mocked(firebase.runTransaction).mockImplementationOnce(async (_db: any, fn: any) => {
         const mock = makeTransactionMock({
@@ -193,6 +194,32 @@ describe('taskService', () => {
 
       const [, updateData] = capturedTransaction.update.mock.calls[0]!;
       expect(updateData).toMatchObject({ status: 'PENDING_DELEGATION', assigneeId: 'manager-2', lockVersion: 5 });
+    });
+
+    it('hedef kullanıcı Müdür değilse reddedilir, transaction hiç başlatılmaz', async () => {
+      vi.mocked(firebase.getDoc).mockResolvedValue({ exists: () => true, data: () => ({ role: 'Staff' }) } as any);
+
+      await expect(
+        taskService.delegateTask('task-1', 'staff-1', 'user-1', 4)
+      ).rejects.toThrow(/yalnızca Müdür rolündeki personele/);
+
+      expect(firebase.runTransaction).not.toHaveBeenCalled();
+    });
+
+    it('hedef kullanıcı dokümanı bulunamazsa (henüz oluşmamış davet) devir engellenmez — nihai karar rules\'a bırakılır', async () => {
+      vi.mocked(firebase.getDoc).mockResolvedValue({ exists: () => false, data: () => undefined } as any);
+      let capturedTransaction: any;
+      vi.mocked(firebase.runTransaction).mockImplementationOnce(async (_db: any, fn: any) => {
+        const mock = makeTransactionMock({
+          status: 'IN_PROGRESS', lockVersion: 4, totalPausedTime: 0, deadline: Date.now() + 100_000,
+        });
+        capturedTransaction = mock;
+        return fn(mock.transaction);
+      });
+
+      await taskService.delegateTask('task-1', 'unknown-user', 'user-1', 4);
+
+      expect(capturedTransaction.update).toHaveBeenCalledOnce();
     });
   });
 

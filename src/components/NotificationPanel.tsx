@@ -1,29 +1,31 @@
 import React from 'react';
 import { AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { notificationService } from '../services/notificationService';
 import type { Notification } from '../types';
 
 interface Props {
   showNotifications: boolean;
   setShowNotifications: (show: boolean) => void;
   notifRef: React.RefObject<HTMLDivElement | null>;
-  userUid: string;
   notifications: Notification[];
-  handleSuccess: (title: string, body: string, taskId?: string) => void;
   setSelectedTaskId: (id: string) => void;
   setActiveTab: (tab: string) => void;
+  /** useAppHandlers üzerinden — bu bileşen artık notificationService'i
+   *  doğrudan çağırmıyor (bkz. kod denetimi: "okundu işaretleme" bir yazma
+   *  işlemidir ve merkezi handler katmanını atlamamalıdır). */
+  markNotificationRead: (notificationId: string) => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
 }
 
 export function NotificationPanel({
   showNotifications,
   setShowNotifications,
   notifRef,
-  userUid,
   notifications,
-  handleSuccess,
   setSelectedTaskId,
   setActiveTab,
+  markNotificationRead,
+  markAllNotificationsRead,
 }: Props) {
   if (!showNotifications) return null;
 
@@ -49,12 +51,8 @@ export function NotificationPanel({
         <button
           onClick={async (e) => {
             e.stopPropagation();
-            try {
-              await notificationService.markAllAsRead(userUid);
-              setShowNotifications(false);
-            } catch (error) {
-              handleSuccess('Hata', 'İşlem başarısız: ' + (error instanceof Error ? error.message : String(error)));
-            }
+            await markAllNotificationsRead();
+            setShowNotifications(false);
           }}
           className="text-[8px] text-text-tertiary hover:text-executive-blue uppercase tracking-[0.25em] font-medium transition-colors px-2 py-1 rounded-lg hover:bg-surface-glass"
         >
@@ -111,14 +109,10 @@ export function NotificationPanel({
                     <button
                       onClick={async (e) => {
                         e.stopPropagation();
-                        try {
-                          setSelectedTaskId(n.taskId!);
-                          setActiveTab('tasks');
-                          await notificationService.markAsRead(n.id);
-                          setShowNotifications(false);
-                        } catch (error) {
-                          handleSuccess('Hata', 'İşlem başarısız: ' + (error instanceof Error ? error.message : String(error)));
-                        }
+                        setSelectedTaskId(n.taskId!);
+                        setActiveTab('tasks');
+                        await markNotificationRead(n.id);
+                        setShowNotifications(false);
                       }}
                       className="px-2.5 py-1 text-[8px] font-medium text-white bg-executive-blue rounded-lg uppercase tracking-[0.2em] hover:opacity-85 transition-opacity"
                     >
@@ -136,11 +130,7 @@ export function NotificationPanel({
                   <button
                     onClick={async (e) => {
                       e.stopPropagation();
-                      try {
-                        await notificationService.markAsRead(n.id);
-                      } catch (error) {
-                        handleSuccess('Hata', 'İşlem başarısız: ' + (error instanceof Error ? error.message : String(error)));
-                      }
+                      await markNotificationRead(n.id);
                     }}
                     className="px-2.5 py-1 text-[8px] font-medium text-text-tertiary bg-surface-glass border border-surface-border rounded-lg uppercase tracking-[0.2em] hover:text-executive-blue hover:bg-surface-elevated transition-colors"
                   >

@@ -7,8 +7,9 @@ import { Select } from './ui/Select';
 import { Modal } from './ui/Modal';
 import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
-import { cn, formatTimeAgo } from '../lib/utils';
-import { ROLE_LABELS, STATUS_LABELS } from '../constants';
+import { cn, formatTimeAgo, formatDateTimeShort } from '../lib/utils';
+import { isCompletedOnTime } from '../lib/sla';
+import { ROLE_LABELS, STATUS_LABELS, STATUS_BADGE_VARIANT } from '../constants';
 import { motion } from 'motion/react';
 import { auditLogService } from '../services/auditLogService';
 import { useUIStore } from '../store/uiStore';
@@ -461,12 +462,10 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
           const rc = roleConfig[selectedUser.role];
           const userAllTasks = selectedUserAllTasks;
           const completedTasks = userAllTasks.filter(t => t.status === 'COMPLETED');
-          const completedWithSla = completedTasks.filter(t => {
-            const totalPaused = t.totalPausedTime || 0;
-            const effectiveDeadline = t.deadline + totalPaused;
-            const isOverdue = t.completedAt ? t.completedAt > effectiveDeadline : false;
-            return !isOverdue;
-          });
+          // lib/sla.ts'teki isCompletedOnTime üzerinden — Dashboard/Reports ile
+          // aynı tanım kullanılır (bkz. kod denetimi: eskiden burada bağımsız
+          // bir formül vardı, ekranlar arası çelişkili SLA yüzdesi üretiyordu).
+          const completedWithSla = completedTasks.filter(isCompletedOnTime);
           const slaSuccessRate = completedTasks.length > 0
             ? Math.round((completedWithSla.length / completedTasks.length) * 100)
             : 100;
@@ -594,13 +593,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                             <span className="text-[12px] font-medium text-executive-blue line-clamp-1 font-serif tracking-tight">
                               {task.title}
                             </span>
-                            <Badge variant={
-                              task.status === 'COMPLETED' ? 'success' :
-                              task.status === 'BLOCKED' ? 'danger' :
-                              task.status === 'IN_PROGRESS' ? 'info' :
-                              task.status === 'AWAITING_APPROVAL' ? 'warning' :
-                              'default'
-                            }>
+                            <Badge variant={STATUS_BADGE_VARIANT[task.status] ?? 'default'}>
                               {STATUS_LABELS[task.status] || task.status}
                             </Badge>
                           </div>
@@ -646,7 +639,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                                 {relatedTask?.title || 'Bilinmeyen Talimat'}
                               </span>
                               <span className="text-[8px] text-text-tertiary font-mono">
-                                {new Date(log.timestamp).toLocaleDateString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                                {formatDateTimeShort(log.timestamp)}
                               </span>
                             </div>
                             
@@ -669,13 +662,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                             ) : (
                               <div className="flex items-center gap-1.5">
                                 <span className="text-[7.5px] font-medium text-text-tertiary uppercase tracking-[0.2em] bg-surface-glass px-1 py-0.5 rounded border border-surface-border">Durum</span>
-                                <Badge variant={
-                                  log.newValue === 'COMPLETED' ? 'success' :
-                                  log.newValue === 'BLOCKED' ? 'danger' :
-                                  log.newValue === 'IN_PROGRESS' ? 'info' :
-                                  log.newValue === 'AWAITING_APPROVAL' ? 'warning' :
-                                  'default'
-                                }>
+                                <Badge variant={STATUS_BADGE_VARIANT[log.newValue as TaskStatus] ?? 'default'}>
                                   {STATUS_LABELS[log.newValue as TaskStatus] ?? String(log.newValue)}
                                 </Badge>
                               </div>

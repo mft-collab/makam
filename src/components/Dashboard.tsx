@@ -5,8 +5,8 @@ import { Task, User } from '../types';
 import { motion } from 'motion/react';
 import { Modal } from './ui/Modal';
 import { Badge } from './ui/Badge';
-import { cn, formatTimeAgo } from '../lib/utils';
-import { STATUS_LABELS } from '../constants';
+import { cn, formatTimeAgo, formatTime } from '../lib/utils';
+import { STATUS_LABELS, STATUS_BADGE_VARIANT } from '../constants';
 import { DashboardSkeleton } from './ui/Skeleton';
 import { useDataStore } from '../store/dataStore';
 import { getInterventionQueue, getUserPerformanceProfiles } from '../lib/executiveMetrics';
@@ -159,7 +159,7 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
                 title="Veriler canlı olarak izlenir; sayaçlar her dakika tazelenir."
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-status-success animate-pulse" aria-hidden="true" />
-                Canlı · {new Date(tick).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                Canlı · {formatTime(tick)}
               </span>
             </div>
             <p className="text-[9px] text-text-tertiary uppercase tracking-[0.3em] mt-0.5">
@@ -424,13 +424,7 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
                 </div>
                 <div className="flex flex-col flex-1 gap-1.5 min-w-0 items-start">
                   <span className="text-[13px] font-medium text-executive-blue tracking-tight line-clamp-1 font-display">{task.title}</span>
-                  <Badge variant={
-                    task.status === 'COMPLETED' ? 'success' :
-                    task.status === 'BLOCKED' ? 'danger' :
-                    task.status === 'IN_PROGRESS' ? 'info' :
-                    task.status === 'AWAITING_APPROVAL' ? 'warning' :
-                    'default'
-                  }>
+                  <Badge variant={STATUS_BADGE_VARIANT[task.status] ?? 'default'}>
                     {STATUS_LABELS[task.status] || task.status}
                   </Badge>
                 </div>

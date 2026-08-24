@@ -1,4 +1,6 @@
-import { addDays, isWeekend } from 'date-fns';
+import { addDays, isWeekend, format } from 'date-fns';
+import type { Task } from '../types';
+import { logger } from './logger';
 
 export interface SLAConfigEntry {
   value: number;
@@ -43,8 +45,13 @@ const OFFICIAL_HOLIDAYS_2026 = [
 
 export function isWeekendOrHoliday(date: Date): boolean {
   if (isWeekend(date)) return true;
-  const dateStr = date.toISOString().split('T')[0];
-  return OFFICIAL_HOLIDAYS_2026.includes(dateStr!);
+  // Yerel (TR) güne göre biçimlendirilir — date.toISOString() UTC kullanır ve
+  // TR saatiyle (UTC+3) 00:00-02:59 arasındaki bir zaman damgası UTC'de bir
+  // önceki güne düşer; bu durumda resmi tatil günleri yanlış sınıflanabilirdi
+  // (bkz. kod denetimi). Hafta sonu kontrolü (isWeekend) zaten yerel saati
+  // kullandığından, tatil karşılaştırması da aynı zaman dilimiyle yapılmalı.
+  const dateStr = format(date, 'yyyy-MM-dd');
+  return OFFICIAL_HOLIDAYS_2026.includes(dateStr);
 }
 
 /**
@@ -171,6 +178,24 @@ export function getRemainingTime(deadline: number, totalPausedTime: number = 0, 
 }
 
 /**
+ * Bir görevin efektif mühlet (deadline + totalPausedTime) içinde tamamlanıp
+ * tamamlanmadığını belirler. "SLA'ya zamanında tamamlama" oranı hesaplayan
+ * TÜM ekranlar (Dashboard, Reports, TeamList, executiveMetrics) TEK bu
+ * fonksiyonu kullanmalı — aksi halde aynı görev seti için ekranlar arası
+ * çelişkili yüzdeler üretilir (bkz. kod denetimi). totalPausedTime'ın dahil
+ * edilmesi, getRemainingTime/effectiveMsToDeadline'daki "efektif mühlet"
+ * kavramıyla tutarlıdır: bir görev meşru bir duraklama (BLOCKED/onay
+ * bekleme) yüzünden ham mühleti aşmışsa ama duraklama-ayarlı mühlet
+ * içinde tamamlanmışsa, zamanında sayılır.
+ */
+export function isCompletedOnTime(task: Pick<Task, 'status' | 'completedAt' | 'updatedAt' | 'deadline' | 'totalPausedTime'>): boolean {
+  if (task.status !== 'COMPLETED') return false;
+  const effectiveDeadline = task.deadline + (task.totalPausedTime || 0);
+  const completionTime = task.completedAt ?? task.updatedAt;
+  return completionTime <= effectiveDeadline;
+}
+
+/**
  * Dinamik SLA yapılandırmasını güvenli geri dönüşlerle okur.
  */
 export function getSLAConfigForPriority(priority: 'Low' | 'Medium' | 'High' | 'Urgent'): SLAConfigEntry {
@@ -187,7 +212,7 @@ export function getSLAConfigForPriority(priority: 'Low' | 'Medium' | 'High' | 'U
       }
     }
   } catch (e) {
-    console.error('Failed to parse SLA config from localstorage:', e);
+    logger.error('Failed to parse SLA config from localstorage:', e);
   }
   return DEFAULT_SLA_CONFIG[priority];
 }

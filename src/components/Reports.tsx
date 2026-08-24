@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { AlertTriangle, Target, Zap, TrendingUp, BarChart3, Users, CheckCircle2, Loader2, Download, FileText, Calendar, ArrowRight } from 'lucide-react';
 import { Task, User, TaskBlocker } from '../types';
 import { cn } from '../lib/utils';
+import { isCompletedOnTime } from '../lib/sla';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from 'recharts';
@@ -152,7 +153,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
     const blocked   = mt.filter(t => t.status === 'BLOCKED').length;
     const total     = mt.length;
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
-    const onTimeCompleted = mt.filter(t => t.status === 'COMPLETED' && (t.completedAt || t.updatedAt) <= t.deadline).length;
+    const onTimeCompleted = mt.filter(isCompletedOnTime).length;
     const slaRate = completed > 0 ? Math.round((onTimeCompleted / completed) * 100) : 100;
     return { ...manager, total, completed, blocked, completionRate, slaRate };
   }).sort((a, b) => b.completionRate - a.completionRate), [managers, tasksByAssignee]);
@@ -189,7 +190,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
       const bucket = dayIndex >= 0 && dayIndex <= 13 ? buckets[dayIndex] : undefined;
       if (!bucket) continue;
       bucket.completed++;
-      if ((t.completedAt || t.updatedAt) <= t.deadline) bucket.onTime++;
+      if (isCompletedOnTime(t)) bucket.onTime++;
     }
     return buckets.map((b, i) => {
       const day = subDays(today, 13 - i);

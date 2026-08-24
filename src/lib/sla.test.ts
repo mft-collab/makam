@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { calculateDeadline, getRemainingTime, getSLAConfigForPriority, DEFAULT_SLA_CONFIG } from '../lib/sla';
+import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { calculateDeadline, getRemainingTime, getSLAConfigForPriority, DEFAULT_SLA_CONFIG, isWeekendOrHoliday } from '../lib/sla';
 
 // Sabitleme: Pazartesi 09:00 sabahı (iş günü başı)
 const MONDAY_9AM = new Date('2024-01-08T09:00:00').getTime();
@@ -178,6 +178,32 @@ describe('SLA Hesaplama Motoru', () => {
       // Cuma 09:00 -> 11:00 (2 saat) -> Toplam 4 saat
       expect(date.getDate()).toBe(24); // 24 Nisan Cuma
       expect(date.getHours()).toBe(11);
+    });
+  });
+
+  // ─── isWeekendOrHoliday — yerel/UTC gün tutarlılığı ────────────────────────
+  // Regresyon: hafta sonu kontrolü (isWeekend) her zaman yerel saati kullanıyordu,
+  // ama tatil karşılaştırması eskiden date.toISOString() (UTC) ile yapılıyordu.
+  // TR (UTC+3) yerel saatiyle 00:00-02:59 arasındaki bir zaman damgası UTC'de bir
+  // önceki güne düşer — bu yüzden İstanbul saatiyle 1 Ocak 01:00 (Yılbaşı, tatil)
+  // yanlışlıkla "tatil değil" olarak sınıflanabiliyordu (bkz. kod denetimi).
+  describe('isWeekendOrHoliday — yerel gün tutarlılığı (TZ=Europe/Istanbul)', () => {
+    const originalTz = process.env.TZ;
+
+    beforeEach(() => { process.env.TZ = 'Europe/Istanbul'; });
+    afterAll(() => { process.env.TZ = originalTz; });
+
+    it('İstanbul saatiyle 1 Ocak 01:00 (UTC\'de hâlâ 31 Aralık), Yılbaşı tatili olarak tanınır', () => {
+      // 2025-12-31T22:00:00Z == 2026-01-01T01:00:00+03:00 (İstanbul)
+      const d = new Date(Date.UTC(2025, 11, 31, 22, 0));
+      expect(isWeekendOrHoliday(d)).toBe(true);
+    });
+
+    it('aynı UTC anı, gerçek yerel takvim gününe (1 Ocak) göre değerlendirilir, UTC gününe (31 Aralık) göre değil', () => {
+      const d = new Date(Date.UTC(2025, 11, 31, 22, 0));
+      expect(d.getUTCDate()).toBe(31); // UTC günü: 31 Aralık — tatil listesinde YOK
+      expect(d.getDate()).toBe(1);     // Yerel (İstanbul) günü: 1 Ocak — tatil listesinde VAR
+      expect(isWeekendOrHoliday(d)).toBe(true);
     });
   });
 });

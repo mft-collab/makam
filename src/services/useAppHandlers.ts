@@ -11,6 +11,7 @@ import { useCallback } from 'react';
 import { taskService } from './taskService';
 import { userService } from './userService';
 import { blockerService } from './blockerService';
+import { notificationService } from './notificationService';
 import { offlineQueue } from '../lib/offlineQueue';
 import { getSLAConfigForPriority, calculateDeadline } from '../lib/sla';
 import { useUIStore } from '../store/uiStore';
@@ -140,11 +141,15 @@ export function useAppHandlers({
       const id = tempId();
       const slaConfig = getSLAConfigForPriority(data.priority ?? 'Medium');
       const deadline = calculateDeadline(new Date(), slaConfig);
-      offlineQueue.enqueue('tasks', 'create', {
-        ...data, id, status: 'ASSIGNED', deadline,
-        createdAt: Date.now(), updatedAt: Date.now(),
-        lockVersion: 0, totalPausedTime: 0, userId: user.uid,
-      });
+      // status/lockVersion/totalPausedTime/createdAt/updatedAt burada elle
+      // ayarlanmaz — senkronda taskService.createTask, online ile BİREBİR AYNI
+      // mantıkla (iş kuralı kontrolleri + audit_logs + system/stats artırımı
+      // dahil) bunları kendisi hesaplar (bkz. offlineQueue.ts sync()).
+      offlineQueue.enqueue(
+        'tasks', 'create', { ...data, id, deadline },
+        undefined, undefined, undefined, undefined,
+        user.uid
+      );
       setIsCreateModalOpen(false);
       toast('📋 Çevrimdışı Talimat', `"${data.title?.slice(0, 45)}" lokal sıraya alındı.`, 'warning', id);
       return;
@@ -165,7 +170,13 @@ export function useAppHandlers({
     const oldTask = tasks.find(t => t.id === taskId);
 
     if (isOfflineNow()) {
-      offlineQueue.enqueue('tasks', 'update', { ...data, updatedAt: Date.now() }, taskId, oldTask?.lockVersion);
+      // actorId + oldTask: senkronda taskService.updateTask ile BİREBİR AYNI
+      // mantıkla (Admin-koordinatör kısıtı + audit_logs kaydı dahil) uygulanır
+      // (bkz. offlineQueue.ts sync()).
+      offlineQueue.enqueue(
+        'tasks', 'update', { ...data, updatedAt: Date.now() }, taskId, oldTask?.lockVersion,
+        undefined, undefined, user.uid, oldTask
+      );
       setIsEditModalOpen(false);
       toast('🔄 Çevrimdışı Güncelleme', 'Talimat düzenlemesi lokal sıraya alındı.', 'warning', taskId);
       return;
@@ -185,8 +196,21 @@ export function useAppHandlers({
     if (!user) return;
 
     if (isOfflineNow()) {
-      tasks.filter(t => t.parentId === taskId).forEach(st => offlineQueue.enqueue('tasks', 'delete', undefined, st.id));
-      blockers.filter(b => b.taskId === taskId).forEach(b => offlineQueue.enqueue('blockers', 'delete', undefined, b.id));
+      // Çok seviyeli alt-görev/engel temizliği — online taskService.deleteTask'taki
+      // BFS mantığıyla aynı: yalnızca doğrudan alt görevler değil TÜM torun
+      // görevler, ve yalnızca kökün değil HER seviyedeki görevin engelleri de
+      // kuyruğa alınır (aksi halde offline silinen çok seviyeli bir hiyerarşide
+      // torun görevler/engeller sunucuda yetim kalır — bkz. kod denetimi).
+      const descendantIds: string[] = [];
+      let frontier = [taskId];
+      while (frontier.length > 0) {
+        const children = tasks.filter(t => t.parentId && frontier.includes(t.parentId)).map(t => t.id);
+        descendantIds.push(...children);
+        frontier = children;
+      }
+      const allIds = [taskId, ...descendantIds];
+      blockers.filter(b => allIds.includes(b.taskId)).forEach(b => offlineQueue.enqueue('blockers', 'delete', undefined, b.id));
+      descendantIds.forEach(id => offlineQueue.enqueue('tasks', 'delete', undefined, id));
       offlineQueue.enqueue('tasks', 'delete', undefined, taskId);
       if (selectedTaskId === taskId) setSelectedTaskId(null);
       toast('🗑 Çevrimdışı Silme', 'Talimat ve bağlı unsurları lokal kuyrukta silindi.', 'warning');
@@ -377,6 +401,19 @@ export function useAppHandlers({
     }
   }, [user, blockers, tasks, toast, onError]);
 
+  // ─── Bildirim yönetimi ───────────────────────────────────────────────────
+  const markNotificationRead = useCallback(async (notificationId: string) => {
+    if (!user) return;
+    try { await notificationService.markAsRead(notificationId); }
+    catch (err) { onError(err, 'update', `notifications/${notificationId}`); }
+  }, [user, onError]);
+
+  const markAllNotificationsRead = useCallback(async () => {
+    if (!user) return;
+    try { await notificationService.markAllAsRead(user.uid); }
+    catch (err) { onError(err, 'update', 'notifications'); }
+  }, [user, onError]);
+
   return {
     updateTaskStatus,
     createTask,
@@ -391,5 +428,7 @@ export function useAppHandlers({
     deleteUser,
     updateBlocker,
     deleteBlocker,
+    markNotificationRead,
+    markAllNotificationsRead,
   };
 }

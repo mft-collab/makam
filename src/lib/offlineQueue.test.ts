@@ -572,4 +572,130 @@ describe('OfflineQueue', () => {
       expect(updateData.totalPausedTime).toBe(queuedAt - pausedSince);
     });
   });
+
+  // ─── sync — business-kurallı create/update (actorId) ───────────────────────
+  // Offline oluşturulan/güncellenen görevler artık ham addDoc/updateDoc yerine
+  // (actorId verildiğinde) online taskService.createTask/updateTaskInTransaction
+  // üzerinden geçiyor — iş kuralları, audit_logs kaydı ve system/stats
+  // güncellemesi offline yolda da online ile birebir aynı şekilde uygulanır.
+
+  describe('sync — business-kurallı create/update (actorId)', () => {
+    it('actorId ile create: taskService.createTask üzerinden audit-log ve stats uygulanır', async () => {
+      const fakeTaskRef = { id: 'real-task-id' };
+      const fakeAuditRef = { id: 'audit-ref' };
+      vi.mocked(firebase.addDoc)
+        .mockResolvedValueOnce(fakeTaskRef as any)
+        .mockResolvedValueOnce(fakeAuditRef as any);
+      vi.mocked(firebase.updateDoc).mockResolvedValue(undefined as any);
+      vi.mocked(firebase.setDoc).mockResolvedValue(undefined as any);
+
+      offlineQueue.enqueue(
+        'tasks', 'create',
+        { id: 'temp-biz-1', title: 'Görev', description: 'Açıklama', assigneeId: 'u2', creatorId: 'u1', priority: 'Medium', deadline: Date.now() + 100000 },
+        undefined, undefined, undefined, undefined, 'user-1'
+      );
+      const result = await offlineQueue.sync();
+
+      expect(result).toBe(true);
+      expect(offlineQueue.getQueue()).toHaveLength(0);
+
+      const auditCall = vi.mocked(firebase.addDoc).mock.calls.find(([, data]: any) => data?.changedBy === 'user-1');
+      expect(auditCall?.[1]).toMatchObject({ changedBy: 'user-1', newValue: 'Talimat Oluşturuldu ve Atandı' });
+
+      expect(firebase.setDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ totalTasks: { __increment: 1 } }),
+        { merge: true }
+      );
+    });
+
+    it('actorId ile create: bağımlı sonraki mutasyondaki geçici ID gerçek ID ile değiştirilir', async () => {
+      const fakeTaskRef = { id: 'real-task-id' };
+      vi.mocked(firebase.addDoc).mockResolvedValue(fakeTaskRef as any);
+      vi.mocked(firebase.updateDoc).mockResolvedValue(undefined as any);
+      vi.mocked(firebase.setDoc).mockResolvedValue(undefined as any);
+      vi.mocked(firebase.deleteDoc).mockResolvedValue(undefined as any);
+
+      offlineQueue.enqueue(
+        'tasks', 'create',
+        { id: 'temp-biz-2', title: 'Görev', description: 'Açıklama', assigneeId: 'u2', creatorId: 'u1', priority: 'Medium', deadline: Date.now() + 100000 },
+        undefined, undefined, undefined, undefined, 'user-1'
+      );
+      offlineQueue.enqueue('tasks', 'delete', undefined, 'temp-biz-2');
+
+      await offlineQueue.sync();
+
+      // Sonraki mutasyonun docId'si geçici ID'den ('temp-biz-2') gerçek ID'ye
+      // ('real-task-id') yamalanmış olmalı — deleteDoc gerçek ID ile çağrılır.
+      expect(vi.mocked(firebase.deleteDoc)).toHaveBeenCalledOnce();
+      const docCallForDelete = vi.mocked(firebase.doc).mock.calls.find(args => args[2] === 'real-task-id');
+      expect(docCallForDelete).toBeDefined();
+      expect(offlineQueue.getQueue()).toHaveLength(0);
+    });
+
+    it('actorId ile update: updateTaskInTransaction üzerinden audit-log yazılır ve versiyon artar', async () => {
+      const transactionUpdate = vi.fn();
+      const transactionSet = vi.fn();
+      vi.mocked(firebase.runTransaction).mockImplementationOnce(async (_db: any, fn: any) => {
+        const transaction = {
+          get: vi.fn().mockResolvedValue({
+            exists: () => true,
+            data: () => ({ status: 'IN_PROGRESS', lockVersion: 3, title: 'Eski Başlık' }),
+          }),
+          update: transactionUpdate,
+          set: transactionSet,
+        };
+        return fn(transaction);
+      });
+
+      const oldTaskSnapshot = { id: 'task-1', status: 'IN_PROGRESS', lockVersion: 3, title: 'Eski Başlık' } as any;
+      offlineQueue.enqueue(
+        'tasks', 'update', { title: 'Yeni Başlık' }, 'task-1', 3,
+        undefined, undefined, 'user-1', oldTaskSnapshot
+      );
+      const result = await offlineQueue.sync();
+
+      expect(result).toBe(true);
+      expect(offlineQueue.getQueue()).toHaveLength(0);
+      expect(transactionUpdate).toHaveBeenCalledOnce();
+      const [, updateData] = transactionUpdate.mock.calls[0]!;
+      expect(updateData).toMatchObject({ title: 'Yeni Başlık', lockVersion: 4 });
+
+      const auditCall = transactionSet.mock.calls.find(([, data]: any) => data?.changes?.title);
+      expect(auditCall?.[1]).toMatchObject({ taskId: 'task-1', changedBy: 'user-1' });
+      expect(auditCall?.[1].changes.title).toEqual({ old: 'Eski Başlık', new: 'Yeni Başlık' });
+    });
+
+    it('actorId ile update: versiyon uyuşmazsa UYGULANMAZ, çakışma bildirilir', async () => {
+      const transactionUpdate = vi.fn();
+      vi.mocked(firebase.runTransaction).mockImplementationOnce(async (_db: any, fn: any) => {
+        const transaction = {
+          get: vi.fn().mockResolvedValue({
+            exists: () => true,
+            data: () => ({ status: 'IN_PROGRESS', lockVersion: 9, title: 'Sunucudaki Başlık' }),
+          }),
+          update: transactionUpdate,
+          set: vi.fn(),
+        };
+        return fn(transaction);
+      });
+
+      const { conflictDetectionService } = await import('../services/conflictDetectionService');
+      const conflictHandler = vi.fn();
+      const unsubscribe = conflictDetectionService.subscribe(conflictHandler);
+
+      const oldTaskSnapshot = { id: 'task-1', status: 'IN_PROGRESS', lockVersion: 3, title: 'Eski Başlık' } as any;
+      offlineQueue.enqueue(
+        'tasks', 'update', { title: 'Yeni Başlık' }, 'task-1', 3,
+        undefined, undefined, 'user-1', oldTaskSnapshot
+      );
+      const result = await offlineQueue.sync();
+      unsubscribe();
+
+      expect(result).toBe(true);
+      expect(offlineQueue.getQueue()).toHaveLength(0);
+      expect(transactionUpdate).not.toHaveBeenCalled();
+      expect(conflictHandler).toHaveBeenCalledOnce();
+    });
+  });
 });

@@ -19,9 +19,18 @@ interface UseSelfHealingOptions {
 }
 
 export function useSelfHealing({ user, tasks, blockers }: UseSelfHealingOptions) {
+  // Yalnızca uid/role'e (primitive) bağımlı — user nesnesi, kullanıcının
+  // Firestore dokümanındaki onarımla alakasız her değişiklikte (fotoğraf,
+  // fcmTokens vb.) yeni bir referansla set ediliyor (bkz. App.tsx); tüm
+  // `user` nesnesini dependency array'e koymak bu tür güncellemelerde
+  // gereksiz yere 5sn'lik onarım zamanlayıcısını sıfırlardı — useFirestoreData.ts'teki
+  // aynı desen (bkz. kod denetimi).
+  const uid = user?.uid;
+  const role = user?.role;
+
   useEffect(() => {
-    if (!user || tasks.length === 0) return;
-    if (user.role !== 'Admin' && user.role !== 'Manager') return;
+    if (!uid || tasks.length === 0) return;
+    if (role !== 'Admin' && role !== 'Manager') return;
 
     const timer = setTimeout(async () => {
       const blockedTasks = tasks.filter(t => t.status === 'BLOCKED');
@@ -33,7 +42,7 @@ export function useSelfHealing({ user, tasks, blockers }: UseSelfHealingOptions)
             `[SelfHealing] "${task.title}" — aktif blocker yok, IN_PROGRESS'e döndürülüyor...`
           );
           try {
-            await taskService.updateTaskStatus(task.id, 'IN_PROGRESS', 'BLOCKED', user.uid, undefined, undefined, task.lockVersion);
+            await taskService.updateTaskStatus(task.id, 'IN_PROGRESS', 'BLOCKED', uid, undefined, undefined, task.lockVersion);
           } catch (e) {
             // VERSION_MISMATCH burada beklenen bir durumdur (görev bu 5sn içinde
             // başka bir yerden değişti) — sessizce atlanır, bir sonraki tetiklemede
@@ -45,5 +54,5 @@ export function useSelfHealing({ user, tasks, blockers }: UseSelfHealingOptions)
     }, 5_000);
 
     return () => clearTimeout(timer);
-  }, [user, tasks, blockers]);
+  }, [uid, role, tasks, blockers]);
 }

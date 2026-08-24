@@ -6,7 +6,7 @@ import {
   GitCommit, Loader2, Hourglass, Clock, Building2, Tag, Flag, ExternalLink
 } from 'lucide-react';
 import { Task, User as UserType, TaskBlocker, AuditLog, TaskStatus } from '../types';
-import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_BADGE_VARIANT } from '../constants';
+import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_BADGE_VARIANT, STATUS_BADGE_VARIANT } from '../constants';
 import { format, formatDistanceToNow } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { cn } from '../lib/utils';
@@ -221,16 +221,6 @@ export const TaskDetails = ({
     }
   };
 
-  const statusBadgeVariant = () => {
-    if (task.status === 'COMPLETED') return 'success';
-    if (task.status === 'BLOCKED' || task.status === 'CRISIS') return 'danger';
-    if (task.status === 'AWAITING_APPROVAL') return 'warning';
-    // Yetki devri bekleyen talimat, "atanmış ve başlamaya hazır" olandan görsel olarak ayrışsın
-    if (task.status === 'PENDING_DELEGATION') return 'warning';
-    if (task.status === 'IN_PROGRESS') return 'info';
-    return 'default';
-  };
-
   return (
     <>
       <div className="flex flex-col gap-4 py-1 font-sans">
@@ -238,7 +228,7 @@ export const TaskDetails = ({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-1">
           <div className="flex flex-wrap items-center gap-2">
             <Badge
-              variant={statusBadgeVariant()}
+              variant={STATUS_BADGE_VARIANT[task.status]}
               withPulse={task.status === 'BLOCKED' || task.status === 'CRISIS'}
               icon={task.status === 'PENDING_DELEGATION'
                 ? <Hourglass className="w-3.5 h-3.5" />

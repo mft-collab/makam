@@ -40,24 +40,21 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
     window.addEventListener('offline', updateNetworkStatus);
     window.addEventListener('makam_queue_changed', updateQueue);
 
-    // Bağlantı geri gelince ağ durumunu güncelle ve kuyruğu otomatik senkronize et
-    const handleOnline = async () => {
-      updateNetworkStatus();
-      if (offlineQueue.getQueue().length > 0) {
-        logger.debug('[useOfflineQueue] Connection restored, syncing queue...');
-        await offlineQueue.sync().catch(logger.warn);
-        updateQueue();
-      }
-    };
-
-    window.addEventListener('online', handleOnline);
+    // Bağlantı geri gelince yalnızca ağ durumu güncellenir — senkronizasyonun
+    // KENDİSİ offlineQueue.ts'teki modül seviyesi 'online' listener'ında
+    // tetiklenir (bkz. offlineQueue.ts sonu). Burada AYRICA offlineQueue.sync()
+    // çağırmak, aynı senkronu iki bağımsız yerden tetikleyip (eskiden isSyncing
+    // mutex'i sayesinde çakışma olmasa da) sorumluluğu gereksiz yere ikiye
+    // bölüyordu (bkz. kod denetimi). Kuyruk uzunluğu zaten offlineQueue.sync()
+    // sonunda dispatch edilen 'makam_queue_changed' ile buradan güncellenir.
+    window.addEventListener('online', updateNetworkStatus);
 
     // İlk değerleri yükle
     updateNetworkStatus();
     updateQueue();
 
     return () => {
-      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('online', updateNetworkStatus);
       window.removeEventListener('offline', updateNetworkStatus);
       window.removeEventListener('makam_queue_changed', updateQueue);
     };

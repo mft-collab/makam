@@ -3,7 +3,7 @@ import { Plus, Search, Layers, Clock, ArrowRight, CheckCircle2, AlertTriangle, A
 import { List, type RowComponentProps } from 'react-window';
 import { Task, User } from '../types';
 import { cn } from '../lib/utils';
-import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_BADGE_VARIANT } from '../constants';
+import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_BADGE_VARIANT, STATUS_BADGE_VARIANT } from '../constants';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { motion } from 'motion/react';
@@ -91,12 +91,7 @@ function DesktopTaskRow({ index, style, ariaAttributes, tasks, usersById, onView
       {/* Status */}
       <div role="cell" className="px-4 py-3">
         <Badge
-          variant={
-            task.status === 'COMPLETED' ? 'success' :
-            task.status === 'BLOCKED' ? 'danger' :
-            task.status === 'AWAITING_APPROVAL' ? 'warning' :
-            task.status === 'IN_PROGRESS' ? 'primary' : 'info'
-          }
+          variant={STATUS_BADGE_VARIANT[task.status] ?? 'default'}
           withPulse={task.status === 'BLOCKED'}
           icon={
             task.status === 'COMPLETED' ? <CheckCircle2 className="w-3.5 h-3.5 stroke-[1.3]" /> :
@@ -193,7 +188,11 @@ export const TaskBoard = ({
   const [assigneeFilter, setAssigneeFilter] = useState<string>('All');
   // #12 — Durum filtresi
   const [statusFilter, setStatusFilter] = useState<string>('All');
-  const { loadMoreTasks, taskLimit } = useDataStore();
+  // Selector bazlı okuma — whole-store `useDataStore()` tasks/stats/blockers
+  // gibi ilgisiz her alan değişiminde gereksiz yeniden render'a yol açıyordu
+  // (bkz. AppHeader.tsx'teki aynı desen / kod denetimi).
+  const loadMoreTasks = useDataStore(s => s.loadMoreTasks);
+  const taskLimit = useDataStore(s => s.taskLimit);
 
   // O(tasks × users) yerine tek geçişte kurulan O(1) lookup — hem uid hem
   // email ile eşleşme aranabildiği için (Firestore'da assigneeId bazen uid,

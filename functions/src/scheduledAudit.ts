@@ -48,10 +48,19 @@ export const scheduledDailyAudit = functions
       const cursorSnap = await cursorRef.get();
       const lastDocId = cursorSnap.exists ? (cursorSnap.data()?.lastDocId as string | undefined) : undefined;
 
+      // orderBy AÇIKÇA belirtilir: Firestore, 'not-in' gibi bir eşitsizlik
+      // filtresi varken ilk orderBy'ın aynı alanda (status) olmasını
+      // ZORUNLU kılar — bu yüzden değişebilir 'status' alanı birincil
+      // sıralama kalır, ama __name__ (doküman ID) ikincil sıralama olarak
+      // eklenerek AYNI status değerine sahip görevler arasında sıra
+      // koşular arası deterministik hale gelir (bkz. kod denetimi: eskiden
+      // örtük/implementation-defined sıralamaya güveniliyordu).
       const baseQuery = () =>
         db
           .collection('tasks')
           .where('status', 'not-in', ['COMPLETED', 'CANCELLED'])
+          .orderBy('status')
+          .orderBy(admin.firestore.FieldPath.documentId())
           .limit(MAX_TASKS_PER_RUN);
 
       let tasksSnap: admin.firestore.QuerySnapshot;
@@ -84,10 +93,14 @@ export const scheduledDailyAudit = functions
         return null;
       }
 
-      // 2. Atıl görevleri filtrele
+      // 2. Atıl görevleri filtrele — zaten CRISIS'te olan görevler hariç tutulur.
+      // Aksi halde her gün aynı kriz görevleri tekrar "işlenir": anlamsız bir
+      // CRISIS→CRISIS audit_logs kaydı üretilir VE lockVersion gereksiz yere
+      // artırılır — bu da client'ların eşzamanlı düzenlemelerinde sahte
+      // VERSION_MISMATCH çakışmasına yol açabilir (bkz. kod denetimi).
       const idleTasks = tasksSnap.docs.filter((doc: admin.firestore.QueryDocumentSnapshot) => {
         const data = doc.data();
-        return (now - (data.updatedAt ?? 0)) > IDLE_THRESHOLD_MS;
+        return data.status !== 'CRISIS' && (now - (data.updatedAt ?? 0)) > IDLE_THRESHOLD_MS;
       });
 
       console.log(`[DailyAudit] ${idleTasks.length} atıl görev tespit edildi.`);
@@ -98,6 +111,17 @@ export const scheduledDailyAudit = functions
       }
 
       // 3. Batch: atıl görevleri CRISIS'e al, audit ve istatistikleri birlikte güncelle
+      //
+      // NOT: `idleTasks` COMPLETED/CANCELLED/CRISIS dışındaki HER durumu (ASSIGNED,
+      // PENDING_DELEGATION, IN_PROGRESS, BLOCKED, AWAITING_APPROVAL) içerebilir — bu
+      // fonksiyon, client tarafındaki durum makinesinin (firestore.rules
+      // isValidTransition + src/lib/taskStateMachine.ts) yalnızca IN_PROGRESS→CRISIS'e
+      // izin vermesinden BİLİNÇLİ OLARAK ayrışır. "Atıl görev" tespiti tüm aktif
+      // durumlar için anlamlı bir iş kuralıdır (ör. haftalarca BLOCKED kalmış bir
+      // görev de krize alınmalı); Admin SDK rules'ı bypass ettiği için bu genişletilmiş
+      // geçiş kümesi yalnızca burada, sistem tarafından tetiklenen bir istisna olarak
+      // uygulanır — UI/client hiçbir zaman bu geçişi manuel tetikleyemez.
+
       const statusDeltas: Record<string, number> = { status_CRISIS: idleTasks.length };
       for (const taskDoc of idleTasks) {
         const status = taskDoc.data().status;

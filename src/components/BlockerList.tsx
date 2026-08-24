@@ -5,7 +5,7 @@ import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
 import { Badge } from './ui/Badge';
-import { cn, formatTimeAgo } from '../lib/utils';
+import { cn, formatTimeAgo, formatDate } from '../lib/utils';
 import { motion } from 'motion/react';
 import { PRIORITY_BADGE_VARIANT, PRIORITY_LABELS } from '../constants';
 
@@ -102,7 +102,7 @@ const BlockerCard = ({ blocker, index, tasksById, usersById, isAdmin, isSystemAd
         </div>
         <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
           <span className="text-[8px] text-text-tertiary font-medium uppercase tracking-[0.15em]">
-            {new Date(blocker.createdAt).toLocaleDateString('tr-TR')}
+            {formatDate(blocker.createdAt)}
           </span>
           <span className="text-[8px] text-text-tertiary">{formatTimeAgo(blocker.createdAt)}</span>
         </div>

@@ -1,6 +1,7 @@
 import type { Task } from '../../types';
 import type { GlobalStats } from '../../store/dataStore';
 import { isTaskInCrisis, type InterventionItem } from '../../lib/executiveMetrics';
+import { isCompletedOnTime } from '../../lib/sla';
 
 export type StatCategory = 'total' | 'waiting' | 'inProgress' | 'blocked' | 'inReview' | 'completed' | 'crisis';
 
@@ -183,11 +184,11 @@ export const computeCompletionRatePercent = (scopeTasks: Task[]): number => {
 };
 
 // SLA standardize edilmiş formul: zamanında tamamlanan / toplam tamamlanan
-// (tüm ekranlarda tutarlı tek tanım)
+// (lib/sla.ts'teki isCompletedOnTime üzerinden — tüm ekranlarda tutarlı tek tanım)
 export const computeSlaCompliancePercent = (scopeTasks: Task[]): number => {
   const completed = scopeTasks.filter(t => t.status === 'COMPLETED');
   if (completed.length === 0) return 100;
-  const onTime = completed.filter(t => (t.completedAt || t.updatedAt) <= t.deadline).length;
+  const onTime = completed.filter(isCompletedOnTime).length;
   return Math.round((onTime / completed.length) * 100);
 };
 

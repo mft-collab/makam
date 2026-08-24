@@ -13,6 +13,7 @@
  */
 import { useState, useEffect } from 'react';
 import { db, collection, query, where, orderBy, limit, onSnapshot } from '../firebase';
+import { logger } from '../lib/logger';
 import type { Notification } from '../types';
 
 const NOTIF_LIMIT = 5;
@@ -46,7 +47,7 @@ export function useNotifications(userId: string | null): UseNotificationsReturn 
       (err) => {
         // Logout sırasında oluşan permission hataları sessizce geçilir
         if (!err.message?.toLowerCase().includes('permission')) {
-          console.warn('[useNotifications] Snapshot error:', err);
+          logger.warn('[useNotifications] Snapshot error:', err);
         }
       }
     );

@@ -188,9 +188,10 @@ describe('useAppHandlers', () => {
 
       await act(async () => { await handlers.createTask({ title: 'Yeni', priority: 'High' }); });
 
-      expect(offlineQueue.enqueue).toHaveBeenCalledWith('tasks', 'create', expect.objectContaining({
-        title: 'Yeni', priority: 'High', status: 'ASSIGNED', lockVersion: 0, totalPausedTime: 0, userId: 'user-1',
-      }));
+      expect(offlineQueue.enqueue).toHaveBeenCalledWith(
+        'tasks', 'create', expect.objectContaining({ title: 'Yeni', priority: 'High' }),
+        undefined, undefined, undefined, undefined, 'user-1'
+      );
       expect(taskService.createTask).not.toHaveBeenCalled();
       expect(uiState.setIsCreateModalOpen).toHaveBeenCalledWith(false);
     });
@@ -233,12 +234,14 @@ describe('useAppHandlers', () => {
 
     it('offline: offlineQueue.enqueue ile kuyruğa alınır, servis çağrılmaz', async () => {
       goOffline();
-      const { handlers } = setup({ tasks: [makeTask()] });
+      const task = makeTask();
+      const { handlers } = setup({ tasks: [task] });
 
       await act(async () => { await handlers.updateTask('task-1', { title: 'Yeni Başlık' }); });
 
       expect(offlineQueue.enqueue).toHaveBeenCalledWith(
-        'tasks', 'update', expect.objectContaining({ title: 'Yeni Başlık' }), 'task-1', 3
+        'tasks', 'update', expect.objectContaining({ title: 'Yeni Başlık' }), 'task-1', 3,
+        undefined, undefined, 'user-1', task
       );
       expect(taskService.updateTask).not.toHaveBeenCalled();
       expect(uiState.setIsEditModalOpen).toHaveBeenCalledWith(false);
@@ -287,6 +290,30 @@ describe('useAppHandlers', () => {
       expect(offlineQueue.enqueue).toHaveBeenCalledWith('blockers', 'delete', undefined, 'blocker-1');
       expect(offlineQueue.enqueue).toHaveBeenCalledWith('tasks', 'delete', undefined, 'task-1');
       expect(offlineQueue.enqueue).toHaveBeenCalledTimes(3);
+    });
+
+    it('offline: çok seviyeli hiyerarşide TÜM torun görevler ve HER seviyedeki engeller kuyruğa alınır', async () => {
+      goOffline();
+      const root = makeTask({ id: 'task-1' });
+      const child = makeTask({ id: 'child-1', parentId: 'task-1' });
+      const grandchild = makeTask({ id: 'grandchild-1', parentId: 'child-1' });
+      const rootBlocker = makeBlocker({ id: 'blocker-root', taskId: 'task-1' });
+      const childBlocker = makeBlocker({ id: 'blocker-child', taskId: 'child-1' });
+      const grandchildBlocker = makeBlocker({ id: 'blocker-grandchild', taskId: 'grandchild-1' });
+      const { handlers } = setup({
+        tasks: [root, child, grandchild],
+        blockers: [rootBlocker, childBlocker, grandchildBlocker],
+      });
+
+      await act(async () => { await handlers.deleteTask('task-1'); });
+
+      expect(offlineQueue.enqueue).toHaveBeenCalledWith('tasks', 'delete', undefined, 'child-1');
+      expect(offlineQueue.enqueue).toHaveBeenCalledWith('tasks', 'delete', undefined, 'grandchild-1');
+      expect(offlineQueue.enqueue).toHaveBeenCalledWith('tasks', 'delete', undefined, 'task-1');
+      expect(offlineQueue.enqueue).toHaveBeenCalledWith('blockers', 'delete', undefined, 'blocker-root');
+      expect(offlineQueue.enqueue).toHaveBeenCalledWith('blockers', 'delete', undefined, 'blocker-child');
+      expect(offlineQueue.enqueue).toHaveBeenCalledWith('blockers', 'delete', undefined, 'blocker-grandchild');
+      expect(offlineQueue.enqueue).toHaveBeenCalledTimes(6);
     });
   });
 

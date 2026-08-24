@@ -9,6 +9,7 @@ import {
   doc, getDoc, updateDoc, onSnapshot, writeBatch, isUsingFirebaseEmulator
 } from './firebase';
 import { User, Task } from './types';
+import { TAB_ROLES, type AppTabId } from './constants';
 import { motion, AnimatePresence } from 'motion/react';
 
 // UI Components
@@ -164,16 +165,7 @@ export default function App() {
   // Tab yetki kontrolü (Güvenlik Duvarı)
   useEffect(() => {
     if (!user) return;
-    const allowedRoles: Record<string, string[]> = {
-      dashboard: ['Admin', 'Manager', 'Staff'],
-      tasks: ['Admin', 'Manager', 'Staff'],
-      blockers: ['Admin', 'Manager'],
-      reports: ['Admin'],
-      team: ['Admin', 'Manager'],
-      audit: ['Admin'],
-      settings: ['Admin'],
-    };
-    const allowed = allowedRoles[activeTab];
+    const allowed = TAB_ROLES[activeTab as AppTabId];
     if (allowed && !allowed.includes(user.role)) {
       console.warn(`[Security] Yetkisiz ekran erişimi engellendi (${activeTab}). Harekat Merkezi'ne yönlendiriliyor.`);
       setActiveTab('dashboard');
@@ -297,11 +289,7 @@ export default function App() {
   // ─── Bildirimler ──────────────────────────────────────────────────────────
   const { notifications } = useNotifications(user?.uid ?? null);
 
-  // ─── Toast yardımcıları (geriye dönük uyumluluk için) ────────────────────
-  const handleSuccess = useCallback((title: string, body: string, taskId?: string) => {
-    addToast({ title, body, type: 'success', taskId });
-  }, [addToast]);
-
+  // ─── Toast yardımcıları ──────────────────────────────────────────────────
   const triggerToast = useCallback((title: string, body: string, type: 'info' | 'success' | 'warning' | 'danger' = 'success', taskId?: string) => {
     addToast({ title, body, type, taskId });
   }, [addToast]);
@@ -417,6 +405,7 @@ export default function App() {
     addBlocker, resolveBlocker, addComment, delegateTask,
     addUser, updateUserRole, deleteUser,
     updateBlocker, deleteBlocker,
+    markNotificationRead, markAllNotificationsRead,
   } = useAppHandlers({ user, tasks, blockers, onError: handleFirestoreError });
 
   // ─── Auth Handlers ────────────────────────────────────────────────────────
@@ -490,8 +479,10 @@ export default function App() {
               globalFocusDept={globalFocusDept}
               onGlobalFocusDeptChange={setGlobalFocusDept}
               departments={departments}
+              isOffline={isOffline}
+              queueLength={offlineQueueLength}
             />
-            <NotificationPanel showNotifications={showNotifications} setShowNotifications={setShowNotifications} notifRef={notifRef} userUid={user.uid} notifications={notifications} handleSuccess={handleSuccess} setSelectedTaskId={setSelectedTaskId} setActiveTab={setActiveTab} />
+            <NotificationPanel showNotifications={showNotifications} setShowNotifications={setShowNotifications} notifRef={notifRef} notifications={notifications} setSelectedTaskId={setSelectedTaskId} setActiveTab={setActiveTab} markNotificationRead={markNotificationRead} markAllNotificationsRead={markAllNotificationsRead} />
 
             <main id="main-content" className="lg:ml-64 min-h-screen relative z-10 scroll-smooth pb-24 lg:pb-0">
               <AnimatePresence mode="wait">

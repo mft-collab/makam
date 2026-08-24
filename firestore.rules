@@ -181,21 +181,39 @@ service cloud.firestore {
     }
 
     function isValidBlocker(data) {
+      // 'id' (blockerService.addBlocker'ın doküman ID'sini de alana yazması) ve
+      // 'resolvedAt' (resolveBlocker/deleteBlocker) opsiyonel alanlardır — bkz.
+      // isValidTaskUpdate/isValidAuditLog'daki aynı hasOnly() alan kilidi deseni
+      // (kod denetimi: eskiden bu koleksiyonda alan kilidi yoktu, kalıcı ve
+      // sınırsız büyüyebilecek keyfi alan eklenmesi mümkündü).
+      let allowedFields = ['id', 'taskId', 'reason', 'isResolved', 'createdAt', 'resolvedAt'];
       return data.keys().hasAll(['taskId', 'reason', 'isResolved', 'createdAt']) &&
+             data.keys().hasOnly(allowedFields) &&
              data.taskId is string &&
              data.reason is string && data.reason.size() >= 1 && data.reason.size() <= 500 &&
              data.isResolved is bool &&
-             data.createdAt is number;
+             data.createdAt is number &&
+             (!('resolvedAt' in data) || data.resolvedAt is number) &&
+             (!('id' in data) || data.id is string);
     }
 
     function isValidAuditLog(data) {
+      // audit_logs silinemez/değiştirilemez (kanıt bütünlüğü) — bu yüzden bir
+      // alan kilidi eksikliği burada ÖZELLİKLE kalıcı bir risk: hasOnly()
+      // olmadan yazılmış keyfi/aşırı büyük bir alan sonsuza dek koleksiyonda
+      // kalır (bkz. kod denetimi).
+      let allowedFields = ['taskId', 'changedBy', 'oldValue', 'newValue', 'timestamp', 'changes'];
       return data.keys().hasAll(['taskId', 'changedBy', 'timestamp']) &&
-             data.taskId is string &&
+             data.keys().hasOnly(allowedFields) &&
+             data.taskId is string && data.taskId.size() <= 200 &&
              data.changedBy is string &&
              // Kaydı oluşturan istemci, başka bir kullanıcı adına sahte kayıt
              // yazamaz — "kim yaptı" bilgisi request.auth.uid'e bağlanır.
              data.changedBy == request.auth.uid &&
-             data.timestamp is number;
+             data.timestamp is number &&
+             (!('oldValue' in data) || (data.oldValue is string && data.oldValue.size() <= 2000)) &&
+             (!('newValue' in data) || (data.newValue is string && data.newValue.size() <= 2000)) &&
+             (!('changes' in data) || data.changes is map);
     }
 
     function isValidNotification(data) {
@@ -207,6 +225,24 @@ service cloud.firestore {
              data.type in ['Crisis', 'Info', 'Warning', 'TaskAssigned'] &&
              data.timestamp is number &&
              data.isRead is bool;
+    }
+
+    function isValidErrorLog(data) {
+      let allowedFields = ['message', 'stack', 'source', 'operationType', 'path', 'context', 'userId', 'timestamp', 'appVersion', 'userAgent'];
+      return data.keys().hasAll(['message', 'source', 'timestamp', 'appVersion']) &&
+             data.keys().hasOnly(allowedFields) &&
+             data.message is string && data.message.size() <= 2000 &&
+             data.source in ['ErrorBoundary', 'async', 'firestore', 'manual'] &&
+             data.timestamp is number &&
+             data.appVersion is string && data.appVersion.size() <= 20 &&
+             (!('stack' in data) || (data.stack is string && data.stack.size() <= 2000)) &&
+             (!('operationType' in data) || (data.operationType is string && data.operationType.size() <= 100)) &&
+             (!('path' in data) || (data.path is string && data.path.size() <= 300)) &&
+             (!('context' in data) || data.context is map) &&
+             (!('userAgent' in data) || (data.userAgent is string && data.userAgent.size() <= 200)) &&
+             // İstemci, gerçekte kim olduğundan başka bir userId adına sahte log yazamaz
+             // (audit_logs'taki changedBy desenindeki aynı ilke, bkz. isValidAuditLog).
+             (!('userId' in data) || data.userId == request.auth.uid);
     }
 
     function isValidSystemLog(data) {
@@ -285,7 +321,7 @@ service cloud.firestore {
         (isManager() && existing().departmentId == getUserDepartment() && (!('departmentId' in incoming()) || incoming().departmentId == getUserDepartment())) ||
         (
           (existing().assigneeId == request.auth.uid || ('email' in request.auth.token && existing().assigneeId == request.auth.token.email)) &&
-          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'evidence', 'evidenceType', 'comments', 'updatedAt', 'pausedAt', 'totalPausedTime', 'lockVersion', 'completedAt', 'checklist'])
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'evidence', 'evidenceType', 'comments', 'updatedAt', 'pausedAt', 'totalPausedTime', 'lockVersion', 'completedAt', 'checklist', 'changedBy'])
         )
       ) && (
         // Durum değişiyorsa geçerli bir geçiş olmalı
@@ -387,7 +423,7 @@ service cloud.firestore {
     // Giriş yapmış herhangi bir kullanıcı hata logu oluşturabilir (istemci taraflı izleme)
     // Sadece Admin okuyabilir / silebilir
     match /error_logs/{logId} {
-      allow create: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(logId) && isValidErrorLog(incoming());
       allow read, delete: if isAdmin();
       allow update: if false; // Loglar değiştirilemez
     }

@@ -78,7 +78,13 @@ async function testConnection() {
     await getDocFromServer(doc(db, 'system', 'connection_test'));
     logger.debug('Firestore connection successful.');
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
+    const isReallyOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    if (error instanceof Error && error.message.includes('the client is offline') && !isReallyOffline) {
+      // navigator.onLine === true iken Firestore'un "client is offline" demesi
+      // gerçek bir yapılandırma sorununa işaret eder (yanlış databaseId/projectId
+      // vb.). Tarayıcı GERÇEKTEN çevrimdışıysa (isReallyOffline) bu, offline-first
+      // PWA'da beklenen/normal bir durumdur — o durumda yanıltıcı bir "yapılandırma
+      // hatası" toastı GÖSTERİLMEZ (bkz. kod denetimi).
       logger.error("Firebase configuration error: Client is offline. Check your project settings.");
       logger.error("This usually means the databaseId or projectId is incorrect.");
       logger.error("Current Database ID:", databaseId);

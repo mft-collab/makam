@@ -19,6 +19,7 @@ import { Task, TaskStatus, User } from '../types';
 import { calculateDeadline, getSLAConfigForPriority } from '../lib/sla';
 import { cleanData } from '../lib/utils';
 import { runWithRetry } from '../lib/retry';
+import { isValidTaskTransition } from '../lib/taskStateMachine';
 
 /**
  * Görev geçişinin tüm okuma+yazma mantığını mevcut bir transaction içinde
@@ -63,6 +64,14 @@ async function transitionTaskInTransaction(
   const currentVersion = task.lockVersion || 0;
   if (options?.expectedVersion !== undefined && currentVersion !== options.expectedVersion) {
     throw new Error(`VERSION_MISMATCH: Beklenen Versiyon ${options.expectedVersion}, Sunucu Versiyonu ${currentVersion}`);
+  }
+
+  // Client-side savunma hattı — firestore.rules'taki isValidTransition ile
+  // aynı kurallar (bkz. lib/taskStateMachine.ts). Rules zaten bunu ayrıca
+  // uyguluyor; bu kontrol yalnızca hatayı sunucuya gitmeden, daha erken ve
+  // daha anlaşılır bir mesajla yakalar.
+  if (!isValidTaskTransition(task.status, newStatus)) {
+    throw new Error(`INVALID_TRANSITION: '${task.status}' durumundan '${newStatus}' durumuna geçiş izinli değil.`);
   }
 
   // --- SLA Pause Logic ---
@@ -149,10 +158,82 @@ async function transitionTaskInTransaction(
 
 export { transitionTaskInTransaction };
 
+/**
+ * Genel (durum-dışı) görev güncellemesinin transaction mantığı — mevcut bir
+ * transaction içinde çalışır ki offlineQueue senkronu (bkz. offlineQueue.ts),
+ * transitionTaskInTransaction'la aynı desende, online taskService.updateTask
+ * ile BİREBİR AYNI audit-log/versiyon/stats davranışını offline'da da
+ * uygulayabilsin. oldTask yalnızca audit diff'inin "eski değer" tabanı ve
+ * optimistic-locking beklenen versiyonu için kullanılır (client'ın enqueue
+ * anındaki anlık görüntüsü) — transaction'ın kendi okuduğu sunucu verisi
+ * yalnızca versiyon karşılaştırması için kullanılır.
+ */
+async function updateTaskInTransaction(
+  transaction: Transaction,
+  taskId: string,
+  data: Partial<Task>,
+  oldTask: Task,
+  userId: string,
+  options?: { timestampOverride?: number }
+): Promise<Task> {
+  const taskRef = doc(db, 'tasks', taskId);
+  const snapshot = await transaction.get(taskRef);
+  if (!snapshot.exists()) {
+    throw new Error('Task does not exist');
+  }
+
+  const task = snapshot.data() as Task;
+  const currentServerVersion = task.lockVersion || 0;
+  const expectedVersion = oldTask.lockVersion || 0;
+
+  if (currentServerVersion !== expectedVersion) {
+    throw new Error(`VERSION_MISMATCH: Beklenen Versiyon ${expectedVersion}, Sunucu Versiyonu ${currentServerVersion}`);
+  }
+
+  const now = options?.timestampOverride ?? Date.now();
+
+  transaction.update(taskRef, cleanData({
+    ...data,
+    updatedAt: now,
+    lockVersion: currentServerVersion + 1
+  }));
+
+  // Audit Log — görev güncellemesiyle aynı transaction içinde yazılır ki
+  // biri başarısız olursa ikisi de geri alınsın (denetim izi bütünlüğü).
+  const auditRef = doc(collection(db, 'audit_logs'));
+  transaction.set(auditRef, {
+    taskId,
+    changedBy: userId,
+    oldValue: 'Kısmi Güncelleme',
+    newValue: 'Kısmi Güncelleme',
+    timestamp: now,
+    changes: (Object.keys(data) as (keyof Task)[]).reduce((acc, key) => ({
+      ...acc,
+      [key]: {
+        old: oldTask[key] === undefined ? null : oldTask[key],
+        new: data[key] === undefined ? null : data[key]
+      }
+    }), {})
+  });
+
+  // Aggregate Stats — aynı transaction içinde
+  if (data.status && data.status !== oldTask.status) {
+    const statsRef = doc(db, 'system', 'stats');
+    transaction.set(statsRef, {
+      [`status_${oldTask.status}`]: increment(-1),
+      [`status_${data.status}`]: increment(1)
+    }, { merge: true });
+  }
+
+  return task;
+}
+
+export { updateTaskInTransaction };
+
 export const taskService = {
-  async createTask(taskData: Partial<Task>, userId: string) {
+  async createTask(taskData: Partial<Task>, userId: string, options?: { timestampOverride?: number }) {
     return runWithRetry(async () => {
-      const now = Date.now();
+      const now = options?.timestampOverride ?? Date.now();
       const slaConfig = getSLAConfigForPriority(taskData.priority ?? 'Medium');
       const deadline = typeof taskData.deadline === 'number' && taskData.deadline > 0
         ? taskData.deadline
@@ -340,10 +421,8 @@ export const taskService = {
     }));
   },
 
-  async updateTask(taskId: string, data: Partial<Task>, oldTask: Task, userId: string) {
+  async updateTask(taskId: string, data: Partial<Task>, oldTask: Task, userId: string, options?: { timestampOverride?: number }) {
     return runWithRetry(async () => {
-      const now = Date.now();
-
       // İş Kuralı: Admin koordinatör atanamaz
       if (data.coordinatorId) {
         const coordSnap = await getDoc(doc(db, 'users', data.coordinatorId!));
@@ -352,54 +431,9 @@ export const taskService = {
         }
       }
 
-      await runTransaction(db, async (transaction) => {
-        const taskRef = doc(db, 'tasks', taskId);
-        const snapshot = await transaction.get(taskRef);
-        if (!snapshot.exists()) {
-          throw new Error('Task does not exist');
-        }
-
-        const task = snapshot.data() as Task;
-        const currentServerVersion = task.lockVersion || 0;
-        const expectedVersion = oldTask.lockVersion || 0;
-
-        if (currentServerVersion !== expectedVersion) {
-          throw new Error(`VERSION_MISMATCH: Beklenen Versiyon ${expectedVersion}, Sunucu Versiyonu ${currentServerVersion}`);
-        }
-
-        transaction.update(taskRef, cleanData({
-          ...data,
-          updatedAt: now,
-          lockVersion: currentServerVersion + 1
-        }));
-
-        // Audit Log — görev güncellemesiyle aynı transaction içinde yazılır ki
-        // biri başarısız olursa ikisi de geri alınsın (denetim izi bütünlüğü).
-        const auditRef = doc(collection(db, 'audit_logs'));
-        transaction.set(auditRef, {
-          taskId,
-          changedBy: userId,
-          oldValue: 'Kısmi Güncelleme',
-          newValue: 'Kısmi Güncelleme',
-          timestamp: now,
-          changes: (Object.keys(data) as (keyof Task)[]).reduce((acc, key) => ({
-            ...acc,
-            [key]: {
-              old: oldTask[key] === undefined ? null : oldTask[key],
-              new: data[key] === undefined ? null : data[key]
-            }
-          }), {})
-        });
-
-        // Aggregate Stats — aynı transaction içinde
-        if (data.status && data.status !== oldTask.status) {
-          const statsRef = doc(db, 'system', 'stats');
-          transaction.set(statsRef, {
-            [`status_${oldTask.status}`]: increment(-1),
-            [`status_${data.status}`]: increment(1)
-          }, { merge: true });
-        }
-      });
+      await runTransaction(db, (transaction) =>
+        updateTaskInTransaction(transaction, taskId, data, oldTask, userId, options)
+      );
     });
   },
 
@@ -409,8 +443,14 @@ export const taskService = {
 
   // İzin/mazeret devri: görev başka bir Müdür'e devredilir ve PENDING_DELEGATION'a
   // alınır (SLA sayacı BLOCKED/AWAITING_APPROVAL ile aynı şekilde duraklar).
-  // Yeni sorumlunun Müdür olması firestore.rules'ta da (isValidTaskBusinessRules) doğrulanır.
+  // Yeni sorumlunun Müdür olması firestore.rules'ta da (isValidTaskBusinessRules)
+  // AYRICA doğrulanır — buradaki kontrol yalnızca client'a erken/anlaşılır bir
+  // hata mesajı vermek için ikinci bir savunma hattıdır (bkz. kod denetimi).
   async delegateTask(taskId: string, newAssigneeId: string, userId: string, expectedVersion?: number) {
+    const assigneeSnap = await getDoc(doc(db, 'users', newAssigneeId));
+    if (assigneeSnap.exists() && (assigneeSnap.data() as User).role !== 'Manager') {
+      throw new Error('İzin/mazeret devri yalnızca Müdür rolündeki personele yapılabilir.');
+    }
     return this.transitionTask(taskId, 'PENDING_DELEGATION', userId, { assigneeId: newAssigneeId, expectedVersion });
   },
 

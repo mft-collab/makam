@@ -5,7 +5,7 @@ import type { LucideIcon } from 'lucide-react';
 import { triggerHaptic } from '../lib/haptics';
 import { cn } from '../lib/utils';
 import { User } from '../types';
-import { ROLE_LABELS } from '../constants';
+import { ROLE_LABELS, TAB_ROLES } from '../constants';
 import { Logo } from './Logo';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import { PremiumIcon } from './ui/PremiumIcon';
@@ -31,16 +31,16 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
   const resolvedTheme = useResolvedTheme();
 
   const primaryItems: MenuItem[] = [
-    { id: 'dashboard', label: 'Harekat Merkezi', icon: ShieldCheck, roles: ['Admin', 'Manager', 'Staff'] },
-    { id: 'tasks', label: 'Talimatlar', icon: CheckSquare, roles: ['Admin', 'Manager', 'Staff'] },
-    { id: 'blockers', label: 'Engeller', icon: AlertTriangle, roles: ['Admin', 'Manager'] },
-    { id: 'team', label: 'Kadro', icon: Users, roles: ['Admin', 'Manager'] },
-    { id: 'reports', label: 'Raporlar', icon: BarChart3, roles: ['Admin'] },
+    { id: 'dashboard', label: 'Harekat Merkezi', icon: ShieldCheck, roles: TAB_ROLES.dashboard },
+    { id: 'tasks', label: 'Talimatlar', icon: CheckSquare, roles: TAB_ROLES.tasks },
+    { id: 'blockers', label: 'Engeller', icon: AlertTriangle, roles: TAB_ROLES.blockers },
+    { id: 'team', label: 'Kadro', icon: Users, roles: TAB_ROLES.team },
+    { id: 'reports', label: 'Raporlar', icon: BarChart3, roles: TAB_ROLES.reports },
   ];
 
   const systemItems: MenuItem[] = [
-    { id: 'audit', label: 'Denetim İzleri', icon: Database, roles: ['Admin'] },
-    { id: 'settings', label: 'Dizge Ayarları', icon: SettingsIcon, roles: ['Admin'] },
+    { id: 'audit', label: 'Denetim İzleri', icon: Database, roles: TAB_ROLES.audit },
+    { id: 'settings', label: 'Dizge Ayarları', icon: SettingsIcon, roles: TAB_ROLES.settings },
   ];
 
   const filteredPrimaryItems = primaryItems.filter(item => user && item.roles.includes(user.role));

@@ -5,7 +5,8 @@ import { AuditLog, Task, User, TaskStatus } from '../types';
 import { Button } from './ui/Button';
 import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
-import { STATUS_LABELS, ROLE_LABELS } from '../constants';
+import { STATUS_LABELS, ROLE_LABELS, STATUS_BADGE_VARIANT } from '../constants';
+import { formatDateTime } from '../lib/utils';
 import { auditLogService } from '../services/auditLogService';
 import { useUIStore } from '../store/uiStore';
 import { AUDIT_FIELD_LABELS, formatAuditValue } from '../lib/auditLabels';
@@ -189,7 +190,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
                       <span className="text-[12px] font-medium text-executive-blue tracking-tight group-hover:text-executive-blue transition-colors">{user?.fullName || 'Dizge'}</span>
                       <span className="text-[8px] text-text-tertiary font-medium uppercase tracking-[0.15em] px-1.5 py-0.5 bg-surface-glass border border-surface-border rounded-md">{user ? ROLE_LABELS[user.role as keyof typeof ROLE_LABELS] : ''}</span>
                     </div>
-                    <span className="text-[9px] text-text-tertiary uppercase tracking-[0.2em]">{new Date(log.timestamp).toLocaleString('tr-TR')}</span>
+                    <span className="text-[9px] text-text-tertiary uppercase tracking-[0.2em]">{formatDateTime(log.timestamp)}</span>
                   </div>
                 </div>
 
@@ -219,23 +220,11 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant={
-                        log.oldValue === 'COMPLETED' ? 'success' :
-                        log.oldValue === 'BLOCKED' ? 'danger' :
-                        log.oldValue === 'IN_PROGRESS' ? 'info' :
-                        log.oldValue === 'AWAITING_APPROVAL' ? 'warning' :
-                        'default'
-                      }>
+                      <Badge variant={STATUS_BADGE_VARIANT[log.oldValue as TaskStatus] ?? 'default'}>
                         {STATUS_LABELS[log.oldValue as TaskStatus] || String(log.oldValue)}
                       </Badge>
                       <ArrowRight className="w-3.5 h-3.5 text-text-tertiary flex-shrink-0" />
-                      <Badge variant={
-                        log.newValue === 'COMPLETED' ? 'success' :
-                        log.newValue === 'BLOCKED' ? 'danger' :
-                        log.newValue === 'IN_PROGRESS' ? 'info' :
-                        log.newValue === 'AWAITING_APPROVAL' ? 'warning' :
-                        'default'
-                      }>
+                      <Badge variant={STATUS_BADGE_VARIANT[log.newValue as TaskStatus] ?? 'default'}>
                         {STATUS_LABELS[log.newValue as TaskStatus] || String(log.newValue)}
                       </Badge>
                     </div>

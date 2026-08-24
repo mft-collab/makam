@@ -1,4 +1,5 @@
 import type { Task, User } from '../types';
+import { isCompletedOnTime, getRemainingTime } from './sla';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -51,16 +52,15 @@ function isActive(task: Task) {
 }
 
 /**
- * Efektif kalan süre: orijinal deadline + toplam duraklatma süresi - referans an.
- * Duraklatılmış (BLOCKED/AWAITING_APPROVAL/PENDING_DELEGATION) bir görevde referans
- * an pausedAt'tır — "now" değil, aksi halde duraklatma süresi boyunca mühlet
- * hesapları yanlışlıkla ilerlemeye devam eder. TaskDetails.tsx'in canlı SLA
- * sayacıyla aynı formül — dashboard/kriz/risk hesapları burada tek noktadan türer.
+ * Efektif kalan süre: lib/sla.ts'teki getRemainingTime üzerinden — orijinal
+ * deadline + toplam duraklatma süresi - referans an (duraklatılmışsa "now"
+ * değil pausedAt referans alınır). TaskDetails.tsx'in canlı SLA sayacıyla
+ * (getTimeLeft → getRemainingTime) AYNI çekirdek hesaplama — bu formülün iki
+ * bağımsız implementasyonu artık yok (bkz. kod denetimi); dashboard/kriz/risk
+ * hesapları burada tek noktadan türer.
  */
 function effectiveMsToDeadline(task: Task, now: number): number {
-  const effectiveDeadline = task.deadline + (task.totalPausedTime || 0);
-  const referenceTime = task.pausedAt ?? now;
-  return effectiveDeadline - referenceTime;
+  return getRemainingTime(task.deadline, task.totalPausedTime || 0, task.pausedAt, now).timeLeftMs;
 }
 
 /**
@@ -224,7 +224,7 @@ export function getUserPerformanceProfiles(tasks: Task[], users: User[], now = D
     const owned = byEmail.length > 0 ? [...byUid, ...byEmail] : byUid;
     const active = owned.filter(isActive);
     const completed = owned.filter(t => t.status === 'COMPLETED');
-    const onTime = completed.filter(t => (t.completedAt ?? t.updatedAt) <= t.deadline).length;
+    const onTime = completed.filter(isCompletedOnTime).length;
 
     const activeCount = active.length;
     const overdueCount = active.filter(t => isTaskInCrisis(t, now) || t.status === 'CRISIS').length;

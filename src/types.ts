@@ -76,7 +76,7 @@ export const TaskSchema = z.object({
     id: z.string(),
     text: z.string(),
     isCompleted: z.boolean(),
-  })).optional(),
+  })).default([]),
   /** Son durum geçişini yapan kullanıcının uid'si — transitionTaskInTransaction
    *  tarafından her geçişte set edilir. Cloud Functions'taki onTaskStatusChanged
    *  trigger'ının "değiştiren kişiye bildirim gönderme" filtresi bu alana bakar. */
@@ -107,6 +107,3 @@ export const AuditLogSchema = z.object({
   timestamp: z.number(),
 });
 export type AuditLog = z.infer<typeof AuditLogSchema>;
-
-// Utility type for Firestore data with ID
-export type WithId<T> = T & { id: string };
