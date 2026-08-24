@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TaskFormModal } from './TaskFormModal';
 import type { Task, User } from '../types';
@@ -28,14 +28,22 @@ const renderForm = (overrides: Partial<React.ComponentProps<typeof TaskFormModal
 const getAssigneeSelect = () => screen.getAllByRole('combobox')[0] as HTMLSelectElement;
 const getCoordinatorSelect = () => screen.getAllByRole('combobox')[1] as HTMLSelectElement;
 const getPrioritySelect = () => screen.getAllByRole('combobox')[2] as HTMLSelectElement;
-const getDeadlineInput = () => document.querySelector('input[type="date"]') as HTMLInputElement;
 const getSubmitButton = () => screen.getByRole('button', { name: /ATAMAYI TAMAMLA|GÜNCELLE/ });
+
+// Native <input type="date"> yerine premium takvim (DatePicker) kullanıldığından
+// (bkz. TaskFormModal), "bugün" hücresi aria-current="date" ile işaretlenmiş
+// tek gündür — gerçek sistem tarihinden ve ay gezinmesinden bağımsız, tekil bir seçim sağlar.
+const pickTodayAsDeadline = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(screen.getByRole('button', { name: 'SLA mühleti' }));
+  const dialog = screen.getByRole('dialog', { name: 'SLA mühleti' });
+  await user.click(within(dialog).getByRole('button', { current: 'date' }));
+};
 
 const fillValidForm = async (user: ReturnType<typeof userEvent.setup>, assigneeId = 'staff-1') => {
   await user.type(screen.getByPlaceholderText('Talimat Başlığı'), 'Test Talimatı');
   await user.type(screen.getByPlaceholderText('İşin detaylarını ve başarı kriterlerini tanımlayın...'), 'Detaylı açıklama');
   await user.selectOptions(getAssigneeSelect(), assigneeId);
-  fireEvent.change(getDeadlineInput(), { target: { value: '2026-06-15' } });
+  await pickTodayAsDeadline(user);
 };
 
 describe('TaskFormModal', () => {

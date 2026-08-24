@@ -6,6 +6,7 @@ import { Task, User, TaskPrioritySchema } from '../types';
 import { PRIORITY_LABELS, ROLE_LABELS } from '../constants';
 import { cn } from '../lib/utils';
 import { FileText, Target, Users, Calendar, AlertCircle } from 'lucide-react';
+import { DatePicker } from './ui/DatePicker';
 
 const taskSchema = z.object({
   title: z.string().min(1, 'Başlık zorunludur.').trim(),
@@ -43,6 +44,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isSubmitting }
   } = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
@@ -57,6 +59,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
   });
 
   const assigneeId = watch('assigneeId');
+  const deadline = watch('deadline');
 
   const getAssignableRoles = (role?: string) => {
     if (role === 'Admin') return ['Admin', 'Manager', 'Staff'];
@@ -118,13 +121,13 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
             <Target className="w-3.5 h-3.5 text-executive-gold stroke-[1.2]" />
             Operasyonel Hedef
           </label>
-          <input 
-            type="text" 
+          <input
+            type="text"
             placeholder="Talimat Başlığı"
             {...register('title')}
             className={cn(
-              "text-[28px] font-light text-text-heading font-serif tracking-tight outline-none bg-transparent placeholder:text-text-muted/30 w-full",
-              errors.title && "border-b border-status-danger/50"
+              "text-[28px] font-light text-text-heading font-serif tracking-tight outline-none bg-transparent placeholder:text-text-muted/30 w-full border-b border-makam-border/10 pb-3 transition-colors focus:border-executive-blue/40",
+              errors.title && "border-status-danger/50 focus:border-status-danger/50"
             )}
           />
           {errors.title && <span className="text-status-danger text-[10px] px-1 uppercase tracking-wider">{errors.title.message}</span>}
@@ -136,10 +139,10 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
             <FileText className="w-3.5 h-3.5 text-executive-blue stroke-[1.2]" />
             Kapsam & Detaylar
           </label>
-          <textarea 
+          <textarea
             className={cn(
-              "makam-input min-h-[140px] resize-none bg-makam-glass border-makam-border/5 text-text-heading placeholder:text-text-muted/30 rounded-2xl p-5 text-[14px] font-light leading-relaxed transition-all outline-none focus:border-executive-blue/20 focus:ring-8 focus:ring-executive-blue/5 shadow-inner",
-              errors.description && "border-status-danger/50 focus:border-status-danger/50 focus:ring-status-danger/5"
+              "w-full min-h-[140px] resize-none bg-surface-elevated border border-makam-border/10 text-text-heading placeholder:text-text-muted/30 rounded-xl px-5 py-4 text-[14px] font-light leading-relaxed transition-all outline-none focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
+              errors.description && "border-status-danger/50"
             )}
             placeholder="İşin detaylarını ve başarı kriterlerini tanımlayın..."
             {...register('description')}
@@ -220,18 +223,25 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
 
         {/* Tarih */}
         <div className="flex flex-col gap-3">
-          <label className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.18em] px-1 flex items-center gap-2.5">
+          <label htmlFor="task-deadline" className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.18em] px-1 flex items-center gap-2.5">
             <Calendar className="w-3.5 h-3.5 text-executive-blue stroke-[1.2]" />
             SLA Mühleti
           </label>
-          <input 
-            type="date"
-            {...register('deadline')}
+          <div
             className={cn(
-              "w-full bg-surface-elevated border border-makam-border/10 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
+              "w-full flex items-center gap-3 bg-surface-elevated border border-makam-border/10 rounded-xl px-4 py-3 transition-all focus-within:border-executive-blue/30 focus-within:ring-4 focus-within:ring-executive-blue/5",
               errors.deadline && "border-status-danger/50"
             )}
-          />
+          >
+            <Calendar className="w-3.5 h-3.5 text-executive-blue/60 stroke-[1.2] flex-shrink-0" aria-hidden="true" />
+            <DatePicker
+              id="task-deadline"
+              value={deadline}
+              onChange={(v) => setValue('deadline', v, { shouldValidate: true, shouldDirty: true })}
+              ariaLabel="SLA mühleti"
+              className="flex-1"
+            />
+          </div>
           {errors.deadline && <span className="text-status-danger text-[10px] px-1 uppercase tracking-wider">{errors.deadline.message}</span>}
         </div>
       </div>
