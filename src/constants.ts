@@ -28,6 +28,22 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
   CRISIS: 'Kriz — Gecikmiş',
 };
 
+/** STATUS_LABELS'ın tek/iki kelimelik kısa biçimi — pipeline şeridi (TaskDetails),
+ *  pasta grafik dilimleri (Reports) gibi dar alanlarda kullanılır. Bu iki yer
+ *  eskiden birbirinden bağımsız, zamanla birbirinden sapmış kendi kopyalarını
+ *  tutuyordu (ör. "Devir Bekliyor" / "Devrediliyor", "Engel" / "Engelli") —
+ *  bkz. kod denetimi. */
+export const STATUS_LABELS_SHORT: Record<TaskStatus, string> = {
+  ASSIGNED: 'Atandı',
+  PENDING_DELEGATION: 'Devir Bekliyor',
+  IN_PROGRESS: 'İşlemde',
+  BLOCKED: 'Engel',
+  AWAITING_APPROVAL: 'Onayda',
+  COMPLETED: 'Tamam',
+  CANCELLED: 'İptal',
+  CRISIS: 'Kriz',
+};
+
 export const PRIORITY_LABELS: Record<TaskPriority, string> = {
   Low: 'Rutin',
   Medium: 'Normal',

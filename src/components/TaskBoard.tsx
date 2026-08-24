@@ -301,7 +301,7 @@ export const TaskBoard = ({
             className="flex items-center gap-1.5 px-4 h-9 rounded-full bg-executive-gold text-white text-[9px] font-semibold uppercase tracking-[0.16em] shadow-lg shadow-executive-gold/15 hover:shadow-xl hover:bg-executive-gold-hover hover:scale-[1.01] active:scale-[0.98] transition-all duration-300"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2]" />
-            <span className="hidden sm:block">Yeni Operasyon</span>
+            <span className="hidden sm:block">Yeni Talimat</span>
             <span className="sm:hidden">Yeni</span>
           </button>
         </div>
@@ -416,7 +416,7 @@ export const TaskBoard = ({
             style={{ gridTemplateColumns: DESKTOP_GRID_TEMPLATE }}
             className="grid bg-surface-glass border-b border-executive-blue/[0.04]"
           >
-            {['Durum', 'Operasyon Tanımı', 'Sorumlu', 'Önem', 'Mühlet', ''].map(h => (
+            {['Durum', 'Talimat Tanımı', 'Sorumlu', 'Önem', 'Mühlet', ''].map(h => (
               <div key={h} role="columnheader" className={cn(
                 'px-4 py-3 text-[8px] font-semibold text-text-tertiary uppercase tracking-[0.18em]',
                 h === '' && 'text-right'
@@ -461,7 +461,7 @@ export const TaskBoard = ({
             onClick={loadMoreTasks}
             className="px-6 py-2 bg-makam-glass backdrop-blur-xl border border-executive-blue/10 rounded-full text-[10px] font-medium text-executive-blue uppercase tracking-widest hover:bg-executive-blue hover:text-white transition-all shadow-sm"
           >
-            Daha Fazla Görev Yükle
+            Daha Fazla Talimat Yükle
           </button>
         </div>
       )}

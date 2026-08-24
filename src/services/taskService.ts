@@ -423,11 +423,11 @@ export const taskService = {
 
   async updateTask(taskId: string, data: Partial<Task>, oldTask: Task, userId: string, options?: { timestampOverride?: number }) {
     return runWithRetry(async () => {
-      // İş Kuralı: Admin koordinatör atanamaz
+      // İş Kuralı: Admin irtibatlı atanamaz
       if (data.coordinatorId) {
         const coordSnap = await getDoc(doc(db, 'users', data.coordinatorId!));
         if (coordSnap.exists() && (coordSnap.data() as User).role === 'Admin') {
-          throw new Error('Admin rolündeki kullanıcı koordinatör olarak atanamaz.');
+          throw new Error('Admin rolündeki kullanıcı irtibatlı olarak atanamaz.');
         }
       }
 

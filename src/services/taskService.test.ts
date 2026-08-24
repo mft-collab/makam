@@ -269,13 +269,13 @@ describe('taskService', () => {
   // ─── updateTask — versiyon kontrolü + alan bazlı diff ──────────────────────
 
   describe('updateTask', () => {
-    it('Admin rolündeki kullanıcı koordinatör olarak atanamaz', async () => {
+    it('Admin rolündeki kullanıcı irtibatlı olarak atanamaz', async () => {
       vi.mocked(firebase.getDoc).mockResolvedValue({ exists: () => true, data: () => ({ role: 'Admin' }) } as any);
       const oldTask = { id: 'task-1', status: 'IN_PROGRESS', lockVersion: 1 } as Task;
 
       await expect(
         taskService.updateTask('task-1', { coordinatorId: 'admin-uid' }, oldTask, 'user-1')
-      ).rejects.toThrow(/Admin rolündeki kullanıcı koordinatör/);
+      ).rejects.toThrow(/Admin rolündeki kullanıcı irtibatlı/);
     }, 10_000);
 
     it('sunucu versiyonu beklenenle uyuşmazsa güncelleme uygulanmaz', async () => {

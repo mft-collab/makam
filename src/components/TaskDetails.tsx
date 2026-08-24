@@ -6,7 +6,7 @@ import {
   GitCommit, Loader2, Hourglass, Clock, Building2, Tag, Flag, ExternalLink, Layers
 } from 'lucide-react';
 import { Task, User as UserType, TaskBlocker, AuditLog, TaskStatus, TaskPriority } from '../types';
-import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_BADGE_VARIANT, STATUS_BADGE_VARIANT } from '../constants';
+import { STATUS_LABELS, STATUS_LABELS_SHORT, PRIORITY_LABELS, PRIORITY_BADGE_VARIANT, STATUS_BADGE_VARIANT } from '../constants';
 import { format, formatDistanceToNow } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { cn } from '../lib/utils';
@@ -277,12 +277,6 @@ export const TaskDetails = ({
             const isActive = currentPipelineIdx === idx;
             const isInterruption = status === 'BLOCKED' || status === 'CRISIS';
             const isDelegation = status === 'PENDING_DELEGATION';
-            const labels: Record<string, string> = {
-              ASSIGNED: 'Atandı', PENDING_DELEGATION: 'Devir Bekliyor',
-              IN_PROGRESS: 'İşlemde',
-              BLOCKED: 'Engel', CRISIS: 'Kriz',
-              AWAITING_APPROVAL: 'Onayda', COMPLETED: 'Tamam'
-            };
             return (
               <React.Fragment key={status}>
                 <div className="flex flex-col items-center gap-1">
@@ -306,7 +300,7 @@ export const TaskDetails = ({
                     isActive && isInterruption ? 'text-status-danger' :
                     isActive && isDelegation ? 'text-executive-gold' :
                     isActive ? 'text-executive-blue' : 'text-text-tertiary'
-                  )}>{labels[status]}</span>
+                  )}>{STATUS_LABELS_SHORT[status]}</span>
                 </div>
                 {idx < STATUS_PIPELINE.length - 1 && (
                   <div className={cn(

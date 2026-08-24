@@ -2,6 +2,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { motion } from 'motion/react';
 import { AlertTriangle, Target, Zap, TrendingUp, BarChart3, Users, CheckCircle2, Loader2, Download, FileText, Calendar, ArrowRight } from 'lucide-react';
 import { Task, User, TaskBlocker } from '../types';
+import { STATUS_LABELS_SHORT } from '../constants';
 import { cn } from '../lib/utils';
 import { isCompletedOnTime } from '../lib/sla';
 import {
@@ -223,12 +224,12 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
   // #6 — Durum dağılımı (Pie chart verisi)
   const statusDistribution = useMemo(() => {
     const map: Record<string, { label: string; color: string; count: number }> = {
-      ASSIGNED:             { label: 'Atandı',    color: '#CBD5E1', count: 0 },
-      PENDING_DELEGATION:   { label: 'Devrediliyor', color: '#A78BFA', count: 0 },
-      IN_PROGRESS:          { label: 'İşlemde',   color: 'var(--color-executive-blue)', count: 0 },
-      AWAITING_APPROVAL:    { label: 'Onayda',    color: '#B38F46', count: 0 },
-      BLOCKED:              { label: 'Engelli',   color: '#A8201A', count: 0 },
-      COMPLETED:            { label: 'Tamam',     color: 'var(--chart-completed)', count: 0 },
+      ASSIGNED:             { label: STATUS_LABELS_SHORT.ASSIGNED,           color: '#CBD5E1', count: 0 },
+      PENDING_DELEGATION:   { label: STATUS_LABELS_SHORT.PENDING_DELEGATION, color: '#A78BFA', count: 0 },
+      IN_PROGRESS:          { label: STATUS_LABELS_SHORT.IN_PROGRESS,        color: 'var(--color-executive-blue)', count: 0 },
+      AWAITING_APPROVAL:    { label: STATUS_LABELS_SHORT.AWAITING_APPROVAL,  color: '#B38F46', count: 0 },
+      BLOCKED:              { label: STATUS_LABELS_SHORT.BLOCKED,            color: '#A8201A', count: 0 },
+      COMPLETED:            { label: STATUS_LABELS_SHORT.COMPLETED,          color: 'var(--chart-completed)', count: 0 },
     };
     filteredTasks.forEach(t => {
       const statusObj = map[t.status];

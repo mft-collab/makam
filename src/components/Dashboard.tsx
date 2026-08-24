@@ -235,9 +235,9 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatCard label="Bekleyen"   value={stats.waiting}    max={stats.total} icon={Clock}        color="gray"   index={0} onClick={() => setSelectedStatCategory('waiting')} />
         <StatCard label="İşlemde"    value={stats.inProgress} max={stats.total} icon={Activity}     color="blue"   index={1} delta={deltas.inProgress} onClick={() => setSelectedStatCategory('inProgress')} />
-        <StatCard label="Denetimde"  value={stats.inReview}   max={stats.total} icon={CheckCircle2} color="green"  index={2} delta={deltas.inReview} onClick={() => setSelectedStatCategory('inReview')} />
+        <StatCard label="Onayda"     value={stats.inReview}   max={stats.total} icon={CheckCircle2} color="green"  index={2} delta={deltas.inReview} onClick={() => setSelectedStatCategory('inReview')} />
         <StatCard label="Engel"      value={stats.blocked}    max={stats.total} icon={ShieldCheck}  color="orange" index={3} delta={deltas.blocked} onClick={() => setSelectedStatCategory('blocked')} />
-        <StatCard label="Gecikme"    value={stats.crisis}     max={stats.total} icon={AlertCircle}  color="red"    index={4} delta={deltas.crisis} onClick={() => setSelectedStatCategory('crisis')} />
+        <StatCard label="Kriz"       value={stats.crisis}     max={stats.total} icon={AlertCircle}  color="red"    index={4} delta={deltas.crisis} onClick={() => setSelectedStatCategory('crisis')} />
         <StatCard label="Tamamlanan" value={stats.completed}  max={stats.total} icon={ListChecks}   color="green"  index={5} onClick={() => setSelectedStatCategory('completed')} />
       </div>
 

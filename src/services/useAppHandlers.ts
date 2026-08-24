@@ -330,7 +330,7 @@ export function useAppHandlers({
 
     try {
       await taskService.delegateTask(taskId, newAssigneeId, user.uid, task.lockVersion);
-      toast('🔄 Talimat Devredildi', 'Görev başka bir müdüre devredildi.', 'info', taskId);
+      toast('🔄 Talimat Devredildi', 'Talimat başka bir müdüre devredildi.', 'info', taskId);
     } catch (err) {
       onError(err, 'update', `tasks/${taskId}`);
     }

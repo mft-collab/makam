@@ -78,7 +78,7 @@ export async function exportTasksToPDF(
   const summaryChips: Array<{ label: string; value: number; color: string }> = [
     { label: 'TOPLAM TALİMAT', value: filtered.length, color: OBSIDIAN },
     { label: 'TAMAMLANAN', value: completed, color: STATUS_HEX.COMPLETED },
-    { label: 'İŞLEMDEKİ', value: inProgress, color: STATUS_HEX.IN_PROGRESS },
+    { label: 'İŞLEMDE', value: inProgress, color: STATUS_HEX.IN_PROGRESS },
     { label: 'ENGELLİ', value: blocked, color: STATUS_HEX.BLOCKED },
   ];
 

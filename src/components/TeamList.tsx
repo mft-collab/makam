@@ -528,7 +528,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                   <div className="grid grid-cols-2 gap-3 mt-3.5">
                     <div className="p-2.5 bg-makam-glass border border-surface-border rounded-xl flex flex-col gap-0.5">
                       <span className="text-[8px] text-text-tertiary uppercase tracking-wider font-bold">Bitirilen Talimat</span>
-                      <span className="text-[13px] font-bold text-executive-blue font-serif">{completedTasks.length} İş</span>
+                      <span className="text-[13px] font-bold text-executive-blue font-serif">{completedTasks.length} Talimat</span>
                     </div>
                     <div className="p-2.5 bg-makam-glass border border-surface-border rounded-xl flex flex-col gap-0.5">
                       <span className="text-[8px] text-text-tertiary uppercase tracking-wider font-bold">SLA Uyum Başarısı</span>

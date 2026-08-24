@@ -364,7 +364,7 @@ export const offlineQueue = {
                   if (mutation.data?.coordinatorId) {
                     const coordSnap = await getDoc(doc(db, 'users', mutation.data.coordinatorId));
                     if (coordSnap.exists() && (coordSnap.data() as User).role === 'Admin') {
-                      throw new Error('Admin rolündeki kullanıcı koordinatör olarak atanamaz.');
+                      throw new Error('Admin rolündeki kullanıcı irtibatlı olarak atanamaz.');
                     }
                   }
                   const oldTaskForDiff = mutation.oldTaskSnapshot ?? ({ lockVersion: mutation.expectedVersion } as Task);
