@@ -229,7 +229,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
           </label>
           <div
             className={cn(
-              "w-full flex items-center gap-3 bg-surface-elevated border border-makam-border/10 rounded-xl px-4 py-3 transition-all focus-within:border-executive-blue/30 focus-within:ring-4 focus-within:ring-executive-blue/5",
+              "w-fit min-w-[180px] flex items-center gap-3 bg-surface-elevated border border-makam-border/10 rounded-xl px-4 py-3 transition-all focus-within:border-executive-blue/30 focus-within:ring-4 focus-within:ring-executive-blue/5",
               errors.deadline && "border-status-danger/50"
             )}
           >
@@ -239,7 +239,6 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
               value={deadline}
               onChange={(v) => setValue('deadline', v, { shouldValidate: true, shouldDirty: true })}
               ariaLabel="SLA mühleti"
-              className="flex-1"
             />
           </div>
           {errors.deadline && <span className="text-status-danger text-[10px] px-1 uppercase tracking-wider">{errors.deadline.message}</span>}
