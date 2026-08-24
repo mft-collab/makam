@@ -45,6 +45,25 @@
      düzeltmiş ama light mod atlanmış. Aynı koyu tonla eşitlendi (~7.4:1). */
   --btn-primary-text: #161513;
 
+  /* --color-executive-blue "dinamik" bir token: light modda koyu (#161513),
+     dark modda AÇIK (#F5F3EF) — yani sabit bir renk değil, temaya göre
+     kutuplaşan bir "mürekkep" rengi. Kod tabanında onlarca yerde
+     `bg-executive-blue text-white` (aktif sekme/segment/adım/gün rozeti gibi)
+     kalıbı kullanılmış; dark modda bu, KREM ZEMİN + BEYAZ METİN'e dönüşüp
+     kontrastı ~1.1:1'e düşürüyordu (tasarım denetimi bulgusu — bkz. yönetici
+     müdahale kuyruğu, Kadro segment kontrolü, Ayarlar sekmeleri, talimat
+     pipeline'ının aktif adımı, DatePicker seçili gün). --executive-blue-text
+     bilinçli olarak TERSİ yönde kutuplaşır: light'ta açık, dark'ta koyu.
+     Kullanım: text-[color:var(--executive-blue-text)]. */
+  --executive-blue-text: #F5F3EF;
+
+  /* --status-danger/--status-warning/--status-info de aynı şekilde dark modda
+     koyu-doygundan açık-pastele döner (bkz. aşağıdaki .dark bloğu) — sabit
+     text-white eşleşmeleri orada da okunmaz hale geliyordu. */
+  --status-danger-text: #ffffff;
+  --status-warning-text: #ffffff;
+  --status-info-text: #ffffff;
+
   /* --color-executive-gold (#C5A059) DÜZ METİN olarak açık zeminler üzerinde
      kullanıldığında (Sidebar'daki aktif nav etiketi, rol rozeti gibi) ~2.1-2.5:1
      kontrast veriyor — axe-core'un authenticated e2e testinde bulduğu ciddi bir
@@ -95,6 +114,7 @@
   --btn-secondary-bg: rgba(20, 20, 18, 0.8);
   --color-executive-blue-dynamic: #F5F3EF;
   --btn-primary-text: #161513;
+  --executive-blue-text: #161513;
   /* Dark modda koyu zemin üzerinde standart altın ton zaten ~8:1 kontrast
      veriyor — light moddaki gibi koyultmaya gerek yok. */
   --gold-text: #C5A059;
@@ -110,6 +130,11 @@
   /* #34D399 açık pastel bir zemindir — sabit beyaz metin ~1.92:1 kontrast
      verir (AA'yı ciddi ihlal eder). Koyu ink ile ~7:1'in üzerinde. */
   --status-success-text: #161513;
+  /* Aynı gerekçe: #F87171/#FCD34D/#60A5FA de açık pastel — sabit beyaz metin
+     yerine koyu ink. */
+  --status-danger-text: #161513;
+  --status-warning-text: #161513;
+  --status-info-text: #161513;
 
   /* Karanlık zemin (#0A0A09) için grafik seri adımları — aynı ton aileleri,
      karanlık mod lightness bandına (L 0.48–0.67) çekilmiş adımlar. */

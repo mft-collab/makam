@@ -166,7 +166,7 @@ export const DatePicker = ({ id, value, onChange, ariaLabel, className, icon, tr
                     className={cn(
                       'w-7 h-7 flex items-center justify-center rounded-lg text-[10px] font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue',
                       isSelected
-                        ? 'bg-executive-blue text-white shadow-sm'
+                        ? 'bg-executive-blue text-[color:var(--executive-blue-text)] shadow-sm'
                         : inMonth
                           ? 'text-text-heading hover:bg-surface-glass'
                           : 'text-text-tertiary/40 hover:bg-surface-glass',

@@ -59,8 +59,8 @@ export const PremiumIcon = ({
           "relative flex items-center justify-center border transition-all duration-500 rounded-[14px]",
           "will-change-transform transform-gpu backface-visibility-hidden retina-perfect", // GPU acceleration for subpixel aliasing
           sizes[size],
-          active 
-            ? "bg-gradient-to-br from-white to-[#F5F3EF] text-executive-blue border-white/70 shadow-[inset_0_1.5px_2.5px_rgba(255,255,255,0.85),inset_0_-1px_1.5px_rgba(0,0,0,0.1),0_10px_24px_rgba(22,21,19,0.12)] ring-1 ring-executive-gold/20" 
+          active
+            ? "bg-gradient-to-br from-white to-[#F5F3EF] text-[color:var(--btn-primary-text)] border-white/70 shadow-[inset_0_1.5px_2.5px_rgba(255,255,255,0.85),inset_0_-1px_1.5px_rgba(0,0,0,0.1),0_10px_24px_rgba(22,21,19,0.12)] ring-1 ring-executive-gold/20"
             : variants[variant],
           className
         )}

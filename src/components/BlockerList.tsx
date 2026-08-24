@@ -5,6 +5,7 @@ import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
 import { Badge } from './ui/Badge';
+import { Skeleton, TableRowSkeleton } from './ui/Skeleton';
 import { cn, formatTimeAgo, formatDate } from '../lib/utils';
 import { motion } from 'motion/react';
 import { PRIORITY_BADGE_VARIANT, PRIORITY_LABELS } from '../constants';
@@ -143,7 +144,7 @@ const BlockerCard = ({ blocker, index, tasksById, usersById, isAdmin, isSystemAd
           )}
           {!blocker.isResolved && isAdmin && (
             <button
-              className="px-3 py-1.5 text-[8px] bg-status-success hover:opacity-90 text-white font-medium uppercase tracking-[0.2em] rounded-lg shadow-sm transition-all active:scale-95"
+              className="px-3 py-1.5 text-[8px] bg-status-success hover:opacity-90 text-[color:var(--status-success-text)] font-medium uppercase tracking-[0.2em] rounded-lg shadow-sm transition-all active:scale-95"
               onClick={(e) => { e.stopPropagation(); onResolve(blocker.id); }}
             >
               Çözüldü
@@ -161,13 +162,39 @@ interface BlockerListProps {
   users: User[];
   isAdmin: boolean;
   isSystemAdmin?: boolean;
+  isLoading?: boolean;
   onResolve: (blockerId: string) => void;
   onEditBlocker: (blockerId: string, reason: string) => void;
   onDeleteBlocker: (blockerId: string) => void;
   onViewTask: (task: Task) => void;
 }
 
-export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = false, onResolve, onEditBlocker, onDeleteBlocker, onViewTask }: BlockerListProps) => {
+// Firestore verisi gelene kadar (tasks/blockers dizileri henüz boş) sayfa
+// kısa süre tamamen boş kalıyordu — "0 aktif engel" boş-durumuyla ayırt
+// edilemediğinden "uygulama çöktü" izlenimi veriyordu (bkz. tasarım denetimi).
+const BlockerListSkeleton = () => (
+  <div className="flex flex-col gap-5 py-4 max-w-[1440px] mx-auto font-sans" aria-label="Yükleniyor..." role="status">
+    <div className="flex items-center gap-2.5 pb-4 border-b border-executive-blue/[0.04]">
+      <Skeleton className="w-8 h-8" rounded="lg" />
+      <div className="flex flex-col gap-1.5">
+        <Skeleton className="h-3 w-40" />
+        <Skeleton className="h-2.5 w-24" />
+      </div>
+    </div>
+    <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-5">
+      {[0, 1].map(col => (
+        <div key={col} className="flex flex-col gap-3">
+          <Skeleton className="h-3 w-32" />
+          <div className="makam-card p-4 flex flex-col gap-3">
+            {[...Array(3)].map((_, i) => <TableRowSkeleton key={i} cols={3} />)}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = false, isLoading = false, onResolve, onEditBlocker, onDeleteBlocker, onViewTask }: BlockerListProps) => {
   const tasksById = useMemo(() => new Map(tasks.map(t => [t.id, t])), [tasks]);
   const usersById = useMemo(() => {
     const map = new Map<string, User>();
@@ -228,16 +255,27 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
     setEditReason(blocker.reason);
   };
 
+  if (isLoading) return <BlockerListSkeleton />;
+
   return (
     <div className="flex flex-col gap-5 py-4 max-w-[1440px] mx-auto font-sans">
 
       {/* ── Header ─────────────────────────────────────────────────── */}
       <div className="flex items-center gap-2.5 pb-4 border-b border-executive-blue/[0.04]">
-        <div className="w-8 h-8 rounded-xl bg-status-danger flex items-center justify-center shadow-lg">
-          <AlertTriangle className="w-4 h-4 text-white stroke-[1.5]" />
+        <div className={cn(
+          "w-8 h-8 rounded-xl flex items-center justify-center shadow-lg",
+          activeBlockers.length > 0 ? "bg-status-danger" : "bg-status-success/15"
+        )}>
+          <AlertTriangle className={cn(
+            "w-4 h-4 stroke-[1.5]",
+            activeBlockers.length > 0 ? "text-[color:var(--status-danger-text)]" : "text-status-success"
+          )} />
         </div>
         <div>
-          <span className="text-[10px] font-medium text-status-danger uppercase tracking-[0.4em] block leading-none">
+          <span className={cn(
+            "text-[10px] font-medium uppercase tracking-[0.4em] block leading-none",
+            activeBlockers.length > 0 ? "text-status-danger" : "text-text-heading"
+          )}>
             OPERASYONEL KRİZ YÖNETİMİ
           </span>
           <span className="text-[9px] text-text-tertiary uppercase tracking-[0.3em]">
@@ -248,16 +286,19 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
 
       {/* ── Two-column blocker panels ────────────────────────────── */}
       {/* Mobile: stacked | Desktop: 2 col */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-5">
 
         {/* Active blockers */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-3.5 h-3.5 text-status-danger stroke-[1.5]" />
-            <h3 className="text-[9px] font-medium text-status-danger uppercase tracking-[0.35em]">
+            <AlertTriangle className={cn("w-3.5 h-3.5 stroke-[1.5]", activeBlockers.length > 0 ? "text-status-danger" : "text-text-tertiary")} />
+            <h3 className={cn("text-[9px] font-medium uppercase tracking-[0.35em]", activeBlockers.length > 0 ? "text-status-danger" : "text-text-tertiary")}>
               Aktif Kriz Engelleri
             </h3>
-            <span className="px-2 py-0.5 rounded-full bg-status-danger/10 text-status-danger border border-status-danger/20 text-[8px] font-bold">
+            <span className={cn(
+              "px-2 py-0.5 rounded-full text-[8px] font-bold border",
+              activeBlockers.length > 0 ? "bg-status-danger/10 text-status-danger border-status-danger/20" : "bg-surface-base text-text-tertiary border-surface-border"
+            )}>
               {activeBlockers.length}
             </span>
           </div>
@@ -279,9 +320,9 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
                 />
               ))
             ) : (
-              <div className="py-12 flex flex-col items-center justify-center bg-makam-glass border border-dashed border-executive-blue/[0.05] rounded-2xl gap-3">
-                <CheckCircle2 className="w-8 h-8 text-status-success/50 stroke-[1]" />
-                <span className="text-[9px] text-text-tertiary uppercase tracking-[0.35em]">Aktif engel bulunmuyor</span>
+              <div className="min-h-[260px] flex flex-col items-center justify-center bg-makam-glass border border-dashed border-executive-blue/[0.05] rounded-2xl gap-3">
+                <CheckCircle2 className="w-10 h-10 text-text-tertiary/50 stroke-[1]" />
+                <span className="text-[13px] text-text-tertiary">Aktif engel bulunmuyor</span>
               </div>
             )}
           </div>
@@ -316,9 +357,9 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
                 />
               ))
             ) : (
-              <div className="py-12 flex flex-col items-center justify-center bg-makam-glass border border-dashed border-executive-blue/[0.05] rounded-2xl gap-3">
-                <Clock className="w-8 h-8 text-surface-border/50 stroke-[1]" />
-                <span className="text-[9px] text-text-tertiary uppercase tracking-[0.35em]">Arşivlenmiş kayıt yok</span>
+              <div className="min-h-[260px] flex flex-col items-center justify-center bg-makam-glass border border-dashed border-executive-blue/[0.05] rounded-2xl gap-3">
+                <Clock className="w-10 h-10 text-text-tertiary/50 stroke-[1]" />
+                <span className="text-[13px] text-text-tertiary">Arşivlenmiş kayıt yok</span>
               </div>
             )}
           </div>

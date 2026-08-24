@@ -43,7 +43,7 @@ export const Login = ({ onLogin, isLoading }: LoginProps) => {
                 transition={{ type: "spring", stiffness: 300, damping: 20 }}
                 className="flex items-center gap-5 group cursor-pointer"
               >
-                <div className="w-12 h-12 rounded-full bg-makam-glass border border-makam-border/5 flex items-center justify-center text-executive-blue group-hover:bg-executive-blue group-hover:text-white transition-all duration-500 shadow-inner">
+                <div className="w-12 h-12 rounded-full bg-makam-glass border border-makam-border/5 flex items-center justify-center text-executive-blue group-hover:bg-executive-blue group-hover:text-[color:var(--executive-blue-text)] transition-all duration-500 shadow-inner">
                   <ShieldCheck className="w-5 h-5 stroke-[1.2]" />
                 </div>
                 <div className="flex flex-col gap-0.5">
@@ -57,7 +57,7 @@ export const Login = ({ onLogin, isLoading }: LoginProps) => {
                 transition={{ type: "spring", stiffness: 300, damping: 20 }}
                 className="flex items-center gap-5 group cursor-pointer"
               >
-                <div className="w-12 h-12 rounded-full bg-makam-glass border border-makam-border/5 flex items-center justify-center text-executive-gold group-hover:bg-executive-gold group-hover:text-white transition-all duration-500 shadow-inner">
+                <div className="w-12 h-12 rounded-full bg-makam-glass border border-makam-border/5 flex items-center justify-center text-executive-gold group-hover:bg-executive-gold group-hover:text-[color:var(--btn-primary-text)] transition-all duration-500 shadow-inner">
                   <Activity className="w-5 h-5 stroke-[1.2]" />
                 </div>
                 <div className="flex flex-col gap-0.5">

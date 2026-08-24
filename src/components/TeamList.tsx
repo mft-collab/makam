@@ -211,7 +211,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
 
   const tasksById = useMemo(() => new Map(tasks.map(t => [t.id, t])), [tasks]);
 
-  const { capacityPercent, availableStaffCount, overloadedStaffCount } = useMemo(() => {
+  const { capacityPercent, availableStaffCount, overloadedStaffCount, hasCapacityData } = useMemo(() => {
     let total = 0, available = 0, overloaded = 0;
     for (const u of staffUsers) {
       const count = getActiveTaskCount(u);
@@ -224,6 +224,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
       capacityPercent: Math.min(100, Math.round((total / max) * 100)),
       availableStaffCount: available,
       overloadedStaffCount: overloaded,
+      hasCapacityData: total > 0,
     };
   }, [staffUsers, activeTaskCountByUser]);
 
@@ -236,7 +237,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-executive-blue/[0.04]">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-executive-gold flex items-center justify-center shadow-lg">
-            <Building className="w-4 h-4 text-white stroke-[1.5]" />
+            <Building className="w-4 h-4 text-[color:var(--btn-primary-text)] stroke-[1.5]" />
           </div>
           <div>
             <span className="text-[10px] font-medium text-executive-blue uppercase tracking-[0.4em] block leading-none">KURUMSAL ORGANİZASYON</span>
@@ -251,7 +252,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
               onClick={() => setViewMode('grid')}
               className={cn(
                 "px-3 py-1.5 rounded-full text-[8.5px] uppercase tracking-wider font-bold transition-all duration-300 cursor-pointer",
-                viewMode === 'grid' ? "bg-executive-blue text-white shadow-sm" : "text-text-muted hover:text-text-heading"
+                viewMode === 'grid' ? "bg-executive-blue text-[color:var(--executive-blue-text)] shadow-sm" : "text-text-muted hover:text-text-heading"
               )}
             >
               Kadro Listesi
@@ -260,7 +261,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
               onClick={() => setViewMode('tree')}
               className={cn(
                 "px-3 py-1.5 rounded-full text-[8.5px] uppercase tracking-wider font-bold transition-all duration-300 cursor-pointer",
-                viewMode === 'tree' ? "bg-executive-blue text-white shadow-sm" : "text-text-muted hover:text-text-heading"
+                viewMode === 'tree' ? "bg-executive-blue text-[color:var(--executive-blue-text)] shadow-sm" : "text-text-muted hover:text-text-heading"
               )}
             >
               Şema Görünümü
@@ -270,7 +271,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
           {isAdmin && (
             <button
               onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 h-9 rounded-full bg-executive-gold text-white text-[9px] font-medium uppercase tracking-[0.3em] shadow-lg shadow-executive-gold/20 hover:shadow-xl hover:bg-executive-gold-hover hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
+              className="flex items-center gap-1.5 px-4 h-9 rounded-full bg-executive-gold text-[color:var(--btn-primary-text)] text-[9px] font-medium uppercase tracking-[0.3em] shadow-lg shadow-executive-gold/20 hover:shadow-xl hover:bg-executive-gold-hover hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
             >
               <UserPlus className="w-3.5 h-3.5 stroke-[2]" />
               <span className="hidden sm:block">Yeni Kadro</span>
@@ -283,18 +284,24 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 p-3.5 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl">
         <div className="flex items-center gap-3">
           <span className="text-[10px] text-text-muted uppercase tracking-wider font-bold">Kadro Kapasite Endeksi:</span>
-          <div className="w-24 h-1.5 bg-executive-blue/5 rounded-full overflow-hidden">
-            <div 
-              className={cn(
-                "h-full rounded-full transition-all duration-300",
-                capacityPercent >= 85 ? "bg-status-danger" :
-                capacityPercent >= 55 ? "bg-status-warning" :
-                "bg-status-success"
-              )}
-              style={{ width: `${capacityPercent}%` }}
-            />
-          </div>
-          <span className="text-[11px] font-bold text-text-heading">%{capacityPercent}</span>
+          {hasCapacityData ? (
+            <>
+              <div className="w-24 h-1.5 bg-executive-blue/5 rounded-full overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all duration-300",
+                    capacityPercent >= 85 ? "bg-status-danger" :
+                    capacityPercent >= 55 ? "bg-status-warning" :
+                    "bg-status-success"
+                  )}
+                  style={{ width: `${capacityPercent}%` }}
+                />
+              </div>
+              <span className="text-[11px] font-bold text-text-heading">%{capacityPercent}</span>
+            </>
+          ) : (
+            <span className="text-[10px] text-text-tertiary">Kapasite verisi için en az 1 aktif talimat gerekli</span>
+          )}
         </div>
         <div className="flex gap-4 text-[10px] text-text-muted uppercase tracking-wider font-bold">
           <span>Müsait Kadro: <span className="text-status-success font-bold">{availableStaffCount}</span></span>
@@ -548,7 +555,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                       onClick={() => setModalTab('tasks')}
                       className={cn(
                         "flex-1 py-1.5 rounded-lg text-[9px] uppercase tracking-wider font-bold transition-all duration-300 cursor-pointer text-center",
-                        modalTab === 'tasks' ? "bg-executive-blue text-white shadow-sm" : "text-text-muted hover:text-text-heading"
+                        modalTab === 'tasks' ? "bg-executive-blue text-[color:var(--executive-blue-text)] shadow-sm" : "text-text-muted hover:text-text-heading"
                       )}
                     >
                       Sorumluluk Alanı
@@ -557,7 +564,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                       onClick={() => setModalTab('logs')}
                       className={cn(
                         "flex-1 py-1.5 rounded-lg text-[9px] uppercase tracking-wider font-bold transition-all duration-300 cursor-pointer text-center",
-                        modalTab === 'logs' ? "bg-executive-blue text-white shadow-sm" : "text-text-muted hover:text-text-heading"
+                        modalTab === 'logs' ? "bg-executive-blue text-[color:var(--executive-blue-text)] shadow-sm" : "text-text-muted hover:text-text-heading"
                       )}
                     >
                       Denetim İzi

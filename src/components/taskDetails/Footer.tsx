@@ -136,7 +136,7 @@ export const TaskDetailsFooter = ({ task, currentUser, onStatusChange }: {
                     'px-3 py-1.5 rounded-full text-[10px] font-medium uppercase tracking-widest transition-colors',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue disabled:opacity-60',
                     evidenceType === opt.value
-                      ? 'bg-executive-blue text-white shadow-sm'
+                      ? 'bg-executive-blue text-[color:var(--executive-blue-text)] shadow-sm'
                       : 'text-text-muted hover:text-executive-blue'
                   )}
                 >

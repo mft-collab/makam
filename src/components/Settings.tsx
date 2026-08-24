@@ -325,7 +325,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
       {/* ── Page Header ──────────────────────────────────────────────── */}
       <div className="flex items-center gap-2.5 pb-4 border-b border-executive-blue/[0.04]">
         <div className="w-8 h-8 rounded-xl bg-executive-blue flex items-center justify-center shadow-lg">
-          <SettingsIcon className="w-4 h-4 text-white stroke-[1.5]" />
+          <SettingsIcon className="w-4 h-4 text-[color:var(--executive-blue-text)] stroke-[1.5]" />
         </div>
         <div>
           <span className="text-[10px] font-medium text-executive-blue uppercase tracking-[0.4em] block leading-none">
@@ -356,7 +356,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
             className={cn(
               "px-4 py-3 rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] text-left transition-all shrink-0 w-full",
               activeSubTab === 'general' 
-                ? "bg-executive-blue text-white shadow-[0_4px_12px_rgba(30,41,59,0.15)]" 
+                ? "bg-executive-blue text-[color:var(--executive-blue-text)] shadow-[0_4px_12px_rgba(30,41,59,0.15)]"
                 : "text-text-muted hover:text-text-heading hover:bg-executive-blue/[0.03]"
             )}
           >
@@ -370,7 +370,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
                 className={cn(
                   "px-4 py-3 rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] text-left transition-all shrink-0 w-full",
                   activeSubTab === 'sla' 
-                    ? "bg-executive-blue text-white shadow-[0_4px_12px_rgba(30,41,59,0.15)]" 
+                    ? "bg-executive-blue text-[color:var(--executive-blue-text)] shadow-[0_4px_12px_rgba(30,41,59,0.15)]"
                     : "text-text-muted hover:text-text-heading hover:bg-executive-blue/[0.03]"
                 )}
               >
@@ -381,7 +381,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
                 className={cn(
                   "px-4 py-3 rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] text-left transition-all shrink-0 w-full",
                   activeSubTab === 'data' 
-                    ? "bg-executive-blue text-white shadow-[0_4px_12px_rgba(30,41,59,0.15)]" 
+                    ? "bg-executive-blue text-[color:var(--executive-blue-text)] shadow-[0_4px_12px_rgba(30,41,59,0.15)]"
                     : "text-text-muted hover:text-text-heading hover:bg-executive-blue/[0.03]"
                 )}
               >
@@ -622,14 +622,14 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
                   ) : (
                     <>
                       <ActionButton
-                        variant="warning"
+                        variant="danger"
                         htmlFor="restore-upload"
                         label={<><RotateCcw className="w-3.5 h-3.5 stroke-[2]" />Yedekten Dön</>}
                       />
 
-                      <div className="flex items-start gap-2 p-2.5 bg-executive-gold/[0.05] border border-executive-gold/15 rounded-xl">
-                        <AlertCircle className="w-3.5 h-3.5 text-executive-gold flex-shrink-0 mt-0.5 stroke-[1.5]" />
-                        <p className="text-[9px] text-executive-gold font-medium uppercase tracking-[0.2em] leading-relaxed">
+                      <div className="flex items-start gap-2.5 p-3.5 border-l-[3px] border-status-danger bg-status-danger/[0.06] rounded-r-xl">
+                        <AlertCircle className="w-4 h-4 text-status-danger flex-shrink-0 mt-0.5 stroke-[1.5]" />
+                        <p className="text-[12.5px] text-text-heading font-normal leading-relaxed">
                           Bu işlem mevcut verilerin üzerine yazacaktır. Kayıtlar toplu halde (chunk) yazılır — işlem yarıda kesilirse veritabanı kısmen güncellenmiş durumda kalabilir. Geri yüklemeden önce güncel bir yedek almanız önerilir.
                         </p>
                       </div>

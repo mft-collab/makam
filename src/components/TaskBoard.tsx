@@ -167,7 +167,7 @@ function DesktopTaskRow({ index, style, ariaAttributes, tasks, usersById, onView
 
       {/* Arrow */}
       <div role="cell" className="px-4 py-3 text-right">
-        <button className="w-7 h-7 rounded-full bg-makam-glass border border-executive-blue/[0.05] flex items-center justify-center text-text-tertiary group-hover:bg-executive-gold group-hover:text-white group-hover:border-transparent transition-all duration-300 shadow-sm ml-auto">
+        <button className="w-7 h-7 rounded-full bg-makam-glass border border-executive-blue/[0.05] flex items-center justify-center text-text-tertiary group-hover:bg-executive-gold group-hover:text-[color:var(--btn-primary-text)] group-hover:border-transparent transition-all duration-300 shadow-sm ml-auto">
           <ArrowRight className="w-3 h-3 stroke-[2]" />
         </button>
       </div>
@@ -264,7 +264,7 @@ export const TaskBoard = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-executive-blue/[0.04]">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-executive-blue flex items-center justify-center shadow-lg">
-            <Layers className="w-4 h-4 text-white stroke-[1.5]" />
+            <Layers className="w-4 h-4 text-[color:var(--executive-blue-text)] stroke-[1.5]" />
           </div>
           <div>
             <span className="text-[10px] font-semibold text-executive-blue uppercase tracking-[0.22em] block leading-none">
@@ -298,7 +298,7 @@ export const TaskBoard = ({
           {/* Add task button */}
           <button
             onClick={onAddTask}
-            className="flex items-center gap-1.5 px-4 h-9 rounded-full bg-executive-gold text-white text-[9px] font-semibold uppercase tracking-[0.16em] shadow-lg shadow-executive-gold/15 hover:shadow-xl hover:bg-executive-gold-hover hover:scale-[1.01] active:scale-[0.98] transition-all duration-300"
+            className="flex items-center gap-1.5 px-4 h-9 rounded-full bg-executive-gold text-[color:var(--btn-primary-text)] text-[9px] font-semibold uppercase tracking-[0.16em] shadow-lg shadow-executive-gold/15 hover:shadow-xl hover:bg-executive-gold-hover hover:scale-[1.01] active:scale-[0.98] transition-all duration-300"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2]" />
             <span className="hidden sm:block">Yeni Talimat</span>
@@ -459,7 +459,7 @@ export const TaskBoard = ({
         <div className="flex justify-center mt-4">
           <button
             onClick={loadMoreTasks}
-            className="px-6 py-2 bg-makam-glass backdrop-blur-xl border border-executive-blue/10 rounded-full text-[10px] font-medium text-executive-blue uppercase tracking-widest hover:bg-executive-blue hover:text-white transition-all shadow-sm"
+            className="px-6 py-2 bg-makam-glass backdrop-blur-xl border border-executive-blue/10 rounded-full text-[10px] font-medium text-executive-blue uppercase tracking-widest hover:bg-executive-blue hover:text-[color:var(--executive-blue-text)] transition-all shadow-sm"
           >
             Daha Fazla Talimat Yükle
           </button>

@@ -70,7 +70,7 @@ export interface ActionButtonProps {
 
 export const ActionButton = ({ onClick, label, htmlFor, variant = 'primary', disabled, className }: ActionButtonProps) => {
   const styles = {
-    primary:   'bg-executive-gold text-white hover:bg-executive-gold-hover shadow-lg shadow-executive-gold/20',
+    primary:   'bg-executive-gold text-[color:var(--btn-primary-text)] hover:bg-executive-gold-hover shadow-lg shadow-executive-gold/20',
     secondary: 'bg-makam-glass text-executive-gold border border-executive-gold/[0.15] hover:bg-surface-elevated hover:shadow-sm',
     danger:    'bg-surface-elevated text-status-danger border border-status-danger/20 hover:bg-status-danger/10',
     warning:   'bg-executive-gold/10 text-executive-gold border border-executive-gold/20 hover:bg-executive-gold/20',

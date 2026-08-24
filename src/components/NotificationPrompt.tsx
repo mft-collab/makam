@@ -147,7 +147,7 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
                     {/* Icon */}
                     <div className="relative mt-2">
                       <div className="w-16 h-16 bg-executive-gold rounded-2xl flex items-center justify-center shadow-lg shadow-executive-gold/20">
-                        <Bell className="w-8 h-8 text-white stroke-[1.5]" />
+                        <Bell className="w-8 h-8 text-[color:var(--btn-primary-text)] stroke-[1.5]" />
                       </div>
                       <motion.div
                         animate={{ scale: [1, 1.4, 1], opacity: [0.6, 0, 0.6] }}
@@ -186,7 +186,7 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
                     <div className="flex flex-col gap-2 w-full">
                       <button
                         onClick={handleActivate}
-                        className="w-full h-11 bg-executive-gold text-white text-[11px] font-medium uppercase tracking-[0.3em] rounded-xl hover:bg-executive-gold-hover active:scale-[0.98] transition-all shadow-lg shadow-executive-gold/20"
+                        className="w-full h-11 bg-executive-gold text-[color:var(--btn-primary-text)] text-[11px] font-medium uppercase tracking-[0.3em] rounded-xl hover:bg-executive-gold-hover active:scale-[0.98] transition-all shadow-lg shadow-executive-gold/20"
                       >
                         Bildirimlere İzin Ver
                       </button>
@@ -211,7 +211,7 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
                       transition={{ type: 'spring', stiffness: 400, damping: 20 }}
                       className="w-16 h-16 bg-status-success rounded-2xl flex items-center justify-center shadow-lg shadow-status-success/20"
                     >
-                      <ShieldCheck className="w-8 h-8 text-white stroke-[1.5]" />
+                      <ShieldCheck className="w-8 h-8 text-[color:var(--status-success-text)] stroke-[1.5]" />
                     </motion.div>
                     <div className="flex flex-col gap-1">
                       <h3 className="text-[16px] font-medium text-executive-blue font-serif">Etkinleştirildi!</h3>

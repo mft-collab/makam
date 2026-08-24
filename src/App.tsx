@@ -528,6 +528,7 @@ export default function App() {
                         onEditBlocker={updateBlocker}
                         onDeleteBlocker={deleteBlocker}
                         onViewTask={(t) => { setSelectedTaskId(t.id); setActiveTab('tasks'); }}
+                        isLoading={isDataLoading}
                       />
                     )}
                     {Boolean(activeTab === 'team') && (
@@ -539,7 +540,7 @@ export default function App() {
                         isLoading={isDataLoading}
                       />
                     )}
-                    {Boolean(activeTab === 'reports') && <Reports tasks={filteredTasksByFocus} users={filteredUsersByFocus} blockers={filteredBlockersByFocus} setActiveTab={setActiveTab} />}
+                    {Boolean(activeTab === 'reports') && <Reports tasks={filteredTasksByFocus} users={filteredUsersByFocus} blockers={filteredBlockersByFocus} setActiveTab={setActiveTab} isLoading={isDataLoading} />}
                     {Boolean(activeTab === 'audit') && (
                       <AuditLogList
                         tasks={filteredTasksByFocus} users={filteredUsersByFocus}

@@ -8,10 +8,14 @@ import { ROLE_LABELS } from '../../constants';
 // Kadro kartlarındaki nötr/ghost departman rozetiyle karışmasın — Manager'ın
 // eski %4 opaklığı, %5 opaklıktaki surface-glass departman zeminiyle neredeyse
 // ayırt edilemiyordu (bkz. kod denetimi).
+// Admin (Müftü) en üst yetki rolüdür — hata/alarm rengiyle (status-danger)
+// işaretlenmesi yanlış bir sinyal veriyordu (bkz. tasarım denetimi); marka
+// altınıyla ayrıcalıklı bir rol olarak işaretleniyor. Manager/Staff nötr
+// tonlarda, aralarındaki hiyerarşi metin/kenarlık ağırlığıyla ayrışıyor.
 export const roleConfig: Record<UserRole, { bg: string; text: string; border: string }> = {
-  Admin:   { bg: 'bg-status-danger/10',  text: 'text-status-danger',  border: 'border-status-danger/25' },
-  Manager: { bg: 'bg-executive-blue/10', text: 'text-executive-blue', border: 'border-executive-blue/25' },
-  Staff:   { bg: 'bg-text-muted/10',     text: 'text-text-muted',     border: 'border-text-muted/25' },
+  Admin:   { bg: 'bg-executive-gold/10', text: 'text-executive-gold', border: 'border-executive-gold/25' },
+  Manager: { bg: 'bg-transparent',       text: 'text-text-muted',     border: 'border-text-muted/25' },
+  Staff:   { bg: 'bg-transparent',       text: 'text-text-tertiary',  border: 'border-text-tertiary/20' },
 };
 
 export interface OrgNodeCardProps {

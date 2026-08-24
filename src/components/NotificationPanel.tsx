@@ -99,7 +99,7 @@ export function NotificationPanel({
               <div className="flex items-center justify-between pl-8 gap-2">
                 <span className="text-[8px] text-text-tertiary uppercase tracking-[0.2em]">
                   {isCrisis
-                    ? "→ İcra Havuzu'nda atıl talimatları denetleyin"
+                    ? "→ Talimatlar'da atıl talimatları denetleyin"
                     : hasTask
                     ? '→ Talimata erişmek için tıklayın'
                     : '→ Üst makam müdahalesi gerekiyor'}
@@ -114,7 +114,7 @@ export function NotificationPanel({
                         await markNotificationRead(n.id);
                         setShowNotifications(false);
                       }}
-                      className="px-2.5 py-1 text-[8px] font-medium text-white bg-executive-blue rounded-lg uppercase tracking-[0.2em] hover:opacity-85 transition-opacity"
+                      className="px-2.5 py-1 text-[8px] font-medium text-[color:var(--executive-blue-text)] bg-executive-blue rounded-lg uppercase tracking-[0.2em] hover:opacity-85 transition-opacity"
                     >
                       Talimata Git
                     </button>
@@ -122,9 +122,9 @@ export function NotificationPanel({
                   {isCrisis && !hasTask && (
                     <button
                       onClick={(e) => { e.stopPropagation(); setActiveTab('tasks'); setShowNotifications(false); }}
-                      className="px-2.5 py-1 text-[8px] font-medium text-white bg-status-danger rounded-lg uppercase tracking-[0.2em] hover:opacity-85 transition-opacity"
+                      className="px-2.5 py-1 text-[8px] font-medium text-[color:var(--status-danger-text)] bg-status-danger rounded-lg uppercase tracking-[0.2em] hover:opacity-85 transition-opacity"
                     >
-                      İcra Havuzuna Git
+                      Talimatlara Git
                     </button>
                   )}
                   <button

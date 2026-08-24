@@ -6,19 +6,45 @@ import { STATUS_LABELS_SHORT } from '../constants';
 import { cn } from '../lib/utils';
 import { isCompletedOnTime } from '../lib/sla';
 import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, CartesianGrid
 } from 'recharts';
 import { format, subDays, differenceInCalendarDays } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { useUIStore } from '../store/uiStore';
 import { DatePicker } from './ui/DatePicker';
+import { Avatar } from './ui/Avatar';
+import { Skeleton, TableRowSkeleton } from './ui/Skeleton';
 
 interface ReportsProps {
   tasks: Task[];
   users: User[];
   blockers: TaskBlocker[];
   setActiveTab?: (tab: string) => void;
+  isLoading?: boolean;
 }
+
+// Firestore verisi gelmeden bu sayfa tüm metrikleri "0" olarak render edip
+// kısa süre tamamen boş kalıyordu (bkz. tasarım denetimi — grafik alanının
+// da kendisi boş olduğundan bu "yazılım bozuk" gibi okunuyordu).
+const ReportsSkeleton = () => (
+  <div className="flex flex-col gap-5 py-4 max-w-[1440px] mx-auto font-sans" aria-label="Yükleniyor..." role="status">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {[...Array(3)].map((_, i) => (
+        <div key={i} className="makam-card p-5 flex flex-col gap-3">
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-7 w-16" />
+        </div>
+      ))}
+    </div>
+    <div className="makam-card p-6 flex flex-col gap-4">
+      <Skeleton className="h-3 w-32" />
+      <Skeleton className="h-48 w-full" rounded="lg" />
+    </div>
+    <div className="makam-card p-4 flex flex-col gap-3">
+      {[...Array(4)].map((_, i) => <TableRowSkeleton key={i} cols={4} />)}
+    </div>
+  </div>
+);
 
 // ─── Compact KPI Card ─────────────────────────────────────────────────────────
 interface KpiCardProps {
@@ -57,7 +83,7 @@ const KpiCard = ({ label, value, icon: Icon, color, index = 0 }: KpiCardProps) =
 };
 
 // ─── Reports ──────────────────────────────────────────────────────────────────
-export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, setActiveTab }: ReportsProps) => {
+export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, setActiveTab, isLoading = false }: ReportsProps) => {
   const addToast = useUIStore(state => state.addToast);
   const tasks = propsTasks;
   const blockers = propsBlockers;
@@ -209,6 +235,10 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
       };
     });
   }, [filteredTasks]);
+  // Seçili aralıkta hiç tamamlanan görev yoksa `oran` tüm noktalarda null olur
+  // ve çizgi hiçbir şey çizmeden yalnızca eksenler kalırdı — boş durum ayrıca
+  // belirtilir (bkz. tasarım denetimi: "grafik alanı tamamen boş").
+  const hasSlaTrendData = slaComplianceTrend.some(d => d.oran !== null);
 
   // #6 — Personel yük dağılımı (Staff bazlı)
   const staffWorkload = useMemo(() => {
@@ -226,7 +256,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
     const map: Record<string, { label: string; color: string; count: number }> = {
       ASSIGNED:             { label: STATUS_LABELS_SHORT.ASSIGNED,           color: '#CBD5E1', count: 0 },
       PENDING_DELEGATION:   { label: STATUS_LABELS_SHORT.PENDING_DELEGATION, color: '#A78BFA', count: 0 },
-      IN_PROGRESS:          { label: STATUS_LABELS_SHORT.IN_PROGRESS,        color: 'var(--color-executive-blue)', count: 0 },
+      IN_PROGRESS:          { label: STATUS_LABELS_SHORT.IN_PROGRESS,        color: 'var(--color-status-info)', count: 0 },
       AWAITING_APPROVAL:    { label: STATUS_LABELS_SHORT.AWAITING_APPROVAL,  color: '#B38F46', count: 0 },
       BLOCKED:              { label: STATUS_LABELS_SHORT.BLOCKED,            color: '#A8201A', count: 0 },
       COMPLETED:            { label: STATUS_LABELS_SHORT.COMPLETED,          color: 'var(--chart-completed)', count: 0 },
@@ -240,6 +270,8 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
     return Object.values(map).filter(v => v.count > 0);
   }, [filteredTasks]);
 
+  if (isLoading) return <ReportsSkeleton />;
+
   return (
     <div className="flex flex-col gap-5 py-4 max-w-[1440px] mx-auto font-sans">
 
@@ -247,7 +279,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-executive-blue/[0.04]">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-executive-blue flex items-center justify-center shadow-lg">
-            <TrendingUp className="w-4 h-4 text-white stroke-[1.5]" aria-hidden="true" />
+            <TrendingUp className="w-4 h-4 text-[color:var(--executive-blue-text)] stroke-[1.5]" aria-hidden="true" />
           </div>
           <div>
             <span className="text-[10px] font-medium text-executive-blue uppercase tracking-[0.4em] block leading-none">
@@ -307,7 +339,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
             onClick={handleExportPDF}
             disabled={isExporting}
             aria-label="Raporu PDF olarak dışa aktar"
-            className="flex items-center gap-1.5 px-3 py-2 bg-executive-blue text-white rounded-2xl text-[10px] uppercase tracking-widest hover:bg-executive-blue/90 transition-all shadow-lg shadow-executive-blue/10 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-2"
+            className="flex items-center gap-1.5 px-3 py-2 bg-executive-blue text-[color:var(--executive-blue-text)] rounded-2xl text-[10px] uppercase tracking-widest hover:bg-executive-blue/90 transition-all shadow-lg shadow-executive-blue/10 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-2"
           >
             {isExporting ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
@@ -354,9 +386,10 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
             </div>
             <TrendingUp className="w-4 h-4 text-executive-gold stroke-[1.5]" />
           </div>
-          <div className="h-[180px]">
+          <div className="h-[180px] relative">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={slaComplianceTrend} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                <CartesianGrid stroke="var(--color-surface-border)" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="name" fontSize={8} tickLine={false} axisLine={false} tick={{ fill: 'var(--text-light)' }} />
                 <YAxis domain={[0, 100]} fontSize={8} tickLine={false} axisLine={false} tick={{ fill: 'var(--text-light)' }}
                   tickFormatter={(v) => `%${v}`} />
@@ -377,6 +410,13 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                   activeDot={{ r: 5 }} connectNulls />
               </LineChart>
             </ResponsiveContainer>
+            {!hasSlaTrendData && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span className="text-[10px] text-text-tertiary uppercase tracking-wider bg-surface-elevated/90 px-3 py-1.5 rounded-lg border border-surface-border">
+                  Seçili aralıkta tamamlanan talimat yok
+                </span>
+              </div>
+            )}
           </div>
         </motion.div>
 
@@ -394,34 +434,40 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
             <CheckCircle2 className="w-4 h-4 text-status-success stroke-[1.5]" />
           </div>
           <div className="h-[180px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={statusDistribution} dataKey="count" nameKey="label"
-                  cx="50%" cy="50%" innerRadius={50} outerRadius={75}
-                  paddingAngle={3}
-                >
-                  {statusDistribution.map((entry, idx) => (
-                    <Cell key={idx} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'var(--color-surface-base)',
-                    borderColor: 'var(--color-surface-border)',
-                    borderRadius: '14px',
-                    fontSize: '11px',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-                    backdropFilter: 'blur(20px)',
-                    color: 'var(--color-text-heading)'
-                  }}
-                  itemStyle={{ color: 'var(--color-text-body)' }}
-                  formatter={(v: any, name: any) => [v, name]}
-                />
-                <Legend iconSize={8} iconType="circle"
-                  formatter={(v) => <span style={{ fontSize: 9, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>{v}</span>}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            {statusDistribution.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={statusDistribution} dataKey="count" nameKey="label"
+                    cx="50%" cy="50%" innerRadius={50} outerRadius={75}
+                    paddingAngle={3} stroke="var(--color-surface-base)" strokeWidth={2}
+                  >
+                    {statusDistribution.map((entry, idx) => (
+                      <Cell key={idx} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'var(--color-surface-base)',
+                      borderColor: 'var(--color-surface-border)',
+                      borderRadius: '14px',
+                      fontSize: '11px',
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                      backdropFilter: 'blur(20px)',
+                      color: 'var(--color-text-heading)'
+                    }}
+                    itemStyle={{ color: 'var(--color-text-body)' }}
+                    formatter={(v: any, name: any) => [v, name]}
+                  />
+                  <Legend iconSize={8} iconType="circle"
+                    formatter={(v) => <span style={{ fontSize: 9, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>{v}</span>}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center">
+                <span className="text-[10px] text-text-tertiary uppercase tracking-wider">Seçili aralıkta talimat yok</span>
+              </div>
+            )}
           </div>
         </motion.div>
       </div>
@@ -445,8 +491,8 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
               <BarChart data={staffWorkload} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
                 <defs>
                   <linearGradient id="barActive" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--color-executive-blue)" stopOpacity="0.8" />
-                    <stop offset="100%" stopColor="var(--color-executive-blue)" stopOpacity="0.35" />
+                    <stop offset="0%" stopColor="var(--chart-created)" stopOpacity="0.8" />
+                    <stop offset="100%" stopColor="var(--chart-created)" stopOpacity="0.35" />
                   </linearGradient>
                   <linearGradient id="barCompleted" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="var(--chart-completed)" stopOpacity="0.8" />
@@ -510,9 +556,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                 transition={{ type: 'spring', stiffness: 280, damping: 30, delay: i * 0.04 }}
                 className="flex items-center gap-3 p-3.5"
               >
-                <div className="w-9 h-9 rounded-full bg-surface-elevated border border-executive-blue/[0.06] flex items-center justify-center text-[14px] font-light text-executive-blue flex-shrink-0">
-                  {m.fullName.charAt(0)}
-                </div>
+                <Avatar name={m.fullName} photoURL={m.photoURL} size="md" className="flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[12px] font-medium text-executive-blue font-serif line-clamp-1">{m.fullName}</p>
                   <div className="flex items-center gap-2 mt-1">
@@ -606,9 +650,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                     {/* Name */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-surface-elevated border border-executive-blue/[0.06] flex items-center justify-center text-[13px] font-light text-executive-blue shadow-inner flex-shrink-0 group-hover:scale-105 transition-transform">
-                          {m.fullName.charAt(0)}
-                        </div>
+                        <Avatar name={m.fullName} photoURL={m.photoURL} size="sm" className="group-hover:scale-105 transition-transform" />
                         <div className="flex flex-col gap-0.5">
                           <span className="text-[13px] font-medium text-executive-blue font-serif tracking-tight group-hover:text-executive-blue transition-colors">
                             {m.fullName}
@@ -688,10 +730,12 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                           </div>
                         </div>
                         ) : (
-                          <span className="text-[10px] text-text-tertiary uppercase tracking-wider">Seçili aralıkta talimat yok</span>
+                          <span className="text-[10px] font-medium px-3 py-1 rounded-lg border text-text-tertiary bg-surface-glass border-surface-border uppercase tracking-wider">
+                            Veri Yok
+                          </span>
                         )}
                         <div className="w-6 h-6 rounded-full bg-executive-blue/5 border border-executive-blue/10 flex items-center justify-center group-hover:bg-executive-blue group-hover:border-transparent transition-all flex-shrink-0">
-                          <ArrowRight className="w-3 h-3 text-text-tertiary group-hover:text-white stroke-[2] transition-colors" />
+                          <ArrowRight className="w-3 h-3 text-text-tertiary group-hover:text-[color:var(--executive-blue-text)] stroke-[2] transition-colors" />
                         </div>
                       </div>
                     </td>

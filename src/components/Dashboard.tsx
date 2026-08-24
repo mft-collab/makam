@@ -258,7 +258,7 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
           {user?.role === 'Admin' && (
             <button
               onClick={() => setActiveTab?.('reports')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-executive-blue/[0.03] border border-executive-blue/[0.06] text-text-muted hover:bg-executive-blue hover:text-white transition-all duration-300 text-[9px] font-medium uppercase tracking-[0.2em]"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-executive-blue/[0.03] border border-executive-blue/[0.06] text-text-muted hover:bg-executive-blue hover:text-[color:var(--executive-blue-text)] transition-all duration-300 text-[9px] font-medium uppercase tracking-[0.2em]"
             >
               <TrendingUp className="w-3 h-3" />
               Analiz
@@ -278,8 +278,8 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
             <BarChart data={last7DaysData} barGap={4} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id="chartCreated" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--color-executive-blue)" stopOpacity="0.8" />
-                  <stop offset="100%" stopColor="var(--color-executive-blue)" stopOpacity="0.35" />
+                  <stop offset="0%" stopColor="var(--chart-created)" stopOpacity="0.8" />
+                  <stop offset="100%" stopColor="var(--chart-created)" stopOpacity="0.35" />
                 </linearGradient>
                 <linearGradient id="chartCompleted" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="var(--chart-completed)" stopOpacity="0.8" />
@@ -306,7 +306,7 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
         {/* Legend */}
         <div className="flex flex-wrap items-center gap-3 mt-2 pt-2 border-t border-executive-blue/[0.04]">
           {[
-            { color: 'var(--color-executive-blue)', label: 'Yeni Talimat' },
+            { color: 'var(--chart-created)', label: 'Yeni Talimat' },
             { color: 'var(--chart-completed)', label: 'İcra Edilen' },
           ].map(({ color, label }) => (
             <div key={label} className="flex items-center gap-1">
@@ -451,7 +451,7 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
                   <span className="text-[9px] text-text-tertiary uppercase tracking-[0.2em] hidden sm:block">
                     {formatTimeAgo(task.updatedAt, task.status)}
                   </span>
-                  <div className="w-7 h-7 rounded-full bg-surface-border/20 flex items-center justify-center group-hover:bg-executive-blue group-hover:text-white transition-all duration-300 opacity-0 group-hover:opacity-100">
+                  <div className="w-7 h-7 rounded-full bg-surface-border/20 flex items-center justify-center group-hover:bg-executive-blue group-hover:text-[color:var(--executive-blue-text)] transition-all duration-300 opacity-0 group-hover:opacity-100">
                     <ArrowRight className="w-3 h-3" />
                   </div>
                 </div>

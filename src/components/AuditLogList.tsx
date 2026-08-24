@@ -88,7 +88,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-executive-blue/[0.04]">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-executive-blue flex items-center justify-center shadow-lg">
-            <ShieldCheck className="w-4 h-4 text-white stroke-[1.5]" />
+            <ShieldCheck className="w-4 h-4 text-[color:var(--executive-blue-text)] stroke-[1.5]" />
           </div>
           <div>
             <span className="text-[10px] font-medium text-executive-blue uppercase tracking-[0.4em] block leading-none">DENETİM İZLERİ</span>
@@ -201,29 +201,40 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
 
                 <div className="flex flex-col gap-2 flex-[1.6] border-t sm:border-t-0 sm:border-l border-executive-blue/[0.04] pt-2.5 sm:pt-0 sm:pl-4">
                   <span className="text-[8px] text-text-tertiary font-medium uppercase tracking-[0.25em]">Durum Değişimi / Değer Detayı</span>
-                  {log.changes ? (
-                    <div className="flex flex-col gap-1.5 w-full max-w-[340px]">
-                      {Object.entries(log.changes)
-                        // Etiketi tanımlı olmayan alanlar (updatedAt, lockVersion gibi dahili
-                        // teknik alanlar) kullanıcıya hiçbir zaman anlamlı gelmez — diff
-                        // görünümünden tamamen gizlenir (bkz. kod denetimi).
-                        .filter(([field]) => field in AUDIT_FIELD_LABELS)
-                        .map(([field, diff]) => {
-                        const fieldLabel = AUDIT_FIELD_LABELS[field] ?? field;
+                  {log.changes ? (() => {
+                    const visibleChanges = Object.entries(log.changes)
+                      // Etiketi tanımlı olmayan alanlar (updatedAt, lockVersion gibi dahili
+                      // teknik alanlar) kullanıcıya hiçbir zaman anlamlı gelmez — diff
+                      // görünümünden tamamen gizlenir (bkz. kod denetimi).
+                      .filter(([field]) => field in AUDIT_FIELD_LABELS)
+                      // Değeri fiilen değişmeyen alanlar (ör. SORUMLU: Selim Deveci →
+                      // Selim Deveci) diff'te kırmızı/yeşil gürültü yaratıp gerçek
+                      // değişikliği gizliyordu (bkz. tasarım denetimi) — gösterilmez.
+                      .filter(([field, diff]) => formatAuditValue(field, diff.old, users) !== formatAuditValue(field, diff.new, users));
 
-                        return (
-                          <div key={field} className="flex flex-col gap-0.5 text-[9px] bg-executive-blue/[0.02] border border-executive-blue/[0.04] p-1.5 rounded-lg">
-                            <span className="font-bold text-[8px] text-text-tertiary uppercase tracking-wider">{fieldLabel}</span>
-                            <div className="flex items-center gap-1 text-[10px] text-text-muted">
-                              <span className="line-through text-status-danger/70 truncate max-w-[120px]">{formatAuditValue(field, diff.old, users)}</span>
-                              <ArrowRight className="w-2.5 h-2.5 flex-shrink-0" />
-                              <span className="font-medium text-status-success truncate max-w-[120px]">{formatAuditValue(field, diff.new, users)}</span>
+                    if (visibleChanges.length === 0) {
+                      return <span className="text-[10px] text-text-tertiary">Yalnızca üstveri güncellendi</span>;
+                    }
+
+                    return (
+                      <div className="flex flex-col gap-1.5 w-full max-w-[340px]">
+                        {visibleChanges.map(([field, diff]) => {
+                          const fieldLabel = AUDIT_FIELD_LABELS[field] ?? field;
+
+                          return (
+                            <div key={field} className="flex flex-col gap-0.5 text-[9px] bg-executive-blue/[0.02] border border-executive-blue/[0.04] p-1.5 rounded-lg">
+                              <span className="font-bold text-[8px] text-text-tertiary uppercase tracking-wider">{fieldLabel}</span>
+                              <div className="flex items-center gap-1 text-[10px] text-text-muted">
+                                <span className="line-through text-status-danger/70 truncate max-w-[120px]">{formatAuditValue(field, diff.old, users)}</span>
+                                <ArrowRight className="w-2.5 h-2.5 flex-shrink-0" />
+                                <span className="font-medium text-status-success truncate max-w-[120px]">{formatAuditValue(field, diff.new, users)}</span>
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
+                          );
+                        })}
+                      </div>
+                    );
+                  })() : (
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant={STATUS_BADGE_VARIANT[log.oldValue as TaskStatus] ?? 'default'}>
                         {STATUS_LABELS[log.oldValue as TaskStatus] || String(log.oldValue)}

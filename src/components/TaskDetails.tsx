@@ -282,10 +282,10 @@ export const TaskDetails = ({
                 <div className="flex flex-col items-center gap-1">
                   <div className={cn(
                     'w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all duration-500',
-                    isCompleted ? 'bg-status-success border-status-success text-white' :
-                    isActive && isInterruption ? 'bg-status-danger border-status-danger text-white animate-pulse shadow-lg shadow-status-danger/15' :
-                    isActive && isDelegation ? 'bg-executive-gold border-executive-gold text-white shadow-lg shadow-executive-gold/20' :
-                    isActive ? 'bg-executive-blue border-executive-blue text-white shadow-lg shadow-executive-blue/20' :
+                    isCompleted ? 'bg-status-success border-status-success text-[color:var(--status-success-text)]' :
+                    isActive && isInterruption ? 'bg-status-danger border-status-danger text-[color:var(--status-danger-text)] animate-pulse shadow-lg shadow-status-danger/15' :
+                    isActive && isDelegation ? 'bg-executive-gold border-executive-gold text-[color:var(--btn-primary-text)] shadow-lg shadow-executive-gold/20' :
+                    isActive ? 'bg-executive-blue border-executive-blue text-[color:var(--executive-blue-text)] shadow-lg shadow-executive-blue/20' :
                     'bg-surface-elevated border-text-muted/25 text-text-tertiary'
                   )}>
                     {isCompleted ? <CheckCircle2 className="w-3.5 h-3.5 stroke-[2.5]" /> :
@@ -342,7 +342,7 @@ export const TaskDetails = ({
                 'px-6 py-4 text-[10px] font-medium uppercase tracking-[0.2em] transition-all border-b-2 whitespace-nowrap relative flex items-center gap-2',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-inset',
                 activeTab === tab.id
-                  ? 'border-executive-blue text-executive-blue'
+                  ? 'border-executive-gold text-executive-gold'
                   : 'border-transparent text-text-muted hover:text-text-heading hover:bg-makam-glass'
               )}
             >
@@ -707,7 +707,7 @@ export const TaskDetails = ({
                 <button
                   onClick={handleAddBlocker}
                   disabled={!blockerReason.trim() || isSubmittingBlocker}
-                  className="px-6 py-3 bg-status-danger text-white rounded-full text-[10px] uppercase tracking-widest shadow-lg shadow-status-danger/10 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger focus-visible:ring-offset-2"
+                  className="px-6 py-3 bg-status-danger text-[color:var(--status-danger-text)] rounded-full text-[10px] uppercase tracking-widest shadow-lg shadow-status-danger/10 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger focus-visible:ring-offset-2"
                 >
                   {isSubmittingBlocker ? 'EKLENİYOR…' : 'ENGEL EKLE'}
                 </button>
@@ -880,7 +880,7 @@ export const TaskDetails = ({
                 <button
                   type="submit"
                   disabled={!newChecklistItem.trim() || isSubmittingChecklist}
-                  className="px-4 py-2 bg-executive-blue text-white rounded-xl flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider hover:bg-executive-blue/90 disabled:opacity-50 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-2"
+                  className="px-4 py-2 bg-executive-blue text-[color:var(--executive-blue-text)] rounded-xl flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider hover:bg-executive-blue/90 disabled:opacity-50 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-2"
                 >
                   <Plus className="w-4 h-4" aria-hidden="true" />
                   Ekle
@@ -940,7 +940,7 @@ export const TaskDetails = ({
                   onClick={handleAddComment}
                   disabled={!newComment.trim() || isSubmittingComment}
                   aria-label="Yorumu gönder"
-                  className="absolute bottom-4 right-4 w-10 h-10 bg-executive-gold text-white rounded-full flex items-center justify-center shadow-lg shadow-executive-gold/25 hover:scale-105 hover:bg-executive-gold-hover active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-2"
+                  className="absolute bottom-4 right-4 w-10 h-10 bg-executive-gold text-[color:var(--btn-primary-text)] rounded-full flex items-center justify-center shadow-lg shadow-executive-gold/25 hover:scale-105 hover:bg-executive-gold-hover active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-2"
                 >
                   {isSubmittingComment
                     ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
