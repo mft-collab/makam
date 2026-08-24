@@ -30,6 +30,12 @@ export const DatePicker = ({ id, value, onChange, ariaLabel, className }: DatePi
   const selected = parseValue(value);
   const [isOpen, setIsOpen] = useState(false);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(selected ?? new Date()));
+  // Takvim gövdesinin yaklaşık yüksekliği (başlık + hafta günleri + 6 satır gün hücresi).
+  // Modal gibi `overflow-y-auto` ile kırpılan konteynerler içinde tetikleyicinin altında
+  // yeterli yer yoksa (ör. formun en alt alanı), takvim yukarı açılır (bkz. kod denetimi:
+  // "SLA mühlet tarihi modal içinde kırpılıyor").
+  const POPUP_HEIGHT_ESTIMATE = 300;
+  const [placement, setPlacement] = useState<'bottom' | 'top'>('bottom');
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -50,6 +56,12 @@ export const DatePicker = ({ id, value, onChange, ariaLabel, className }: DatePi
 
   const openPicker = () => {
     setViewMonth(startOfMonth(selected ?? new Date()));
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const roomBelow = window.innerHeight - rect.bottom;
+      const roomAbove = rect.top;
+      setPlacement(roomBelow < POPUP_HEIGHT_ESTIMATE && roomAbove > roomBelow ? 'top' : 'bottom');
+    }
     setIsOpen(true);
   };
 
@@ -84,11 +96,14 @@ export const DatePicker = ({ id, value, onChange, ariaLabel, className }: DatePi
           <motion.div
             role="dialog"
             aria-label={ariaLabel}
-            initial={{ opacity: 0, scale: 0.96, y: -6 }}
+            initial={{ opacity: 0, scale: 0.96, y: placement === 'bottom' ? -6 : 6 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: -6 }}
+            exit={{ opacity: 0, scale: 0.96, y: placement === 'bottom' ? -6 : 6 }}
             transition={{ type: 'spring', damping: 28, stiffness: 380 }}
-            className="absolute z-50 top-[calc(100%+8px)] left-0 w-64 p-3 rounded-2xl bg-surface-elevated backdrop-blur-xl border border-surface-border shadow-[0_20px_60px_-15px_rgba(0,0,0,0.15)]"
+            className={cn(
+              'absolute z-50 left-0 w-64 p-3 rounded-2xl bg-surface-elevated backdrop-blur-xl border border-surface-border shadow-[0_20px_60px_-15px_rgba(0,0,0,0.15)]',
+              placement === 'bottom' ? 'top-[calc(100%+8px)]' : 'bottom-[calc(100%+8px)]'
+            )}
           >
             <div className="flex items-center justify-between mb-2">
               <button
