@@ -126,7 +126,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
             placeholder="Talimat Başlığı"
             {...register('title')}
             className={cn(
-              "text-[28px] font-light text-text-heading font-serif tracking-tight outline-none bg-transparent placeholder:text-text-muted/30 w-full border-b border-makam-border/10 pb-3 transition-colors focus:border-executive-blue/40",
+              "text-[28px] font-light text-text-heading font-serif tracking-tight outline-none bg-transparent placeholder:text-text-muted/30 w-full border-b border-text-muted/20 pb-3 transition-colors focus:border-executive-blue/50",
               errors.title && "border-status-danger/50 focus:border-status-danger/50"
             )}
           />
@@ -170,9 +170,9 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
                 errors.assigneeId && "border-status-danger/50"
               )}
             >
-              <option value="">Sorumlu Seçiniz</option>
+              <option value="" className="bg-surface-base text-text-heading">Sorumlu Seçiniz</option>
               {assignableUsers.map(m => (
-                <option key={m.uid} value={m.uid}>{m.fullName}</option>
+                <option key={m.uid} value={m.uid} className="bg-surface-base text-text-heading">{m.fullName}</option>
               ))}
             </select>
             {errors.assigneeId && <span className="text-status-danger text-[10px] px-1 uppercase tracking-wider">{errors.assigneeId.message}</span>}
@@ -190,9 +190,9 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
                 errors.coordinatorId && "border-status-danger/50"
               )}
             >
-              <option value="">İrtibatlı Seçiniz (İsteğe Bağlı)</option>
+              <option value="" className="bg-surface-base text-text-heading">İrtibatlı Seçiniz (İsteğe Bağlı)</option>
               {coordinatorUsers.map(m => (
-                <option key={m.uid} value={m.uid}>{m.fullName} — {ROLE_LABELS[m.role]}</option>
+                <option key={m.uid} value={m.uid} className="bg-surface-base text-text-heading">{m.fullName} — {ROLE_LABELS[m.role]}</option>
               ))}
             </select>
              {errors.coordinatorId ? (
@@ -214,7 +214,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
               className="w-full bg-field-surface border border-makam-border/20 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5"
             >
               {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
+                <option key={value} value={value} className="bg-surface-base text-text-heading">{label}</option>
               ))}
             </select>
             {errors.priority && <span className="text-status-danger text-[10px] px-1 uppercase tracking-wider">{errors.priority.message}</span>}

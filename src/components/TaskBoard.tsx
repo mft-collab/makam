@@ -330,9 +330,9 @@ export const TaskBoard = ({
             aria-label="Öncelik filtresi"
             className="bg-transparent border-none text-[9px] font-medium text-text-muted uppercase tracking-[0.12em] sm:tracking-[0.25em] focus:ring-0 cursor-pointer outline-none min-w-0 w-full"
           >
-            <option value="All">TÜM ÖNCELİKLER</option>
+            <option value="All" className="bg-surface-base text-text-heading">TÜM ÖNCELİKLER</option>
             {Object.entries(PRIORITY_LABELS).map(([val, label]) => (
-              <option key={val} value={val}>{label.toUpperCase()}</option>
+              <option key={val} value={val} className="bg-surface-base text-text-heading">{label.toUpperCase()}</option>
             ))}
           </select>
         </div>
@@ -345,9 +345,9 @@ export const TaskBoard = ({
             aria-label="Durum filtresi"
             className="bg-transparent border-none text-[9px] font-medium text-text-muted uppercase tracking-[0.12em] sm:tracking-[0.25em] focus:ring-0 cursor-pointer outline-none min-w-0 w-full"
           >
-            <option value="All">TÜM DURUMLAR</option>
+            <option value="All" className="bg-surface-base text-text-heading">TÜM DURUMLAR</option>
             {Object.entries(STATUS_LABELS).map(([val, label]) => (
-              <option key={val} value={val}>{label.toUpperCase()}</option>
+              <option key={val} value={val} className="bg-surface-base text-text-heading">{label.toUpperCase()}</option>
             ))}
           </select>
         </div>
@@ -360,9 +360,9 @@ export const TaskBoard = ({
             aria-label="Sorumlu filtresi"
             className="bg-transparent border-none text-[9px] font-medium text-text-muted uppercase tracking-[0.12em] sm:tracking-[0.25em] focus:ring-0 cursor-pointer outline-none min-w-0 w-full"
           >
-            <option value="All">TÜM SORUMLULAR</option>
+            <option value="All" className="bg-surface-base text-text-heading">TÜM SORUMLULAR</option>
             {users.map(u => (
-              <option key={u.uid} value={u.uid}>{u.fullName.toUpperCase()}</option>
+              <option key={u.uid} value={u.uid} className="bg-surface-base text-text-heading">{u.fullName.toUpperCase()}</option>
             ))}
           </select>
         </div>

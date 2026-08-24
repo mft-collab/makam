@@ -701,7 +701,7 @@ export const TaskDetails = ({
                   className="bg-makam-glass border border-makam-border/10 rounded-full px-4 py-3 text-[12px] font-medium text-text-heading focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger/10 disabled:opacity-60"
                 >
                   {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
+                    <option key={value} value={value} className="bg-surface-base text-text-heading">{label}</option>
                   ))}
                 </select>
                 <button
@@ -986,9 +986,9 @@ export const TaskDetails = ({
           aria-label="Devredilecek müdür"
           className="w-full bg-surface-elevated border border-makam-border/10 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5"
         >
-          <option value="">Müdür Seçiniz</option>
+          <option value="" className="bg-surface-base text-text-heading">Müdür Seçiniz</option>
           {delegateCandidates.map(m => (
-            <option key={m.uid} value={m.uid}>{m.fullName}</option>
+            <option key={m.uid} value={m.uid} className="bg-surface-base text-text-heading">{m.fullName}</option>
           ))}
         </select>
         <div className="flex justify-end gap-2.5 pt-4 border-t border-executive-blue/[0.04]">

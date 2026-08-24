@@ -487,8 +487,8 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
                         disabled={!isOnline || isSavingSla}
                         className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
                       >
-                        <option value="days">İş Günü</option>
-                        <option value="hours">İş Saati</option>
+                        <option value="days" className="bg-surface-base text-text-heading">İş Günü</option>
+                        <option value="hours" className="bg-surface-base text-text-heading">İş Saati</option>
                       </select>
                     </div>
                   </div>
@@ -511,8 +511,8 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
                         disabled={!isOnline || isSavingSla}
                         className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
                       >
-                        <option value="days">İş Günü</option>
-                        <option value="hours">İş Saati</option>
+                        <option value="days" className="bg-surface-base text-text-heading">İş Günü</option>
+                        <option value="hours" className="bg-surface-base text-text-heading">İş Saati</option>
                       </select>
                     </div>
                   </div>
@@ -535,8 +535,8 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
                         disabled={!isOnline || isSavingSla}
                         className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
                       >
-                        <option value="days">İş Günü</option>
-                        <option value="hours">İş Saati</option>
+                        <option value="days" className="bg-surface-base text-text-heading">İş Günü</option>
+                        <option value="hours" className="bg-surface-base text-text-heading">İş Saati</option>
                       </select>
                     </div>
                   </div>
@@ -559,8 +559,8 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
                         disabled={!isOnline || isSavingSla}
                         className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
                       >
-                        <option value="days">İş Günü</option>
-                        <option value="hours">İş Saati</option>
+                        <option value="days" className="bg-surface-base text-text-heading">İş Günü</option>
+                        <option value="hours" className="bg-surface-base text-text-heading">İş Saati</option>
                       </select>
                     </div>
                   </div>
