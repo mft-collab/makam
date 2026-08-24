@@ -159,7 +159,7 @@ jobs:
   deploy:
     name: Firebase Deploy
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, performance]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
@@ -190,7 +190,7 @@ jobs:
   preview:
     name: PR Preview Deploy
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, performance]
     if: github.event_name == 'pull_request'
 
     steps:
