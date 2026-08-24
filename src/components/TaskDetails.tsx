@@ -3,7 +3,7 @@ import {
   Calendar, CheckCircle2, AlertTriangle, FileText,
   ChevronRight, Award, Zap, Activity, Info,
   Edit2, Trash2, ArrowRight, MessageSquare, History, ListChecks, Send, Plus,
-  GitCommit, Loader2, Hourglass, Clock, Building2, Tag, Flag, ExternalLink
+  GitCommit, Loader2, Hourglass, Clock, Building2, Tag, Flag, ExternalLink, Layers
 } from 'lucide-react';
 import { Task, User as UserType, TaskBlocker, AuditLog, TaskStatus } from '../types';
 import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_BADGE_VARIANT, STATUS_BADGE_VARIANT } from '../constants';
@@ -622,7 +622,7 @@ export const TaskDetails = ({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {subtasks.length === 0 ? (
-                <EmptyState className="md:col-span-2" message="Alt talimat bulunamadı" />
+                <EmptyState className="md:col-span-2" icon={<Layers className="w-8 h-8" />} message="Alt talimat bulunamadı" />
               ) : (
                 subtasks.map(sub => (
                   <div 
@@ -648,7 +648,7 @@ export const TaskDetails = ({
               <h4 className="text-[9px] font-medium text-text-muted uppercase tracking-[0.18em]">Aktif Engeller</h4>
               <div className="flex flex-col gap-3">
                 {blockers.length === 0 ? (
-                  <EmptyState message="Engel kaydı bulunamadı" />
+                  <EmptyState icon={<AlertTriangle className="w-8 h-8" />} message="Engel kaydı bulunamadı" />
                 ) : (
                   blockers.map(blocker => (
                     <div key={blocker.id} className={cn(
@@ -725,7 +725,7 @@ export const TaskDetails = ({
                   </button>
                 </div>
               ) : localLogs.length === 0 ? (
-                <EmptyState message="Denetim izi kaydı bulunamadı" />
+                <EmptyState icon={<History className="w-8 h-8" />} message="Denetim izi kaydı bulunamadı" />
               ) : (
                 localLogs.map(log => {
                   const actor = users.find(u => u.uid === log.changedBy || u.email === log.changedBy);
@@ -752,16 +752,18 @@ export const TaskDetails = ({
                         {/* #7 - Field-level diff */}
                         {hasChanges ? (
                           <div className="flex flex-col gap-1">
-                            {Object.entries(log.changes!).map(([field, change]) => {
+                            {Object.entries(log.changes!)
+                              .filter(([field]) => field in AUDIT_FIELD_LABELS)
+                              .map(([field, change]) => {
                               const label = AUDIT_FIELD_LABELS[field] ?? field;
                               return (
                                 <div key={field} className="flex items-center gap-1.5 flex-wrap">
                                   <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-[0.2em] bg-surface-glass px-1.5 py-0.5 rounded border border-surface-border">
                                     {label}
                                   </span>
-                                  <span className="text-[9px] text-text-tertiary line-through">{formatAuditValue(field, change.old)}</span>
+                                  <span className="text-[9px] text-status-danger/70 line-through">{formatAuditValue(field, change.old, users)}</span>
                                   <ArrowRight className="w-2.5 h-2.5 text-text-tertiary flex-shrink-0" />
-                                  <span className="text-[9px] font-medium text-executive-blue">{formatAuditValue(field, change.new)}</span>
+                                  <span className="text-[9px] font-medium text-status-success">{formatAuditValue(field, change.new, users)}</span>
                                 </div>
                               );
                             })}
@@ -881,7 +883,7 @@ export const TaskDetails = ({
               <h4 className="text-[9px] font-medium text-text-muted uppercase tracking-[0.18em]">Yorumlar & Koordinasyon Notları</h4>
               <div className="flex flex-col gap-4 max-h-[400px] overflow-y-auto no-scrollbar pr-2">
                 {(!task.comments || task.comments.length === 0) ? (
-                  <EmptyState message="Henüz yorum girilmemiş" />
+                  <EmptyState icon={<MessageSquare className="w-8 h-8" />} message="Henüz yorum girilmemiş" />
                 ) : (
                   task.comments.map((comment, idx) => {
                     const commenter = users.find(u => u.uid === comment.userId || u.email === comment.userId);

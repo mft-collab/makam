@@ -203,16 +203,21 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
                   <span className="text-[8px] text-text-tertiary font-medium uppercase tracking-[0.25em]">Durum Değişimi / Değer Detayı</span>
                   {log.changes ? (
                     <div className="flex flex-col gap-1.5 w-full max-w-[340px]">
-                      {Object.entries(log.changes).map(([field, diff]) => {
+                      {Object.entries(log.changes)
+                        // Etiketi tanımlı olmayan alanlar (updatedAt, lockVersion gibi dahili
+                        // teknik alanlar) kullanıcıya hiçbir zaman anlamlı gelmez — diff
+                        // görünümünden tamamen gizlenir (bkz. kod denetimi).
+                        .filter(([field]) => field in AUDIT_FIELD_LABELS)
+                        .map(([field, diff]) => {
                         const fieldLabel = AUDIT_FIELD_LABELS[field] ?? field;
 
                         return (
                           <div key={field} className="flex flex-col gap-0.5 text-[9px] bg-executive-blue/[0.02] border border-executive-blue/[0.04] p-1.5 rounded-lg">
                             <span className="font-bold text-[8px] text-text-tertiary uppercase tracking-wider">{fieldLabel}</span>
                             <div className="flex items-center gap-1 text-[10px] text-text-muted">
-                              <span className="line-through opacity-60 truncate max-w-[120px]">{formatAuditValue(field, diff.old)}</span>
+                              <span className="line-through text-status-danger/70 truncate max-w-[120px]">{formatAuditValue(field, diff.old, users)}</span>
                               <ArrowRight className="w-2.5 h-2.5 flex-shrink-0" />
-                              <span className="font-medium text-text-heading truncate max-w-[120px]">{formatAuditValue(field, diff.new)}</span>
+                              <span className="font-medium text-status-success truncate max-w-[120px]">{formatAuditValue(field, diff.new, users)}</span>
                             </div>
                           </div>
                         );

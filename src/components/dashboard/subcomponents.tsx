@@ -60,7 +60,16 @@ export const StatCard = ({ label, value, max, icon: Icon, color, onClick, index 
       <div className="flex flex-col gap-0.5 flex-1 min-w-0">
         <span className="text-[9px] font-semibold text-text-tertiary uppercase tracking-[0.08em] leading-tight whitespace-normal">{label}</span>
         <div className="flex items-baseline gap-1 min-w-0">
-          <RollingNumber value={value} className="text-[20px] sm:text-[22px] font-light text-executive-blue tracking-tight tabular-nums leading-none shrink-0" />
+          {/* value === 0 iken diğer aktif sayılarla (ör. Tamamlanan: 5) aynı
+              görsel ağırlıkta duruyordu — sıfır değerler artık soluk, aktif
+              sayılar tam kontrastta (bkz. kod denetimi). */}
+          <RollingNumber
+            value={value}
+            className={cn(
+              'text-[20px] sm:text-[22px] font-light tracking-tight tabular-nums leading-none shrink-0',
+              value === 0 ? 'text-text-tertiary/60' : 'text-executive-blue'
+            )}
+          />
           {max > 0 && <span className="text-[10px] text-text-tertiary font-light truncate min-w-0">/ {max}</span>}
           {delta !== 0 && (
             <span className={cn(
@@ -78,10 +87,17 @@ export const StatCard = ({ label, value, max, icon: Icon, color, onClick, index 
   );
 };
 
+// low→medium→high→critical arasında gerçek bir 4 kademeli kademelenme:
+// medium ve high ikisi de amber ailesindeydi ama high aslında zaten kırmızıya
+// kayıyordu — critical (dolu kırmızı) ile aradaki fark yalnızca doygunluk
+// farkına dayanıyordu, hızlı taramada "72" (high) ile "82" (critical) neredeyse
+// aynı kırmızı gibi algılanıyordu (bkz. kod denetimi). high artık ağır bir
+// amber tonunda (koyu/dolgun status-warning) — critical'in "dolu kırmızı"sı
+// tek başına kalıp gerçek bir eşik geçişi hissi verir.
 export const riskTone = {
   low: 'bg-surface-glass text-text-muted border-surface-border',
   medium: 'bg-status-warning/10 text-status-warning border-status-warning/20',
-  high: 'bg-status-danger/10 text-status-danger border-status-danger/20',
+  high: 'bg-status-warning/25 text-status-warning border-status-warning/50 font-semibold',
   // Kritik risk: dolgu rengi solid kalır (görsel ağırlık korunur); metin,
   // her iki temada da zeminle yüksek kontrast veren surface-base tonudur.
   critical: 'bg-status-danger text-surface-base border-status-danger',

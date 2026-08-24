@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { CheckCircle2, Clock, AlertTriangle, AlertCircle, TrendingUp, Activity, Target, ArrowRight, ShieldCheck, ListChecks, Gauge, Users as UsersIcon, Info } from 'lucide-react';
+import { CheckCircle2, Clock, AlertTriangle, AlertCircle, TrendingUp, Activity, Target, ArrowRight, ShieldCheck, ListChecks, Gauge, Users as UsersIcon, Info, BarChart3 } from 'lucide-react';
 import { Task, User } from '../types';
 import { motion } from 'motion/react';
 import { Modal } from './ui/Modal';
 import { Badge } from './ui/Badge';
+import { EmptyState } from './ui/EmptyState';
 import { cn, formatTimeAgo, formatTime } from '../lib/utils';
 import { STATUS_LABELS, STATUS_BADGE_VARIANT } from '../constants';
 import { DashboardSkeleton } from './ui/Skeleton';
@@ -89,6 +90,13 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
   // "Yeni Talimat" ve "İcra Edilen" metrikleri geçmişe dönük tutarlıdır.
   // Gün sınırı tick'ten türetilir ki gece yarısı geçişinde pencere bayatlamasın.
   const last7DaysData = useMemo(() => computeLast7DaysData(scopeTasks, tick), [scopeTasks, tick]);
+  // Son 7 günde hiç yeni talimat/icra kaydı yoksa grafik sessizce boş bir
+  // dikdörtgen bırakıyordu — kullanıcıya "veri yok" sinyali hiç verilmiyordu
+  // (bkz. kod denetimi). Boşken grafik yerine EmptyState gösterilir.
+  const hasChartActivity = useMemo(
+    () => last7DaysData.some(d => d['Yeni Talimat'] > 0 || d['İcra Edilen'] > 0),
+    [last7DaysData]
+  );
 
   const chartSummary = useMemo(
     () => last7DaysData
@@ -203,7 +211,10 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
 
           <div className="flex items-center gap-3">
             <div className="flex flex-col items-center">
-              <span className="text-[24px] font-light text-executive-blue tracking-tight tabular-nums leading-none">
+              {/* 24px'ten 32px'e büyütüldü — StatCard rakamlarıyla (20-22px)
+                  arasında sayfadaki EN önemli tekil metrik olduğunu belirgin
+                  kılan bir punto farkı yoktu (bkz. kod denetimi). */}
+              <span className="text-[32px] font-display font-medium text-executive-blue tracking-tight tabular-nums leading-none">
                 {healthScore}%
               </span>
               <span
@@ -256,6 +267,13 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
         </div>
         {/* Chart: reduced height on mobile */}
         <div className="h-[160px] sm:h-[200px] lg:h-[220px] w-full">
+          {!hasChartActivity ? (
+            <EmptyState
+              className="h-full justify-center border-none"
+              icon={<BarChart3 className="w-7 h-7" />}
+              message="Son 7 günde yeni talimat veya icra kaydı yok"
+            />
+          ) : (
           <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
             <BarChart data={last7DaysData} barGap={4} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
               <defs>
@@ -282,6 +300,7 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
               <Bar dataKey="İcra Edilen" fill="url(#chartCompleted)" radius={[4,4,0,0]} />
             </BarChart>
           </ResponsiveContainer>
+          )}
         </div>
 
         {/* Legend */}

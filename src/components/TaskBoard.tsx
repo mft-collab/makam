@@ -19,7 +19,11 @@ import { isTaskInCrisis } from '../lib/executiveMetrics';
 // padding/font boyutlarına göre ölçülüp tarayıcıda doğrulanmıştır.
 const DESKTOP_ROW_HEIGHT = 64;
 const DESKTOP_LIST_MAX_HEIGHT = 640;
-const DESKTOP_GRID_TEMPLATE = '150px minmax(0,1fr) 190px 130px 160px 64px';
+// Durum sütunu 150px'ten 180px'e genişletildi — "İCRA AŞAMASINDA"/"YETKİ
+// DEVRİ BEKLENİYOR" gibi uzun rozet etiketleri artık (Badge.tsx'teki
+// whitespace-nowrap ile birlikte) taşmadan tek satırda sığıyor (bkz. kod
+// denetimi).
+const DESKTOP_GRID_TEMPLATE = '180px minmax(0,1fr) 190px 130px 160px 64px';
 const MOBILE_ROW_HEIGHT = 80;
 const MOBILE_LIST_MAX_HEIGHT = 560;
 
@@ -84,8 +88,12 @@ function DesktopTaskRow({ index, style, ariaAttributes, tasks, usersById, onView
       onClick={() => onViewTask(task)}
       style={{ ...style, gridTemplateColumns: DESKTOP_GRID_TEMPLATE }}
       className={cn(
-        'grid items-center border-b border-makam-border/30 cursor-pointer transition-colors duration-200 hover:bg-makam-glass group',
-        isCrisis && 'bg-status-danger/[0.03]'
+        'grid items-center border-b border-l-2 border-transparent border-b-makam-border/30 cursor-pointer transition-colors duration-200 hover:bg-makam-glass group',
+        // SLA ihlalli satırlar eskiden yalnızca %3 opaklıkta bir zemin tonuyla
+        // ayrışıyordu — sayfa taranırken fark edilmesi zordu. Sol kenarlıktaki
+        // kırmızı şerit, Harekat Merkezi'ndeki kriz kartlarıyla aynı deseni
+        // kullanarak ihlali satırı taramadan görünür kılar (bkz. kod denetimi).
+        isCrisis && 'bg-status-danger/[0.03] border-l-status-danger'
       )}
     >
       {/* Status */}

@@ -67,6 +67,16 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
   const [isExporting, setIsExporting] = useState(false);
 
+  // Native <input type="date"> boş/eksik yazarken (ör. ayırıcı karakter
+  // yazılırken) geçici olarak '' raporlayabilir; bu değer state'e girerse
+  // aşağıdaki format(new Date(dateFrom), ...) çağrısı date-fns'te
+  // "RangeError: Invalid time value" fırlatıp ekranı ErrorBoundary'e
+  // düşürüyordu (bkz. kod denetimi). Geçersiz/boş girişler state'e hiç
+  // yazılmaz — son geçerli tarih korunur.
+  const isValidDateInput = (value: string) => value !== '' && !Number.isNaN(new Date(value).getTime());
+  const handleDateFromChange = (value: string) => { if (isValidDateInput(value)) setDateFrom(value); };
+  const handleDateToChange = (value: string) => { if (isValidDateInput(value)) setDateTo(value); };
+
   const departmentsList = useMemo(() => {
     const depts = new Set<string>();
     users.forEach(u => {
@@ -155,7 +165,13 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
     const onTimeCompleted = mt.filter(isCompletedOnTime).length;
     const slaRate = completed > 0 ? Math.round((onTimeCompleted / completed) * 100) : 100;
-    return { ...manager, total, completed, blocked, completionRate, slaRate };
+    // total === 0 iken completionRate sabit %0 (kırmızı), slaRate sabit %100
+    // (yeşil) dönüyor — aynı satırda birbiriyle çelişen, yanıltıcı bir "kötü
+    // performans ama mükemmel SLA" görüntüsü oluşturuyordu (bkz. kod denetimi).
+    // hasData bayrağı, seçili tarih/birim filtresinde bu yöneticiye ait hiç
+    // görev olmadığını UI'da ayırt etmek için kullanılır.
+    const hasData = total > 0;
+    return { ...manager, total, completed, blocked, completionRate, slaRate, hasData };
   }).sort((a, b) => b.completionRate - a.completionRate), [managers, tasksByAssignee]);
 
   const averageCompletionTime = useMemo(() => {
@@ -276,7 +292,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
               id="report-date-from"
               type="date"
               value={dateFrom}
-              onChange={e => setDateFrom(e.target.value)}
+              onChange={e => handleDateFromChange(e.target.value)}
               className="text-[11px] text-text-heading bg-transparent outline-none border-none cursor-pointer"
               aria-label="Rapor başlangıç tarihi"
             />
@@ -286,7 +302,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
               id="report-date-to"
               type="date"
               value={dateTo}
-              onChange={e => setDateTo(e.target.value)}
+              onChange={e => handleDateToChange(e.target.value)}
               className="text-[11px] text-text-heading bg-transparent outline-none border-none cursor-pointer"
               aria-label="Rapor bitiş tarihi"
             />
@@ -317,11 +333,15 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
         </div>
       </div>
 
-      {/* Filtre özeti */}
-      <div className="flex items-center gap-2 text-[9px] text-text-tertiary uppercase tracking-widest">
-        <span>{filteredTasks.length} talimat</span>
+      {/* Filtre özeti — önceden çok soluk (text-tertiary) olduğundan, dar bir
+          tarih aralığında %0 gibi görünen metrikler "herkesin performansı
+          kötü" gibi yanlış okunabiliyordu; aktif kapsam artık daha belirgin
+          (bkz. kod denetimi). */}
+      <div className="flex items-center gap-1.5 text-[10px] text-text-muted uppercase tracking-widest font-medium">
+        <Calendar className="w-3 h-3 flex-shrink-0" aria-hidden="true" />
+        <span className="tabular-nums">{filteredTasks.length} talimat</span>
         <span>·</span>
-        <span>{format(new Date(dateFrom), 'd MMM yyyy', { locale: tr })} — {format(new Date(dateTo), 'd MMM yyyy', { locale: tr })}</span>
+        <span className="tabular-nums">{format(new Date(dateFrom), 'd MMM yyyy', { locale: tr })} — {format(new Date(dateTo), 'd MMM yyyy', { locale: tr })}</span>
       </div>
 
       {/* ── KPI Cards — 1 col mobile, 3 cols sm+ ─────────────────── */}
@@ -510,16 +530,21 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                 <div className="flex-1 min-w-0">
                   <p className="text-[12px] font-medium text-executive-blue font-serif line-clamp-1">{m.fullName}</p>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[9px] text-text-tertiary">{m.total} talimat</span>
-                    <span className="text-[9px] text-status-success">{m.completed} tamamlandı</span>
-                    {m.blocked > 0 && <span className="text-[9px] text-status-danger">{m.blocked} engel</span>}
-                    <span className={cn(
-                      'text-[9px] font-bold px-1.5 py-0.5 rounded border',
-                      m.slaRate > 80 ? 'text-status-success border-status-success/20 bg-status-success/10' :
-                      m.slaRate > 50 ? 'text-executive-gold border-executive-gold/20 bg-executive-gold/10' :
-                      'text-status-danger border-status-danger/20 bg-status-danger/10'
-                    )}>SLA %{m.slaRate}</span>
+                    <span className="text-[9px] text-text-tertiary tabular-nums">{m.total} talimat</span>
+                    <span className="text-[9px] text-status-success tabular-nums">{m.completed} tamamlandı</span>
+                    {m.blocked > 0 && <span className="text-[9px] text-status-danger tabular-nums">{m.blocked} engel</span>}
+                    {m.hasData ? (
+                      <span className={cn(
+                        'text-[9px] font-bold px-1.5 py-0.5 rounded border',
+                        m.slaRate > 80 ? 'text-status-success border-status-success/20 bg-status-success/10' :
+                        m.slaRate > 50 ? 'text-executive-gold border-executive-gold/20 bg-executive-gold/10' :
+                        'text-status-danger border-status-danger/20 bg-status-danger/10'
+                      )}>SLA %{m.slaRate}</span>
+                    ) : (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border text-text-tertiary border-surface-border bg-surface-glass">Veri yok</span>
+                    )}
                   </div>
+                  {m.hasData ? (
                   <div className="flex items-center gap-2 mt-1.5">
                     <div className="flex-1 h-1 bg-surface-border rounded-full overflow-hidden">
                       <motion.div
@@ -539,6 +564,9 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                       m.completionRate > 40 ? 'text-executive-gold' : 'text-status-danger'
                     )}>%{m.completionRate}</span>
                   </div>
+                  ) : (
+                    <p className="text-[9px] text-text-tertiary mt-1.5">Seçili aralıkta talimat yok</p>
+                  )}
                 </div>
               </motion.div>
             ))
@@ -632,19 +660,26 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
 
                     {/* SLA Rate */}
                     <td className="px-4 py-3 text-center">
-                      <span className={cn(
-                        'text-[12px] font-medium px-3 py-1 rounded-lg border tabular-nums',
-                        m.slaRate > 80 ? 'text-status-success bg-status-success/10 border-status-success/20' :
-                        m.slaRate > 50 ? 'text-executive-gold bg-executive-gold/10 border-executive-gold/20' :
-                        'text-status-danger bg-status-danger/10 border-status-danger/20'
-                      )}>
-                        %{m.slaRate}
-                      </span>
+                      {m.hasData ? (
+                        <span className={cn(
+                          'text-[12px] font-medium px-3 py-1 rounded-lg border tabular-nums',
+                          m.slaRate > 80 ? 'text-status-success bg-status-success/10 border-status-success/20' :
+                          m.slaRate > 50 ? 'text-executive-gold bg-executive-gold/10 border-executive-gold/20' :
+                          'text-status-danger bg-status-danger/10 border-status-danger/20'
+                        )}>
+                          %{m.slaRate}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-medium px-3 py-1 rounded-lg border text-text-tertiary bg-surface-glass border-surface-border uppercase tracking-wider">
+                          Veri Yok
+                        </span>
+                      )}
                     </td>
 
                     {/* Score + progress bar + nav arrow */}
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-3">
+                        {m.hasData ? (
                         <div className="flex flex-col items-end gap-1.5">
                           <span className={cn(
                             'text-[18px] font-light tabular-nums tracking-tight font-serif',
@@ -666,6 +701,9 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                             />
                           </div>
                         </div>
+                        ) : (
+                          <span className="text-[10px] text-text-tertiary uppercase tracking-wider">Seçili aralıkta talimat yok</span>
+                        )}
                         <div className="w-6 h-6 rounded-full bg-executive-blue/5 border border-executive-blue/10 flex items-center justify-center group-hover:bg-executive-blue group-hover:border-transparent transition-all flex-shrink-0">
                           <ArrowRight className="w-3 h-3 text-text-tertiary group-hover:text-white stroke-[2] transition-colors" />
                         </div>

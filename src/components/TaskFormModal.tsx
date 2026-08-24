@@ -78,6 +78,10 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
 
   const processForm = async (data: TaskFormValues) => {
     try {
+      // updatedAt burada elle gönderilmiyor — taskService.createTask/updateTask
+      // bunu zaten kendisi (senkron anına göre) set ediyor. Burada gönderilmesi
+      // yalnızca denetim izi diff'inde anlamsız bir "UpdatedAt" satırı olarak
+      // görünmesine yol açıyordu (bkz. kod denetimi).
       const taskData: Partial<Task> = {
         title: data.title,
         description: data.description,
@@ -85,7 +89,6 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
         coordinatorId: data.coordinatorId || undefined,
         priority: data.priority,
         deadline: new Date(data.deadline).getTime(),
-        updatedAt: Date.now(),
       };
 
       if (!task) {

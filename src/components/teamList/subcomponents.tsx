@@ -4,10 +4,14 @@ import { cn } from '../../lib/utils';
 import { Avatar } from '../ui/Avatar';
 import { ROLE_LABELS } from '../../constants';
 
+// Rol rozeti her zaman "dolu" (belirgin arka plan + kenarlık) kalmalı ki
+// Kadro kartlarındaki nötr/ghost departman rozetiyle karışmasın — Manager'ın
+// eski %4 opaklığı, %5 opaklıktaki surface-glass departman zeminiyle neredeyse
+// ayırt edilemiyordu (bkz. kod denetimi).
 export const roleConfig: Record<UserRole, { bg: string; text: string; border: string }> = {
-  Admin:   { bg: 'bg-status-danger/10',      text: 'text-status-danger', border: 'border-status-danger/20' },
-  Manager: { bg: 'bg-executive-blue/[0.04]', text: 'text-executive-blue', border: 'border-executive-blue/10' },
-  Staff:   { bg: 'bg-surface-glass',         text: 'text-text-muted',  border: 'border-surface-border' },
+  Admin:   { bg: 'bg-status-danger/10',  text: 'text-status-danger',  border: 'border-status-danger/25' },
+  Manager: { bg: 'bg-executive-blue/10', text: 'text-executive-blue', border: 'border-executive-blue/25' },
+  Staff:   { bg: 'bg-text-muted/10',     text: 'text-text-muted',     border: 'border-text-muted/25' },
 };
 
 export interface OrgNodeCardProps {

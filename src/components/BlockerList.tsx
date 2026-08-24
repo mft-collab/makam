@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { AlertTriangle, CheckCircle2, Clock, Edit2, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, Edit2, ShieldCheck, Trash2 } from 'lucide-react';
 import { Task, TaskBlocker, User } from '../types';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -196,6 +196,16 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
 
   const resolvedBlockers = blockers.filter(b => b.isResolved);
 
+  const resolvedLast30Days = useMemo(() => {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    return blockers.filter(b => b.isResolved && b.resolvedAt && b.resolvedAt >= cutoff).length;
+  }, [blockers]);
+
+  const trackedTaskCount = useMemo(
+    () => tasks.filter(t => t.status !== 'COMPLETED' && t.status !== 'CANCELLED').length,
+    [tasks]
+  );
+
   const [editingBlocker, setEditingBlocker]   = useState<TaskBlocker | null>(null);
   const [editReason, setEditReason]           = useState('');
   const [deletingBlockerId, setDeletingBlockerId] = useState<string | null>(null);
@@ -308,6 +318,14 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
             )}
           </div>
         </div>
+      </div>
+
+      {/* ── Özet şeridi ────────────────────────────────────────────── */}
+      <div className="flex items-center justify-center gap-2 py-3 border-t border-executive-blue/[0.04]">
+        <ShieldCheck className="w-3.5 h-3.5 text-status-success/60 stroke-[1.5]" />
+        <span className="text-[9px] text-text-tertiary uppercase tracking-[0.3em]">
+          Son 30 günde {resolvedLast30Days} engel çözüldü · {trackedTaskCount} talimat izleniyor
+        </span>
       </div>
 
       {/* ── Edit Modal ─────────────────────────────────────────────── */}

@@ -318,7 +318,10 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                 transition={{ type: 'spring', stiffness: 260, damping: 28, delay: i * 0.04 }}
                 whileHover={{ y: -2, scale: 1.005 }}
                 onClick={() => setSelectedUser(user)}
-                className="group flex flex-col gap-3 p-4 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl shadow-[0_1px_8px_rgba(22,21,19,0.02)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] hover:bg-surface-elevated hover:border-surface-border transition-all duration-300 cursor-pointer relative"
+                className={cn(
+                  "group flex flex-col gap-3 p-4 bg-makam-glass backdrop-blur-xl border-x border-b border-surface-border rounded-2xl shadow-[0_1px_8px_rgba(22,21,19,0.02)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] hover:bg-surface-elevated hover:border-surface-border transition-all duration-300 cursor-pointer relative border-t-2",
+                  userTaskCount >= 5 ? "border-t-status-danger" : "border-t-surface-border"
+                )}
               >
                 {/* Action buttons (hover) */}
                 {canEdit && (
@@ -377,7 +380,11 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                       {ROLE_LABELS[user.role]}
                     </span>
                     {user.departmentId && (
-                      <span className="inline-flex items-center gap-1 text-[8px] font-medium uppercase tracking-[0.2em] px-2 py-0.5 rounded-full bg-surface-glass text-text-tertiary border border-surface-border">
+                      // Dolu rol rozetinden bilinçli olarak ayrışsın diye tamamen
+                      // ghost/outline: zemin dolgusu yok, yalnızca ince kenarlık
+                      // (bkz. kod denetimi — rol ile departman rozeti aynı gri
+                      // yoğunlukta olduğunda ilk bakışta ayırt edilemiyordu).
+                      <span className="inline-flex items-center gap-1 text-[8px] font-medium uppercase tracking-[0.2em] px-2 py-0.5 rounded-full bg-transparent text-text-tertiary border border-surface-border">
                         <Building className="w-2.5 h-2.5" />
                         {user.departmentId}
                       </span>
@@ -645,16 +652,18 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                             
                             {hasChanges ? (
                               <div className="flex flex-col gap-1 pl-1 border-l border-executive-blue/10">
-                                {Object.entries(log.changes!).map(([field, change]) => {
+                                {Object.entries(log.changes!)
+                                  .filter(([field]) => field in AUDIT_FIELD_LABELS)
+                                  .map(([field, change]) => {
                                   const label = AUDIT_FIELD_LABELS[field] ?? field;
                                   return (
                                     <div key={field} className="flex items-center gap-1.5 flex-wrap">
                                       <span className="text-[7.5px] font-medium text-text-tertiary uppercase tracking-[0.2em] bg-surface-glass px-1 py-0.5 rounded border border-surface-border">
                                         {label}
                                       </span>
-                                      <span className="text-[8.5px] text-text-tertiary line-through">{formatAuditValue(field, change.old)}</span>
+                                      <span className="text-[8.5px] text-status-danger/70 line-through">{formatAuditValue(field, change.old, users)}</span>
                                       <ArrowRight className="w-2 h-2 text-text-tertiary flex-shrink-0" />
-                                      <span className="text-[8.5px] font-medium text-executive-blue">{formatAuditValue(field, change.new)}</span>
+                                      <span className="text-[8.5px] font-medium text-status-success">{formatAuditValue(field, change.new, users)}</span>
                                     </div>
                                   );
                                 })}
