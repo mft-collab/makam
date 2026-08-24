@@ -603,7 +603,7 @@ export default function App() {
                     users={users}
                     currentUser={user!}
                     blockers={blockers.filter(b => b.taskId === selectedTask!.id)}
-                    onAddBlocker={(reason) => selectedTask && addBlocker(selectedTask.id, reason)}
+                    onAddBlocker={(reason, severity) => selectedTask && addBlocker(selectedTask.id, reason, severity)}
                     onResolveBlocker={resolveBlocker}
                     onAddSubTask={(parentId, title) => { setParentTaskId(parentId); setInitialTitle(title); setIsCreateModalOpen(true); }}
                     onAddComment={(text) => selectedTask && addComment(selectedTask.id, text)}

@@ -8,13 +8,13 @@ import {
 } from '../firebase';
 import { transitionTaskInTransaction } from './taskService';
 import { runWithRetry } from '../lib/retry';
-import { TaskStatus } from '../types';
+import { TaskPriority, TaskStatus } from '../types';
 
 export const blockerService = {
   // Engel dokümanı ve görevin BLOCKED'a alınması AYNI transaction'da yapılır —
   // biri başarısız olursa diğeri de uygulanmaz (ör. sahipsiz bir engel kaydı
   // kalıp görevin durumu güncellenmemiş olması engellenir).
-  async addBlocker(taskId: string, reason: string, userId: string, _oldStatus: TaskStatus, expectedVersion?: number) {
+  async addBlocker(taskId: string, reason: string, userId: string, _oldStatus: TaskStatus, expectedVersion?: number, severity: TaskPriority = 'Medium') {
     const blockerRef = doc(collection(db, 'blockers'));
     await runWithRetry(async () => {
       await runTransaction(db, async (transaction) => {
@@ -25,6 +25,7 @@ export const blockerService = {
           id: blockerRef.id,
           taskId,
           reason,
+          severity,
           isResolved: false,
           createdAt: Date.now()
         });

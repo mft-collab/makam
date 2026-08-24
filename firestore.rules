@@ -186,11 +186,12 @@ service cloud.firestore {
       // isValidTaskUpdate/isValidAuditLog'daki aynı hasOnly() alan kilidi deseni
       // (kod denetimi: eskiden bu koleksiyonda alan kilidi yoktu, kalıcı ve
       // sınırsız büyüyebilecek keyfi alan eklenmesi mümkündü).
-      let allowedFields = ['id', 'taskId', 'reason', 'isResolved', 'createdAt', 'resolvedAt'];
+      let allowedFields = ['id', 'taskId', 'reason', 'severity', 'isResolved', 'createdAt', 'resolvedAt'];
       return data.keys().hasAll(['taskId', 'reason', 'isResolved', 'createdAt']) &&
              data.keys().hasOnly(allowedFields) &&
              data.taskId is string &&
              data.reason is string && data.reason.size() >= 1 && data.reason.size() <= 500 &&
+             (!('severity' in data) || (data.severity in ['Low', 'Medium', 'High', 'Urgent'])) &&
              data.isResolved is bool &&
              data.createdAt is number &&
              (!('resolvedAt' in data) || data.resolvedAt is number) &&

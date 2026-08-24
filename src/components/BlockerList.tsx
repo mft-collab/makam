@@ -44,7 +44,8 @@ interface BlockerCardProps {
 const BlockerCard = ({ blocker, index, tasksById, usersById, isAdmin, isSystemAdmin, onViewTask, onResolve, onRequestEdit, onRequestDelete }: BlockerCardProps) => {
   const task     = tasksById.get(blocker.taskId);
   const assignee = task ? usersById.get(task.assigneeId) : undefined;
-  const isUrgentOrHigh = task?.priority === 'Urgent' || task?.priority === 'High';
+  const severity = blocker.severity ?? task?.priority ?? 'Medium';
+  const isUrgentOrHigh = severity === 'Urgent' || severity === 'High';
 
   return (
     <motion.div
@@ -85,12 +86,12 @@ const BlockerCard = ({ blocker, index, tasksById, usersById, isAdmin, isSystemAd
             <span className="text-[9px] text-text-tertiary font-medium uppercase tracking-[0.2em] truncate">
               {task?.title || 'Bilinmeyen Talimat'}
             </span>
+            <span className="text-[9px] text-text-tertiary/40">•</span>
+            <Badge variant={PRIORITY_BADGE_VARIANT[severity]}>
+              {PRIORITY_LABELS[severity]}
+            </Badge>
             {task && (
               <>
-                <span className="text-[9px] text-text-tertiary/40">•</span>
-                <Badge variant={PRIORITY_BADGE_VARIANT[task.priority]}>
-                  {PRIORITY_LABELS[task.priority]}
-                </Badge>
                 {task.deadline > 0 && (
                   <Badge variant={task.deadline < Date.now() ? 'danger' : 'default'} icon={<Clock className="w-2.5 h-2.5" />}>
                     {getSlaLabel(task.deadline)}
@@ -182,7 +183,11 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
     for (const t of tasks) {
       taskPriorityWeightById.set(t.id, PRIORITY_WEIGHTS[t.priority] ?? 0);
     }
-    const weightOf = (blocker: TaskBlocker) => taskPriorityWeightById.get(blocker.taskId) ?? -1;
+    // Engelin kendi ciddiyeti varsa (bkz. severity alanı) bağlı görevin
+    // önceliğinden önceliklidir — engel, görevden bağımsız olarak daha
+    // ciddi/hafif işaretlenebilir.
+    const weightOf = (blocker: TaskBlocker) =>
+      blocker.severity ? (PRIORITY_WEIGHTS[blocker.severity] ?? 0) : (taskPriorityWeightById.get(blocker.taskId) ?? -1);
 
     return blockers
       .filter(b => !b.isResolved)

@@ -10,6 +10,7 @@ import {
 import { format, subDays, differenceInCalendarDays } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { useUIStore } from '../store/uiStore';
+import { DatePicker } from './ui/DatePicker';
 
 interface ReportsProps {
   tasks: Task[];
@@ -66,16 +67,6 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
   const [dateTo, setDateTo] = useState(format(today, 'yyyy-MM-dd'));
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
   const [isExporting, setIsExporting] = useState(false);
-
-  // Native <input type="date"> boş/eksik yazarken (ör. ayırıcı karakter
-  // yazılırken) geçici olarak '' raporlayabilir; bu değer state'e girerse
-  // aşağıdaki format(new Date(dateFrom), ...) çağrısı date-fns'te
-  // "RangeError: Invalid time value" fırlatıp ekranı ErrorBoundary'e
-  // düşürüyordu (bkz. kod denetimi). Geçersiz/boş girişler state'e hiç
-  // yazılmaz — son geçerli tarih korunur.
-  const isValidDateInput = (value: string) => value !== '' && !Number.isNaN(new Date(value).getTime());
-  const handleDateFromChange = (value: string) => { if (isValidDateInput(value)) setDateFrom(value); };
-  const handleDateToChange = (value: string) => { if (isValidDateInput(value)) setDateTo(value); };
 
   const departmentsList = useMemo(() => {
     const depts = new Set<string>();
@@ -287,24 +278,18 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
 
           <div className="flex items-center gap-2 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl px-3 py-2">
             <Calendar className="w-3.5 h-3.5 text-executive-blue stroke-[1.5] flex-shrink-0" aria-hidden="true" />
-            <label htmlFor="report-date-from" className="sr-only">Başlangıç tarihi</label>
-            <input
+            <DatePicker
               id="report-date-from"
-              type="date"
               value={dateFrom}
-              onChange={e => handleDateFromChange(e.target.value)}
-              className="text-[11px] text-text-heading bg-transparent outline-none border-none cursor-pointer"
-              aria-label="Rapor başlangıç tarihi"
+              onChange={setDateFrom}
+              ariaLabel="Rapor başlangıç tarihi"
             />
             <span className="text-[10px] text-text-tertiary mx-1">—</span>
-            <label htmlFor="report-date-to" className="sr-only">Bitiş tarihi</label>
-            <input
+            <DatePicker
               id="report-date-to"
-              type="date"
               value={dateTo}
-              onChange={e => handleDateToChange(e.target.value)}
-              className="text-[11px] text-text-heading bg-transparent outline-none border-none cursor-pointer"
-              aria-label="Rapor bitiş tarihi"
+              onChange={setDateTo}
+              ariaLabel="Rapor bitiş tarihi"
             />
           </div>
 

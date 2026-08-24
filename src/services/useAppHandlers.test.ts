@@ -96,7 +96,7 @@ describe('useAppHandlers', () => {
 
       await act(async () => { await handlers.updateTaskStatus('task-1', 'BLOCKED'); });
 
-      expect(blockerService.addBlocker).toHaveBeenCalledWith('task-1', 'Hızlı kaydırma ile kriz bildirimi.', 'user-1', 'IN_PROGRESS', 3);
+      expect(blockerService.addBlocker).toHaveBeenCalledWith('task-1', 'Hızlı kaydırma ile kriz bildirimi.', 'user-1', 'IN_PROGRESS', 3, 'High');
       expect(taskService.updateTaskStatus).not.toHaveBeenCalled();
     });
 
@@ -324,12 +324,20 @@ describe('useAppHandlers', () => {
       expect(blockerService.addBlocker).not.toHaveBeenCalled();
     });
 
-    it('online: blockerService.addBlocker doğru argümanlarla çağrılır', async () => {
+    it('online: blockerService.addBlocker doğru argümanlarla çağrılır (severity verilmezse Medium)', async () => {
       const { handlers } = setup({ tasks: [makeTask({ status: 'IN_PROGRESS', lockVersion: 5 })] });
 
       await act(async () => { await handlers.addBlocker('task-1', 'Sunucu çöktü'); });
 
-      expect(blockerService.addBlocker).toHaveBeenCalledWith('task-1', 'Sunucu çöktü', 'user-1', 'IN_PROGRESS', 5);
+      expect(blockerService.addBlocker).toHaveBeenCalledWith('task-1', 'Sunucu çöktü', 'user-1', 'IN_PROGRESS', 5, 'Medium');
+    });
+
+    it('online: severity açıkça verilirse aynen iletilir', async () => {
+      const { handlers } = setup({ tasks: [makeTask({ status: 'IN_PROGRESS', lockVersion: 5 })] });
+
+      await act(async () => { await handlers.addBlocker('task-1', 'Sunucu çöktü', 'Urgent'); });
+
+      expect(blockerService.addBlocker).toHaveBeenCalledWith('task-1', 'Sunucu çöktü', 'user-1', 'IN_PROGRESS', 5, 'Urgent');
     });
 
     it('servis reddederse onError(err, \'create\', \'blockers\') çağrılır', async () => {

@@ -88,6 +88,9 @@ export const TaskBlockerSchema = z.object({
   id: z.string(),
   taskId: z.string(),
   reason: z.string().min(1),
+  // Bağlı görevin önceliğinden bağımsız olarak engelin kendi ciddiyeti —
+  // eski kayıtlarda yok, okuyan taraflar 'Medium' varsayımıyla ele almalı.
+  severity: TaskPrioritySchema.optional(),
   isResolved: z.boolean(),
   createdAt: z.number(),
   resolvedAt: z.number().optional(),

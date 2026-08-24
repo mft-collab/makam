@@ -16,7 +16,7 @@ import { offlineQueue } from '../lib/offlineQueue';
 import { getSLAConfigForPriority, calculateDeadline } from '../lib/sla';
 import { useUIStore } from '../store/uiStore';
 import { STATUS_LABELS } from '../constants';
-import type { Task, TaskStatus, TaskBlocker, User, UserRole } from '../types';
+import type { Task, TaskStatus, TaskBlocker, TaskPriority, User, UserRole } from '../types';
 
 // ─── Statü emoji haritası ─────────────────────────────────────────────────────
 const STATUS_EMOJI: Partial<Record<TaskStatus, string>> = {
@@ -115,7 +115,9 @@ export function useAppHandlers({
       if (newStatus === 'BLOCKED') {
         const hasBlocker = blockers.some(b => b.taskId === taskId && !b.isResolved);
         if (!hasBlocker) {
-          await blockerService.addBlocker(taskId, 'Hızlı kaydırma ile kriz bildirimi.', user.uid, oldTask?.status ?? 'IN_PROGRESS', oldTask?.lockVersion);
+          // Kaydırma ile hızlı kriz bildirimi bir kullanıcı seçimi içermez —
+          // "Yüksek" varsayılan ciddiyet, bu yolun bilinçli acil-durum niteliğini yansıtır.
+          await blockerService.addBlocker(taskId, 'Hızlı kaydırma ile kriz bildirimi.', user.uid, oldTask?.status ?? 'IN_PROGRESS', oldTask?.lockVersion, 'High');
         } else {
           await taskService.updateTaskStatus(taskId, newStatus, oldTask?.status, user.uid, evidence, evidenceType, oldTask?.lockVersion);
         }
@@ -226,7 +228,7 @@ export function useAppHandlers({
   }, [user, tasks, blockers, selectedTaskId, setSelectedTaskId, toast, onError]);
 
   // ─── addBlocker ──────────────────────────────────────────────────────────
-  const addBlocker = useCallback(async (taskId: string, reason: string) => {
+  const addBlocker = useCallback(async (taskId: string, reason: string, severity: TaskPriority = 'Medium') => {
     if (!user) return;
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
@@ -238,7 +240,7 @@ export function useAppHandlers({
       // sync sırasında blockerService.addBlocker ile aynı transaction'da uygulanır.
       offlineQueue.enqueue(
         'blockers', 'create',
-        { id: bid, taskId, reason, isResolved: false, createdAt: now },
+        { id: bid, taskId, reason, severity, isResolved: false, createdAt: now },
         undefined, undefined,
         { taskId, newStatus: 'BLOCKED', userId: user.uid, expectedVersion: task.lockVersion }
       );
@@ -247,7 +249,7 @@ export function useAppHandlers({
     }
 
     try {
-      await blockerService.addBlocker(taskId, reason, user.uid, task.status, task.lockVersion);
+      await blockerService.addBlocker(taskId, reason, user.uid, task.status, task.lockVersion, severity);
     } catch (err) {
       onError(err, 'create', 'blockers');
     }

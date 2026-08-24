@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { Reports } from './Reports';
 import type { Task, User, TaskBlocker } from '../types';
 
@@ -13,29 +13,52 @@ const task: Task = {
 const users: User[] = [admin];
 const blockers: TaskBlocker[] = [];
 
-const getDateFromInput = () => screen.getByLabelText('Rapor başlangıç tarihi') as HTMLInputElement;
+const getDateFromButton = () => screen.getByRole('button', { name: 'Rapor başlangıç tarihi' }) as HTMLButtonElement;
 
-describe('Reports — tarih aralığı filtresi', () => {
-  it('geçersiz/boş tarih değeri girilince çökmez ve son geçerli değeri korur', () => {
+describe('Reports — tarih aralığı filtresi (özel takvim)', () => {
+  it('takvim yalnızca takvim ikonuna/butona tıklanınca açılır, kapalıyken günler görünmez', () => {
     render(<Reports tasks={[task]} users={users} blockers={blockers} />);
-    const input = getDateFromInput();
-    const validValue = input.value;
-    expect(validValue).not.toBe('');
+    expect(screen.queryByRole('dialog', { name: 'Rapor başlangıç tarihi' })).not.toBeInTheDocument();
 
-    // Native <input type="date"> yazım sırasında geçici olarak boş string
-    // raporlayabilir (bkz. kod denetimi) — bileşen çökmemeli.
-    expect(() => fireEvent.change(input, { target: { value: '' } })).not.toThrow();
+    fireEvent.click(getDateFromButton());
 
-    // Geçersiz değer state'e yazılmamalı — input hâlâ son geçerli değeri göstermeli.
-    expect(getDateFromInput().value).toBe(validValue);
+    expect(screen.getByRole('dialog', { name: 'Rapor başlangıç tarihi' })).toBeInTheDocument();
   });
 
-  it('geçerli bir tarih değeri normal şekilde kabul edilir', () => {
+  it('takvimden bir gün seçilince buton etiketi güncellenir ve takvim kapanır', () => {
     render(<Reports tasks={[task]} users={users} blockers={blockers} />);
-    const input = getDateFromInput();
+    fireEvent.click(getDateFromButton());
+    const dialog = screen.getByRole('dialog', { name: 'Rapor başlangıç tarihi' });
 
-    fireEvent.change(input, { target: { value: '2026-01-01' } });
+    // Ayın 1'i her zaman ızgarada bulunur (önceki/aynı ay içinde) — tıklanabilir gün butonlarından ilkini seç.
+    const dayButtons = within(dialog).getAllByRole('button').filter(b => /^\d+$/.test(b.textContent ?? ''));
+    fireEvent.click(dayButtons[0]!);
 
-    expect(getDateFromInput().value).toBe('2026-01-01');
+    // Kapanış AnimatePresence exit animasyonu ile gecikmeli olabilir — tetikleyici
+    // butonun aria-expanded durumu, animasyon zamanlamasından bağımsız otorite kaynağıdır.
+    expect(getDateFromButton()).toHaveAttribute('aria-expanded', 'false');
+    expect(getDateFromButton().textContent).not.toBe('—');
+  });
+
+  it('ay gezinme okları takvimi kapatmaz, ay başlığını değiştirir', () => {
+    render(<Reports tasks={[task]} users={users} blockers={blockers} />);
+    fireEvent.click(getDateFromButton());
+    const dialog = screen.getByRole('dialog', { name: 'Rapor başlangıç tarihi' });
+    const monthLabel = within(dialog).getByText(/\d{4}/).textContent;
+
+    fireEvent.click(within(dialog).getByLabelText('Sonraki ay'));
+
+    expect(within(dialog).getByText(/\d{4}/).textContent).not.toBe(monthLabel);
+    expect(screen.getByRole('dialog', { name: 'Rapor başlangıç tarihi' })).toBeInTheDocument();
+  });
+
+  it('Escape tuşu açık takvimi kapatır', () => {
+    render(<Reports tasks={[task]} users={users} blockers={blockers} />);
+    fireEvent.click(getDateFromButton());
+    expect(screen.getByRole('dialog', { name: 'Rapor başlangıç tarihi' })).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(getDateFromButton()).toHaveAttribute('aria-expanded', 'false');
   });
 });

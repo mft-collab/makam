@@ -46,6 +46,46 @@ describe('blockerService', () => {
       expect(blockerSetCall?.[1]).toMatchObject({ taskId: 'task-1', reason: 'Sebep', isResolved: false });
     });
 
+    it('severity belirtilmezse Medium varsayılır', async () => {
+      const transactionSet = vi.fn();
+      vi.mocked(firebase.runTransaction).mockImplementationOnce(async (_db: any, fn: any) => {
+        const transaction = {
+          get: vi.fn().mockResolvedValueOnce({
+            exists: () => true,
+            data: () => ({ status: 'IN_PROGRESS', lockVersion: 2, totalPausedTime: 0 }),
+          }),
+          update: vi.fn(),
+          set: transactionSet,
+        };
+        return fn(transaction);
+      });
+
+      await blockerService.addBlocker('task-1', 'Sebep', 'user-1', 'IN_PROGRESS', 2);
+
+      const blockerSetCall = transactionSet.mock.calls.find(([, data]: any) => data?.reason !== undefined);
+      expect(blockerSetCall?.[1]).toMatchObject({ severity: 'Medium' });
+    });
+
+    it('severity açıkça verilirse doküman değeri onu yansıtır', async () => {
+      const transactionSet = vi.fn();
+      vi.mocked(firebase.runTransaction).mockImplementationOnce(async (_db: any, fn: any) => {
+        const transaction = {
+          get: vi.fn().mockResolvedValueOnce({
+            exists: () => true,
+            data: () => ({ status: 'IN_PROGRESS', lockVersion: 2, totalPausedTime: 0 }),
+          }),
+          update: vi.fn(),
+          set: transactionSet,
+        };
+        return fn(transaction);
+      });
+
+      await blockerService.addBlocker('task-1', 'Sebep', 'user-1', 'IN_PROGRESS', 2, 'Urgent');
+
+      const blockerSetCall = transactionSet.mock.calls.find(([, data]: any) => data?.reason !== undefined);
+      expect(blockerSetCall?.[1]).toMatchObject({ severity: 'Urgent' });
+    });
+
     it('görev versiyonu uyuşmuyorsa transaction tamamı reddedilir, engel dokümanı yazılmaz', async () => {
       const transactionSet = vi.fn();
 

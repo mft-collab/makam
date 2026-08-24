@@ -5,7 +5,7 @@ import {
   Edit2, Trash2, ArrowRight, MessageSquare, History, ListChecks, Send, Plus,
   GitCommit, Loader2, Hourglass, Clock, Building2, Tag, Flag, ExternalLink, Layers
 } from 'lucide-react';
-import { Task, User as UserType, TaskBlocker, AuditLog, TaskStatus } from '../types';
+import { Task, User as UserType, TaskBlocker, AuditLog, TaskStatus, TaskPriority } from '../types';
 import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_BADGE_VARIANT, STATUS_BADGE_VARIANT } from '../constants';
 import { format, formatDistanceToNow } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -36,7 +36,7 @@ export const TaskDetails = ({
   users: UserType[];
   currentUser: UserType | null;
   blockers: TaskBlocker[];
-  onAddBlocker: (reason: string) => void;
+  onAddBlocker: (reason: string, severity: TaskPriority) => void;
   onResolveBlocker: (blockerId: string) => void;
   onAddSubTask: (parentId: string, title: string) => void;
   onAddComment: (text: string) => void;
@@ -52,6 +52,7 @@ export const TaskDetails = ({
   const [activeTab, setActiveTab] = useState<'info' | 'checklist' | 'blockers' | 'subtasks' | 'history' | 'comments'>('info');
   const [newComment, setNewComment] = useState('');
   const [blockerReason, setBlockerReason] = useState('');
+  const [blockerSeverity, setBlockerSeverity] = useState<TaskPriority>('Medium');
   const [newChecklistItem, setNewChecklistItem] = useState('');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
@@ -214,8 +215,9 @@ export const TaskDetails = ({
     if (!blockerReason.trim() || isSubmittingBlocker) return;
     setIsSubmittingBlocker(true);
     try {
-      await Promise.resolve(onAddBlocker(blockerReason));
+      await Promise.resolve(onAddBlocker(blockerReason, blockerSeverity));
       setBlockerReason('');
+      setBlockerSeverity('Medium');
     } finally {
       setIsSubmittingBlocker(false);
     }
@@ -657,11 +659,16 @@ export const TaskDetails = ({
                     )}>
                       <div className="flex items-center gap-4">
                         <AlertTriangle className={cn("w-5 h-5", blocker.isResolved ? "text-text-muted" : "text-status-danger")} />
-                        <div className="flex flex-col">
+                        <div className="flex flex-col gap-1">
                           <span className="text-[14px] font-medium text-text-heading">{blocker.reason}</span>
-                          <span className="text-[9px] text-text-muted uppercase tracking-widest">
-                            {format(blocker.createdAt, 'd MMM HH:mm', { locale: tr })}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={PRIORITY_BADGE_VARIANT[blocker.severity ?? 'Medium']}>
+                              {PRIORITY_LABELS[blocker.severity ?? 'Medium']}
+                            </Badge>
+                            <span className="text-[9px] text-text-muted uppercase tracking-widest">
+                              {format(blocker.createdAt, 'd MMM HH:mm', { locale: tr })}
+                            </span>
+                          </div>
                         </div>
                       </div>
                       {!blocker.isResolved && (isAdmin || isManager) && (
@@ -691,6 +698,18 @@ export const TaskDetails = ({
                   disabled={isSubmittingBlocker}
                   className="flex-1 bg-makam-glass border border-makam-border/10 rounded-full px-5 py-3 text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger/10 disabled:opacity-60"
                 />
+                <label htmlFor="blocker-severity-select" className="sr-only">Engel ciddiyeti</label>
+                <select
+                  id="blocker-severity-select"
+                  value={blockerSeverity}
+                  onChange={(e) => setBlockerSeverity(e.target.value as TaskPriority)}
+                  disabled={isSubmittingBlocker}
+                  className="bg-makam-glass border border-makam-border/10 rounded-full px-4 py-3 text-[12px] font-medium text-text-heading focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger/10 disabled:opacity-60"
+                >
+                  {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
                 <button
                   onClick={handleAddBlocker}
                   disabled={!blockerReason.trim() || isSubmittingBlocker}
