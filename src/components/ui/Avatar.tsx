@@ -24,6 +24,12 @@ const SIZE_MAP = {
 export const Avatar = ({ name, photoURL, size = 'md', className, ring = false }: AvatarProps) => {
   const { container, text } = SIZE_MAP[size];
   const initial = name?.charAt(0)?.toUpperCase() ?? '?';
+  // photoURL değiştiğinde (ör. farklı bir kullanıcıya ait Avatar yeniden
+  // kullanıldığında) hata durumu sıfırlanmalı — aksi halde önceki URL'nin
+  // hatası yeni, geçerli bir URL için de fallback göstermeye devam ederdi.
+  const [imgError, setImgError] = React.useState(false);
+  React.useEffect(() => { setImgError(false); }, [photoURL]);
+  const showPhoto = Boolean(photoURL) && !imgError;
 
   return (
     <div
@@ -35,14 +41,17 @@ export const Avatar = ({ name, photoURL, size = 'md', className, ring = false }:
         className
       )}
     >
-      {photoURL ? (
+      {showPhoto ? (
         <img
-          src={photoURL}
+          src={photoURL!}
           alt={name}
           className="w-full h-full object-cover"
-          onError={(e) => {
-            // Fotoğraf yüklenemezse baş harfe dön
-            (e.target as HTMLImageElement).style.display = 'none';
+          onError={() => {
+            // Fotoğraf yüklenemezse (404/ağ hatası) baş harfe dön — eskiden
+            // yalnızca <img>'i gizliyordu, dokümante edilen "yoksa ilk harf"
+            // fallback'i hiç render edilmiyordu (bkz. kod denetimi):
+            // kullanıcı boş bir daire görüyordu.
+            setImgError(true);
           }}
         />
       ) : (

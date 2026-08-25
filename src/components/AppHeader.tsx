@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AlertCircle, Sun, Moon, Monitor, Building, BookOpen } from 'lucide-react';
 import { Logo } from './Logo';
+import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import { Avatar } from './ui/Avatar';
 import { LocalTime } from './LocalTime';
 import { Badge } from './ui/Badge';
@@ -45,6 +46,7 @@ export function AppHeader({
   // gereksiz yeniden render'a yol açıyordu.
   const theme = useUIStore(s => s.theme);
   const setTheme = useUIStore(s => s.setTheme);
+  const resolvedTheme = useResolvedTheme();
   const isOnline = !isOffline;
   const queueCount = queueLength;
   const [isGuideOpen, setIsGuideOpen] = useState(false);
@@ -174,7 +176,12 @@ export function AppHeader({
 
       {/* Mobile Header Refined */}
       <header className="lg:hidden h-16 bg-makam-glass border-b border-makam-border/5 flex items-center justify-between px-6 sticky top-0 z-40 backdrop-blur-3xl">
-        <Logo size="sm" variant="light" />
+        {/* Sidebar/Login/App.tsx'teki gibi çözümlenmiş temayı izler — eskiden
+            variant sabit "light" idi, koyu temada (mobil başlık zemini de
+            koyu olduğundan) koyu-üstüne-koyu render olup görünürlüğü ciddi
+            şekilde düşürebiliyordu (bkz. kod denetimi, Sidebar.tsx'teki aynı
+            hatanın burada tekrarı). */}
+        <Logo size="sm" variant={resolvedTheme} />
         
         <div className="flex items-center gap-3">
           {/* Mobile Network Indicator */}

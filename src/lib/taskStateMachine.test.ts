@@ -7,7 +7,7 @@ describe('isValidTaskTransition', () => {
     expect(isValidTaskTransition('COMPLETED', 'COMPLETED')).toBe(true);
   });
 
-  it('CANCELLED\'a her durumdan geçiş izinlidir', () => {
+  it('CANCELLED\'a aktif durumlardan geçiş izinlidir', () => {
     expect(isValidTaskTransition('ASSIGNED', 'CANCELLED')).toBe(true);
     expect(isValidTaskTransition('BLOCKED', 'CANCELLED')).toBe(true);
     expect(isValidTaskTransition('CRISIS', 'CANCELLED')).toBe(true);
@@ -42,7 +42,12 @@ describe('isValidTaskTransition', () => {
   });
 
   it('COMPLETED/CANCELLED terminal durumlardır (kendisi hariç hiçbir yere geçemez)', () => {
-    expect(isValidTaskTransition('COMPLETED', 'CANCELLED')).toBe(true); // CANCELLED istisnası
+    // Eskiden burada evrensel bir "her durumdan CANCELLED'a izin ver" kısayolu
+    // vardı; bu, COMPLETED bir görevin bile CANCELLED'a çekilmesine izin
+    // veriyordu (bkz. kod denetimi). Artık CANCELLED yalnızca aktif durumların
+    // kendi listesinde yer alıyor, terminal durumlardan hiçbir yere geçiş yok.
+    expect(isValidTaskTransition('COMPLETED', 'CANCELLED')).toBe(false);
+    expect(isValidTaskTransition('CANCELLED', 'COMPLETED')).toBe(false);
     expect(isValidTaskTransition('COMPLETED', 'IN_PROGRESS')).toBe(false);
     expect(isValidTaskTransition('CANCELLED', 'IN_PROGRESS')).toBe(false);
   });

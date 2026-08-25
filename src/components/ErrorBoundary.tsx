@@ -1,6 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { RefreshCw, Home, ShieldAlert } from 'lucide-react';
 import { Logo } from './Logo';
+import { Button } from './ui/Button';
 import { logError } from '../services/errorLoggingService';
 
 interface Props {
@@ -77,20 +78,21 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
 
             <div className="flex flex-col gap-4 w-full pt-8 border-t border-makam-border/5">
-              <button 
-                onClick={this.handleReset} 
-                className="makam-button-primary w-full h-16 tracking-[0.16em]"
+              <Button
+                onClick={this.handleReset}
+                className="w-full h-16 tracking-[0.16em]"
               >
                 <RefreshCw className="w-5 h-5 mr-3 stroke-[1.5]" />
                 DİZGEYİ YENİLE
-              </button>
-              <button 
-                onClick={() => window.location.href = '/'} 
-                className="makam-button-secondary w-full h-16 tracking-[0.16em]"
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => window.location.href = '/'}
+                className="w-full h-16 tracking-[0.16em]"
               >
                 <Home className="w-5 h-5 mr-3 stroke-[1.5]" />
                 ANA SAYFAYA DÖN
-              </button>
+              </Button>
             </div>
           </div>
         </div>

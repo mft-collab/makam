@@ -66,7 +66,12 @@ async function deleteOldDocs(
 export const cleanupOldNotifications = functions
   .region('europe-west1')
   .pubsub
-  .schedule('0 2 * * 0')           // Her Pazar 02:00 UTC (05:00 TR)
+  .schedule('0 2 * * 0')           // Her Pazar 02:00 — .timeZone() set edildiğinde cron
+                                    // string'i DOĞRUDAN o saat diliminde yorumlanır (bkz.
+                                    // scheduledAudit.ts'teki aynı açıklama), yani bu 02:00
+                                    // İSTANBUL saatidir, UTC değil (eskiden yorum "02:00 UTC
+                                    // (05:00 TR)" diyordu — 3 saatlik yanıltıcı dokümantasyon
+                                    // hatası, bkz. kod denetimi).
   .timeZone('Europe/Istanbul')
   .onRun(async (_context: functions.EventContext) => {
     console.log(`[Cleanup] ${NOTIFICATION_TTL_DAYS} günden eski okunmuş bildirimler siliniyor...`);

@@ -9,28 +9,48 @@ const baseTask: Task = {
 } as Task;
 
 const admin: User = { uid: 'admin-1', fullName: 'Yönetici', email: 'admin@makam.com', role: 'Admin' };
+// baseTask.assigneeId === 'assignee-1' — bu kullanıcı görevin gerçek sahibi.
+const assigneeStaff: User = { uid: 'assignee-1', fullName: 'Sorumlu Memur', email: 'assignee@makam.com', role: 'Staff' };
+// Görevin sahibi OLMAYAN bir Staff — firestore.rules'ta bu kullanıcı görevi
+// yazamaz (yalnızca Admin/aynı-departman Manager/assignee yazabilir).
 const staff: User = { uid: 'staff-1', fullName: 'Memur', email: 'staff@makam.com', role: 'Staff' };
 const manager: User = { uid: 'mgr-1', fullName: 'Müdür', email: 'mgr@makam.com', role: 'Manager' };
 
 describe('getPrimaryAction', () => {
-  it('ASSIGNED durumunda role bakılmaksızın SÜRECİ BAŞLAT döner', () => {
-    const action = getPrimaryAction({ ...baseTask, status: 'ASSIGNED' }, staff);
+  it('ASSIGNED + görevin sahibi olan Staff → SÜRECİ BAŞLAT döner', () => {
+    const action = getPrimaryAction({ ...baseTask, status: 'ASSIGNED' }, assigneeStaff);
     expect(action).toMatchObject({ label: 'SÜRECİ BAŞLAT', next: 'IN_PROGRESS', collectsEvidence: false, needsConfirm: false });
   });
 
-  it('PENDING_DELEGATION durumunda role bakılmaksızın DEVRİ KABUL ET VE BAŞLAT döner', () => {
+  it('ASSIGNED + görevin sahibi OLMAYAN bir Staff → null (rules bu yazmayı reddeder)', () => {
+    expect(getPrimaryAction({ ...baseTask, status: 'ASSIGNED' }, staff)).toBeNull();
+  });
+
+  it('PENDING_DELEGATION + Manager (görevin devredildiği yeni sorumlu) → DEVRİ KABUL ET VE BAŞLAT döner', () => {
     const action = getPrimaryAction({ ...baseTask, status: 'PENDING_DELEGATION' }, manager);
     expect(action).toMatchObject({ label: 'DEVRİ KABUL ET VE BAŞLAT', next: 'IN_PROGRESS' });
   });
 
-  it('IN_PROGRESS + Admin-olmayan → TAMAMLA VE ONAYA SUN (AWAITING_APPROVAL, onay gerektirmez)', () => {
-    const action = getPrimaryAction({ ...baseTask, status: 'IN_PROGRESS' }, staff);
+  it('IN_PROGRESS + görevin sahibi olan Staff (Admin değil) → TAMAMLA VE ONAYA SUN (AWAITING_APPROVAL, onay gerektirmez)', () => {
+    const action = getPrimaryAction({ ...baseTask, status: 'IN_PROGRESS' }, assigneeStaff);
     expect(action).toMatchObject({ label: 'TAMAMLA VE ONAYA SUN', next: 'AWAITING_APPROVAL', collectsEvidence: true, needsConfirm: false });
   });
 
-  it('IN_PROGRESS + Manager (Admin değil) → TAMAMLA VE ONAYA SUN', () => {
+  it('IN_PROGRESS + görevin sahibi OLMAYAN bir Staff → null', () => {
+    expect(getPrimaryAction({ ...baseTask, status: 'IN_PROGRESS' }, staff)).toBeNull();
+  });
+
+  it('IN_PROGRESS + Manager (Admin değil, görevin departmanı yok → serbest) → TAMAMLA VE ONAYA SUN', () => {
     const action = getPrimaryAction({ ...baseTask, status: 'IN_PROGRESS' }, manager);
     expect(action?.label).toBe('TAMAMLA VE ONAYA SUN');
+  });
+
+  it('IN_PROGRESS + Manager, görev başka departmana ait → null', () => {
+    const action = getPrimaryAction(
+      { ...baseTask, status: 'IN_PROGRESS', departmentId: 'muhasebe' },
+      { ...manager, departmentId: 'insan-kaynaklari' }
+    );
+    expect(action).toBeNull();
   });
 
   it('IN_PROGRESS + Admin → KESİN TAMAMLA (COMPLETED, onay atlanır)', () => {
@@ -38,8 +58,8 @@ describe('getPrimaryAction', () => {
     expect(action).toMatchObject({ label: 'KESİN TAMAMLA', next: 'COMPLETED', collectsEvidence: true, needsConfirm: true });
   });
 
-  it('CRISIS durumu IN_PROGRESS ile aynı aksiyon setini kullanır (Admin-olmayan)', () => {
-    const action = getPrimaryAction({ ...baseTask, status: 'CRISIS' }, staff);
+  it('CRISIS durumu IN_PROGRESS ile aynı aksiyon setini kullanır (görevin sahibi, Admin-olmayan)', () => {
+    const action = getPrimaryAction({ ...baseTask, status: 'CRISIS' }, assigneeStaff);
     expect(action?.label).toBe('TAMAMLA VE ONAYA SUN');
   });
 
@@ -54,6 +74,7 @@ describe('getPrimaryAction', () => {
   });
 
   it('AWAITING_APPROVAL + Admin-olmayan → null (onay bekleyen görev için aksiyon yok)', () => {
+    expect(getPrimaryAction({ ...baseTask, status: 'AWAITING_APPROVAL' }, assigneeStaff)).toBeNull();
     expect(getPrimaryAction({ ...baseTask, status: 'AWAITING_APPROVAL' }, staff)).toBeNull();
     expect(getPrimaryAction({ ...baseTask, status: 'AWAITING_APPROVAL' }, manager)).toBeNull();
   });
@@ -70,9 +91,8 @@ describe('getPrimaryAction', () => {
     expect(getPrimaryAction({ ...baseTask, status: 'BLOCKED' }, admin)).toBeNull();
   });
 
-  it('currentUser null olduğunda Admin-özel dallar tetiklenmez (Admin-olmayan davranışı uygulanır)', () => {
-    const action = getPrimaryAction({ ...baseTask, status: 'IN_PROGRESS' }, null);
-    expect(action?.label).toBe('TAMAMLA VE ONAYA SUN');
+  it('currentUser null olduğunda hiçbir aksiyon dönmez (anonim/oturumsuz kullanıcı yazamaz)', () => {
+    expect(getPrimaryAction({ ...baseTask, status: 'IN_PROGRESS' }, null)).toBeNull();
   });
 });
 

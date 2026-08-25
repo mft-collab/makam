@@ -28,21 +28,31 @@ export const ExecutiveToast: React.FC<ExecutiveToastProps> = ({ toast, onClose, 
   };
 
   useEffect(() => {
+    // Her toast'ta yeni bir AudioContext açılıp hiç kapatılmıyordu — art arda
+    // gelen bildirimlerde (ki bu ekranın asıl senaryosu: kriz bildirimleri)
+    // tarayıcının sekme başına eşzamanlı AudioContext sınırına (Chrome'da
+    // tarihsel olarak ~6) çarpılıp yenilerinin sessizce başlayamaması veya
+    // bellek sızıntısı riski vardı (bkz. kod denetimi). Ses bittiğinde
+    // (onended) VE toast beklenenden erken kapatılırsa (cleanup) context
+    // kapatılır — ikisi de tetiklenirse close() ikinci çağrıda hata
+    // fırlatabilir, bu yüzden sessizce yutulur.
+    let audioCtx: AudioContext | null = null;
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const oscillator = audioCtx.createOscillator();
       const gainNode = audioCtx.createGain();
-      
+
       oscillator.type = 'sine';
       oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
       gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
       gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
-      
+
       oscillator.connect(gainNode);
       gainNode.connect(audioCtx.destination);
-      
+
       oscillator.start();
       oscillator.stop(audioCtx.currentTime + 0.4);
+      oscillator.onended = () => { audioCtx?.close().catch(() => {}); };
     } catch {
       console.warn('Audio feedback blocked');
     }
@@ -51,7 +61,10 @@ export const ExecutiveToast: React.FC<ExecutiveToastProps> = ({ toast, onClose, 
       onClose(toast.id);
     }, 6000);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      audioCtx?.close().catch(() => {});
+    };
   }, [toast.id, onClose]);
 
   const icons = {

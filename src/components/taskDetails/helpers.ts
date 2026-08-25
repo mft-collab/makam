@@ -16,7 +16,26 @@ export interface PrimaryAction {
   hint: string;
 }
 
+/**
+ * Bu kullanıcı bu görev üzerinde bir durum-geçiş aksiyonu tetikleyebilir mi?
+ * firestore.rules'taki tasks/update yazma yetkisiyle (Admin / aynı departmandaki
+ * Manager / görevin assigneeId'si) TUTARLI bir istemci-taraflı ön kontrol —
+ * gerçek yetki sınırı yine rules'ta. Bu kontrol olmadan getPrimaryAction,
+ * kendisine atanmamış bir görevi salt görüntüleyen (departman-geneli okuma
+ * izniyle) bir kullanıcıya, sunucunun kesin reddedeceği bir birincil aksiyon
+ * butonu gösteriyordu (bkz. kod denetimi).
+ */
+const canActOnTask = (task: Task, currentUser: UserType | null): boolean => {
+  if (!currentUser) return false;
+  if (currentUser.role === 'Admin') return true;
+  if (currentUser.role === 'Manager') {
+    return !task.departmentId || task.departmentId === currentUser.departmentId;
+  }
+  return currentUser.uid === task.assigneeId;
+};
+
 export const getPrimaryAction = (task: Task, currentUser: UserType | null): PrimaryAction | null => {
+  if (!canActOnTask(task, currentUser)) return null;
   const isAdmin = currentUser?.role === 'Admin';
   if (task.status === 'ASSIGNED') {
     return { label: 'SÜRECİ BAŞLAT', next: 'IN_PROGRESS', variant: 'gold', collectsEvidence: false, needsConfirm: false, hint: 'Talimatı icraya alır; mühlet sayacı bu andan itibaren işlemeye başlar.' };

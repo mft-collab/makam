@@ -36,26 +36,33 @@ export const Card = ({ title, description, footer, children, className, spotligh
       transparent 80%
     )
   `;
+  // Hook çağrıları KOŞULSUZ kalmalı (Rules of Hooks) — yalnızca sonuçlarının
+  // kullanımı `spotlight` prop'una göre koşulludur. Eskiden `spotlight` prop'u
+  // yalnızca hiçbir yerde tanımlı olmayan (dolayısıyla hiçbir görsel etkisi
+  // olmayan) bir CSS sınıfı ekliyordu; asıl fare-takip efekti (bu iki motion
+  // template + aşağıdaki glow katmanı) `spotlight` değerinden TAMAMEN
+  // bağımsız olarak her zaman aktifti — `spotlight={false}` geçen bir çağıran
+  // hiçbir şey kazanmıyordu (bkz. kod denetimi).
+  const mouseXPx = useMotionTemplate`${mouseX}px`;
+  const mouseYPx = useMotionTemplate`${mouseY}px`;
 
   return (
-    <motion.div 
+    <motion.div
       layout
-      className={cn(
-        'makam-card flex flex-col gap-5 group/card', 
-        spotlight && 'makam-card-spotlight',
-        className
-      )} 
-      onMouseMove={handleMouseMove}
-      style={{
-        '--mouse-x': useMotionTemplate`${mouseX}px`,
-        '--mouse-y': useMotionTemplate`${mouseY}px`,
-      } as CardMotionStyle}
+      className={cn('makam-card flex flex-col gap-5 group/card', className)}
+      onMouseMove={spotlight ? handleMouseMove : undefined}
+      style={spotlight ? ({
+        '--mouse-x': mouseXPx,
+        '--mouse-y': mouseYPx,
+      } as CardMotionStyle) : undefined}
       {...restProps}
     >
-      <motion.div
-        className="pointer-events-none absolute -inset-px rounded-2xl opacity-0 transition duration-300 group-hover/card:opacity-100"
-        style={{ background }}
-      />
+      {spotlight && (
+        <motion.div
+          className="pointer-events-none absolute -inset-px rounded-2xl opacity-0 transition duration-300 group-hover/card:opacity-100"
+          style={{ background }}
+        />
+      )}
       {(title || description) && (
         <div className="flex flex-col gap-1 relative z-10">
           {title && <h3 className="text-[17px] font-semibold text-text-heading tracking-tight">{title}</h3>}

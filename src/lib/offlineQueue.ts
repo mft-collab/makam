@@ -21,6 +21,37 @@ import type { Task, TaskStatus, User } from '../types';
 // sonsuza dek tutmak yerine mutasyon düşürülür ve kullanıcı bilgilendirilir.
 const NON_RETRYABLE_CODES = new Set(['permission-denied', 'invalid-argument']);
 
+// taskStateMachine/taskService'in fırlattığı, DETERMİNİSTİK iş kuralı
+// hataları — bir ağ hatası değildir, sync() kaç kez çalışırsa çalışsın
+// sonuç asla değişmez. Genel/bilinmeyen `Error` mesajları (ör. geçici bir
+// 'Network error') kasıtlı olarak bu listeye dahil EDİLMEZ ve retry'a devam
+// eder — yalnızca kod tabanının kendi iş-kuralı hata imzaları tanınır.
+const NON_RETRYABLE_MESSAGE_PATTERNS = [
+  /^INVALID_TRANSITION:/,
+  /Admin rolündeki kullanıcı irtibatlı/,
+  /yalnızca Memur/,
+  /yalnızca Müdür/,
+];
+
+/**
+ * Bir senkron hatası yeniden denenirse sonucun değişip değişmeyeceğine karar
+ * verir. `FirebaseError` (ağ/sunucu kaynaklı) ise yalnızca yukarıdaki bilinen
+ * kalıcı kodlar non-retryable sayılır. Diğer (`FirebaseError` olmayan)
+ * hatalarda mesaj, yukarıdaki bilinen iş-kuralı imzalarıyla eşleşiyorsa
+ * (ör. `transitionTaskInTransaction`'ın fırlattığı `'INVALID_TRANSITION: ...'`)
+ * yine non-retryable sayılır. Eskiden INVALID_TRANSITION `NON_RETRYABLE_CODES`
+ * kapsamında olmadığından (FirebaseError değil) sonsuza dek `remaining`'e
+ * itilip her `sync()` çağrısında sessizce yeniden deneniyordu — kullanıcıya
+ * hiç bildirilmeyen bir "zombi mutasyon" haline geliyordu (bkz. kod denetimi).
+ */
+function isNonRetryableError(err: unknown): boolean {
+  if (err instanceof FirebaseError) {
+    return NON_RETRYABLE_CODES.has(err.code);
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+  return NON_RETRYABLE_MESSAGE_PATTERNS.some(p => p.test(msg));
+}
+
 export interface OfflineMutation {
   id: string;
   collectionName: string;
@@ -220,7 +251,12 @@ export const offlineQueue = {
     }
 
     const mutation: OfflineMutation = {
-      id: Math.random().toString(36).substring(2, 9),
+      // crypto.randomUUID() — Math.random() tabanlı önceki ID kriptografik
+      // olmayan, düşük-entropili bir üreteçti (bkz. kod denetimi). Bu ID
+      // yalnızca yerel kuyruk içi eşleştirme için kullanıldığından pratik
+      // risk düşüktü, ama proje genelinde (TaskDetails checklist) zaten
+      // kullanılan standart deseple tutarlı hale getirildi.
+      id: crypto.randomUUID(),
       collectionName,
       docId,
       action,
@@ -453,7 +489,7 @@ export const offlineQueue = {
             logger.debug(`[Offline Queue] Successfully synced mutation ${mutation.id}`);
           }
         } catch (err) {
-          const isNonRetryable = err instanceof FirebaseError && NON_RETRYABLE_CODES.has(err.code);
+          const isNonRetryable = isNonRetryableError(err);
           if (isNonRetryable) {
             logger.error(`[Offline Queue] Mutation ${mutation.id} kalıcı olarak reddedildi (${(err as FirebaseError).code}), kuyruktan düşürülüyor:`, err);
             useUIStore.getState().addToast({

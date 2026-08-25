@@ -46,20 +46,6 @@ describe('useUIStore', () => {
     });
   });
 
-  describe('offline durumu', () => {
-    it('setOfflineStatus isOffline ve offlineQueueLength\'i günceller', () => {
-      useUIStore.getState().setOfflineStatus(true, 3);
-      expect(useUIStore.getState().isOffline).toBe(true);
-      expect(useUIStore.getState().offlineQueueLength).toBe(3);
-    });
-
-    it('queueLength verilmezse 0\'a sıfırlanır', () => {
-      useUIStore.getState().setOfflineStatus(true, 5);
-      useUIStore.getState().setOfflineStatus(false);
-      expect(useUIStore.getState().offlineQueueLength).toBe(0);
-    });
-  });
-
   describe('App seviyesi modal aksiyonları', () => {
     it('closeAllModals modal state\'ini ve bağlı alanları sıfırlar', () => {
       useUIStore.setState({

@@ -34,7 +34,7 @@ describe('blockerService', () => {
         return fn(transaction);
       });
 
-      const blockerId = await blockerService.addBlocker('task-1', 'Sebep', 'user-1', 'IN_PROGRESS', 2);
+      const blockerId = await blockerService.addBlocker('task-1', 'Sebep', 'user-1', 2);
 
       expect(blockerId).toBeTruthy();
       // Okuma, herhangi bir yazmadan önce gerçekleşmeli (Firestore transaction kuralı)
@@ -60,7 +60,7 @@ describe('blockerService', () => {
         return fn(transaction);
       });
 
-      await blockerService.addBlocker('task-1', 'Sebep', 'user-1', 'IN_PROGRESS', 2);
+      await blockerService.addBlocker('task-1', 'Sebep', 'user-1', 2);
 
       const blockerSetCall = transactionSet.mock.calls.find(([, data]: any) => data?.reason !== undefined);
       expect(blockerSetCall?.[1]).toMatchObject({ severity: 'Medium' });
@@ -80,7 +80,7 @@ describe('blockerService', () => {
         return fn(transaction);
       });
 
-      await blockerService.addBlocker('task-1', 'Sebep', 'user-1', 'IN_PROGRESS', 2, 'Urgent');
+      await blockerService.addBlocker('task-1', 'Sebep', 'user-1', 2, 'Urgent');
 
       const blockerSetCall = transactionSet.mock.calls.find(([, data]: any) => data?.reason !== undefined);
       expect(blockerSetCall?.[1]).toMatchObject({ severity: 'Urgent' });
@@ -102,7 +102,7 @@ describe('blockerService', () => {
       });
 
       await expect(
-        blockerService.addBlocker('task-1', 'Sebep', 'user-1', 'IN_PROGRESS', 2)
+        blockerService.addBlocker('task-1', 'Sebep', 'user-1', 2)
       ).rejects.toThrow(/VERSION_MISMATCH/);
 
       // Transaction hata fırlattığı için blocker seti hiçbir zaman commit edilmez
@@ -136,33 +136,52 @@ describe('blockerService', () => {
       expect(blockerUpdateCall).toBeTruthy();
     });
 
-    it('başka aktif engel varsa sadece bu engel çözülür, görev durumu değişmez (transaction kullanılmaz)', async () => {
-      vi.mocked(firebase.updateDoc).mockResolvedValueOnce(undefined as any);
+    it('başka aktif engel varsa sadece bu engel çözülür, görev durumu değişmez (transaction kullanılmaz) — audit log AYNI batch\'te yazılır', async () => {
+      // Görev durumu değişmediğinden transitionTaskInTransaction'ın otomatik
+      // audit yazımı devreye girmiyor — bu yüzden burada kendi audit kaydımız
+      // yazılıyor olmalı (bkz. kod denetimi: eskiden bu dal hiç log yazmıyordu).
+      const set = vi.fn();
+      const update = vi.fn();
+      const commit = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(firebase.writeBatch).mockReturnValue({ set, update, delete: vi.fn(), commit } as any);
 
       await blockerService.resolveBlocker('blocker-1', 'task-1', 2, 'user-1', 4);
 
-      expect(firebase.updateDoc).toHaveBeenCalledOnce();
       expect(firebase.runTransaction).not.toHaveBeenCalled();
+      expect(update).toHaveBeenCalledWith(expect.anything(), { isResolved: true, resolvedAt: expect.any(Number) });
+      const auditCall = set.mock.calls.find(([, data]: any) => data?.changedBy !== undefined);
+      expect(auditCall?.[1]).toMatchObject({ taskId: 'task-1', changedBy: 'user-1' });
+      expect(commit).toHaveBeenCalledOnce();
     });
   });
 
   describe('editBlocker', () => {
-    it('doğru blockerId ile updateDoc çağırır', async () => {
-      await blockerService.editBlocker('blocker-1', 'Yeni sebep');
+    it('doğru blockerId ile batch.update çağırır, audit log AYNI batch\'te yazılır', async () => {
+      // Eskiden bu fonksiyon hiç audit_logs yazmıyordu (bkz. kod denetimi).
+      const set = vi.fn();
+      const update = vi.fn();
+      const commit = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(firebase.writeBatch).mockReturnValue({ set, update, delete: vi.fn(), commit } as any);
 
-      expect(firebase.updateDoc).toHaveBeenCalledWith({ id: 'generated-ref-1' }, { reason: 'Yeni sebep' });
+      await blockerService.editBlocker('blocker-1', 'Yeni sebep', 'user-1', 'task-1');
+
+      expect(update).toHaveBeenCalledWith({ id: 'generated-ref-1' }, { reason: 'Yeni sebep' });
+      const auditCall = set.mock.calls.find(([, data]: any) => data?.changedBy !== undefined);
+      expect(auditCall?.[1]).toMatchObject({ taskId: 'task-1', changedBy: 'user-1', newValue: 'Yeni sebep' });
+      expect(commit).toHaveBeenCalledOnce();
     });
 
-    it('updateDoc her denemede reddederse runWithRetry tükendikten sonra hata fırlatılır', async () => {
-      vi.mocked(firebase.updateDoc).mockRejectedValue(new Error('permission-denied'));
+    it('batch.commit her denemede reddederse runWithRetry tükendikten sonra hata fırlatılır', async () => {
+      const commit = vi.fn().mockRejectedValue(new Error('permission-denied'));
+      vi.mocked(firebase.writeBatch).mockReturnValue({ set: vi.fn(), update: vi.fn(), delete: vi.fn(), commit } as any);
 
-      await expect(blockerService.editBlocker('blocker-1', 'X')).rejects.toThrow('permission-denied');
-      expect(firebase.updateDoc).toHaveBeenCalledTimes(3);
+      await expect(blockerService.editBlocker('blocker-1', 'X', 'user-1', 'task-1')).rejects.toThrow('permission-denied');
+      expect(commit).toHaveBeenCalledTimes(3);
     });
   });
 
   describe('deleteBlocker', () => {
-    it('doğru blockerId ile deleteDoc çağırır', async () => {
+    it('taskId/userId verilmeden (eski/legacy çağrı) doğru blockerId ile ham deleteDoc çağırır', async () => {
       await blockerService.deleteBlocker('blocker-1');
 
       expect(firebase.deleteDoc).toHaveBeenCalledWith({ id: 'generated-ref-1' });
@@ -173,6 +192,23 @@ describe('blockerService', () => {
 
       await expect(blockerService.deleteBlocker('blocker-1')).rejects.toThrow('permission-denied');
       expect(firebase.deleteDoc).toHaveBeenCalledTimes(3);
+    });
+
+    it('son aktif engel DEĞİLKEN taskId/userId verilirse batch ile silinir ve audit log yazılır', async () => {
+      // Eskiden bu dal (son engel değilken) hiç audit_logs yazmıyordu
+      // (bkz. kod denetimi).
+      const set = vi.fn();
+      const del = vi.fn();
+      const commit = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(firebase.writeBatch).mockReturnValue({ set, update: vi.fn(), delete: del, commit } as any);
+
+      await blockerService.deleteBlocker('blocker-1', 'task-1', 2, 'user-1', 4);
+
+      expect(firebase.runTransaction).not.toHaveBeenCalled();
+      expect(del).toHaveBeenCalledWith({ id: 'generated-ref-1' });
+      const auditCall = set.mock.calls.find(([, data]: any) => data?.changedBy !== undefined);
+      expect(auditCall?.[1]).toMatchObject({ taskId: 'task-1', changedBy: 'user-1', newValue: 'Risk Unsuru Silindi' });
+      expect(commit).toHaveBeenCalledOnce();
     });
   });
 });

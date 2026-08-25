@@ -2,7 +2,7 @@ import React, { useCallback, useState, useMemo, type ReactElement } from 'react'
 import { Plus, Search, Layers, Clock, ArrowRight, CheckCircle2, AlertTriangle, AlertCircle, ShieldCheck, Zap, Info, Filter, X } from 'lucide-react';
 import { List, type RowComponentProps } from 'react-window';
 import { Task, User } from '../types';
-import { cn } from '../lib/utils';
+import { cn, buildUsersById } from '../lib/utils';
 import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_BADGE_VARIANT, STATUS_BADGE_VARIANT } from '../constants';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -205,14 +205,7 @@ export const TaskBoard = ({
   // O(tasks × users) yerine tek geçişte kurulan O(1) lookup — hem uid hem
   // email ile eşleşme aranabildiği için (Firestore'da assigneeId bazen uid,
   // bazen email olabiliyor) her iki alan da anahtar olarak eklenir.
-  const usersById = useMemo(() => {
-    const map = new Map<string, User>();
-    for (const u of users) {
-      map.set(u.uid, u);
-      map.set(u.email, u);
-    }
-    return map;
-  }, [users]);
+  const usersById = useMemo(() => buildUsersById(users), [users]);
   const assigneeFilterEmail = assigneeFilter === 'All' ? null : (usersById.get(assigneeFilter)?.email ?? null);
 
   const filteredTasks = useMemo(() => tasks.filter(task => {

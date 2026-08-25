@@ -60,8 +60,14 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidTransition(oldStatus, newStatus) {
-      // Herhangi bir durumdan iptal edilebilir (Admin/Manager yetkisi kuralda kontrol edilir)
-      let cancelAllowed = newStatus == 'CANCELLED';
+      // NOT: Burada "her durumdan CANCELLED'a izin ver" türünden bir kısayol
+      // KASITLI OLARAK yok — böyle bir kısayol oldStatus'tan bağımsız çalışacağı
+      // için aşağıdaki fromCompleted/fromCancelled (COMPLETED ve CANCELLED'ın
+      // terminal/değiştirilemez olması) niyetini geçersiz kılardı. CANCELLED
+      // zaten her aktif durumun kendi geçiş listesinde AYRI AYRI yer alıyor
+      // (bkz. fromAssigned...fromCrisis) — bu yeterli ve daha güvenli (kod
+      // denetimi: eskiden burada `newStatus == 'CANCELLED'` kısayolu vardı ve
+      // COMPLETED→CANCELLED'ı yanlışlıkla mümkün kılıyordu).
 
       // ASSIGNED → IN_PROGRESS, BLOCKED, CANCELLED, PENDING_DELEGATION (izin/mazeret devri)
       let fromAssigned = oldStatus == 'ASSIGNED' &&
@@ -91,18 +97,15 @@ service cloud.firestore {
       let fromCrisis = oldStatus == 'CRISIS' &&
         newStatus in ['IN_PROGRESS', 'CANCELLED', 'COMPLETED', 'AWAITING_APPROVAL'];
 
-      // COMPLETED → Değiştirilemez (sadece Admin silebilir)
-      let fromCompleted = oldStatus == 'COMPLETED' && false;
-
-      // CANCELLED → Değiştirilemez
-      let fromCancelled = oldStatus == 'CANCELLED' && false;
+      // COMPLETED ve CANCELLED terminal durumlardır: hiçbir hedefe (CANCELLED
+      // dahil) geçiş yok — yalnızca Admin override'ı (tasks update kuralındaki
+      // `isValidTransition(...) || isAdmin()`) veya Admin silme bunları değiştirebilir.
 
       // Aynı durum (güncelleme ama durum değişmedi)
       let sameStatus = oldStatus == newStatus;
 
-      return sameStatus || cancelAllowed || fromAssigned || fromPending || 
-             fromInProgress || fromBlocked || fromAwaiting || fromCrisis ||
-             fromCompleted || fromCancelled;
+      return sameStatus || fromAssigned || fromPending ||
+             fromInProgress || fromBlocked || fromAwaiting || fromCrisis;
     }
 
     // ===============================================================
@@ -218,12 +221,20 @@ service cloud.firestore {
     }
 
     function isValidNotification(data) {
+      // hasOnly() alan kilidi — kod tabanındaki diğer tüm yazılabilir
+      // koleksiyonlarla (user/task/blocker/audit/error/system-log) tutarlı
+      // hale getirildi (kod denetimi: eskiden burada alan kilidi yoktu, kendine
+      // bildirim oluşturma hakkı olan herhangi bir kullanıcı dokümana keyfi
+      // ek alan enjekte edebiliyordu).
       let requiredFields = ['userId', 'title', 'message', 'type', 'timestamp', 'isRead'];
+      let allowedFields = ['userId', 'title', 'message', 'type', 'taskId', 'timestamp', 'isRead'];
       return data.keys().hasAll(requiredFields) &&
+             data.keys().hasOnly(allowedFields) &&
              data.userId is string &&
              data.title is string && data.title.size() <= 100 &&
              data.message is string && data.message.size() <= 600 &&
              data.type in ['Crisis', 'Info', 'Warning', 'TaskAssigned'] &&
+             (!('taskId' in data) || (data.taskId is string && data.taskId.size() <= 200)) &&
              data.timestamp is number &&
              data.isRead is bool;
     }
@@ -247,11 +258,38 @@ service cloud.firestore {
     }
 
     function isValidSystemLog(data) {
-      let allowedFields = ['type', 'timestamp', 'idleTaskCount', 'details', 'userId'];
+      // functions/src/scheduledAudit.ts:_logAudit — bu koleksiyona TEK yazan
+      // yer (Admin SDK, rules'ı bypass eder) — allowedFields gerçekte yazılan
+      // {type,timestamp,idleTaskCount,result,source} alanlarıyla eşleştirildi;
+      // eskiden 'details'/'userId' hiç yazılmayan, 'result'/'source' ise hiç
+      // izin verilmeyen alanlardı (bkz. kod denetimi: şema artık üretimdeki
+      // gerçek dokümanı tarif etmiyordu).
+      let allowedFields = ['type', 'timestamp', 'idleTaskCount', 'result', 'source'];
       return data.keys().hasAll(['type', 'timestamp']) &&
              data.keys().hasOnly(allowedFields) &&
              data.type is string && data.type.size() >= 1 && data.type.size() <= 50 &&
-             data.timestamp is number;
+             data.timestamp is number &&
+             (!('idleTaskCount' in data) || data.idleTaskCount is number) &&
+             (!('result' in data) || (data.result is string && data.result.size() <= 100)) &&
+             (!('source' in data) || (data.source is string && data.source.size() <= 50));
+    }
+
+    // blockers/{id} read/create kurallarındaki AYNI "bağlı görev üzerinden
+    // erişim" deseni eskiden 6 kez tekrarlanıyordu (bkz. kod denetimi) —
+    // taskId parametreli tek bir yardımcıya çıkarıldı. Firestore rules aynı
+    // dokümana yapılan tekrarlı get() çağrılarını tek bir evaluation içinde
+    // önbelleğe alır, bu yüzden mantık/performans AYNI kalır, yalnızca kaynak
+    // kod tekrarı ortadan kalkar.
+    function blockerTaskGrantsAccess(taskId) {
+      return exists(/databases/$(database)/documents/tasks/$(taskId)) &&
+        (
+          get(/databases/$(database)/documents/tasks/$(taskId)).data.creatorId == request.auth.uid ||
+          get(/databases/$(database)/documents/tasks/$(taskId)).data.assigneeId == request.auth.uid ||
+          get(/databases/$(database)/documents/tasks/$(taskId)).data.departmentId == getUserDepartment() ||
+          !('departmentId' in get(/databases/$(database)/documents/tasks/$(taskId)).data) ||
+          get(/databases/$(database)/documents/tasks/$(taskId)).data.departmentId == null ||
+          get(/databases/$(database)/documents/tasks/$(taskId)).data.departmentId == ""
+        );
     }
 
     function isValidTaskBusinessRules(data) {
@@ -340,32 +378,10 @@ service cloud.firestore {
       // koleksiyonuyla aynı desen. Bağlı görev yoksa (silinmiş/geçersiz
       // referans) yalnızca Admin erişebilir.
       allow read: if isSignedIn() && (
-        isAdmin() ||
-        (
-          exists(/databases/$(database)/documents/tasks/$(resource.data.taskId)) &&
-          (
-            get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.creatorId == request.auth.uid ||
-            get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.assigneeId == request.auth.uid ||
-            get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.departmentId == getUserDepartment() ||
-            !('departmentId' in get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data) ||
-            get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.departmentId == null ||
-            get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.departmentId == ""
-          )
-        )
+        isAdmin() || blockerTaskGrantsAccess(resource.data.taskId)
       );
       allow create: if isSignedIn() && isValidId(blockerId) && isValidBlocker(incoming()) && (
-        isAdmin() ||
-        (
-          exists(/databases/$(database)/documents/tasks/$(incoming().taskId)) &&
-          (
-            get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data.creatorId == request.auth.uid ||
-            get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data.assigneeId == request.auth.uid ||
-            get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data.departmentId == getUserDepartment() ||
-            !('departmentId' in get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data) ||
-            get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data.departmentId == null ||
-            get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data.departmentId == ""
-          )
-        )
+        isAdmin() || blockerTaskGrantsAccess(incoming().taskId)
       );
       // Manager yalnızca kendi departmanındaki görevlere bağlı engelleri
       // güncelleyebilir (tasks update kuralıyla aynı sıkılıkta) — Admin sınırsız.
@@ -381,7 +397,29 @@ service cloud.firestore {
     }
 
     match /audit_logs/{logId} {
-      allow read: if isSignedIn();
+      // Departman izolasyonu — blockers/tasks okuma kurallarıyla AYNI desen.
+      // Eskiden yalnızca isSignedIn() vardı: herhangi bir kullanıcı, başka bir
+      // departmandaki bir görevin alan-bazlı değişikliklerini (başlık/açıklama/
+      // kanıt) içeren bir denetim kaydını okuyabiliyordu (bkz. kod denetimi —
+      // TeamList.tsx'teki "Denetim İzi" sekmesi bunu istemeden mümkün
+      // kılıyordu; UI tarafı da ayrıca Admin-only'e çekildi, bkz. TeamList.tsx).
+      // Kendi yaptığınız işlemleri (changedBy) her zaman görebilirsiniz —
+      // departmanınız sonradan değişse bile kendi geçmişiniz erişilebilir kalır.
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        resource.data.changedBy == request.auth.uid ||
+        (
+          exists(/databases/$(database)/documents/tasks/$(resource.data.taskId)) &&
+          (
+            get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.creatorId == request.auth.uid ||
+            get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.assigneeId == request.auth.uid ||
+            get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.departmentId == getUserDepartment() ||
+            !('departmentId' in get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data) ||
+            get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.departmentId == null ||
+            get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.departmentId == ""
+          )
+        )
+      );
       allow create: if isSignedIn() && isValidId(logId) && isValidAuditLog(incoming());
       // Denetim izi değiştirilemez/silinemez — Admin dahil hiçbir istemci rolü
       // kaydı sonradan değiştiremez veya silemez (kanıt bütünlüğü).

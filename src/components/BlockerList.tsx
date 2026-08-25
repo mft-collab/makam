@@ -6,22 +6,25 @@ import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
 import { Badge } from './ui/Badge';
 import { Skeleton, TableRowSkeleton } from './ui/Skeleton';
-import { cn, formatTimeAgo, formatDate } from '../lib/utils';
+import { cn, formatTimeAgo, formatDate, buildUsersById } from '../lib/utils';
 import { motion } from 'motion/react';
 import { PRIORITY_BADGE_VARIANT, PRIORITY_LABELS } from '../constants';
+import { getTimeLeft } from './taskDetails/helpers';
 
 const PRIORITY_WEIGHTS: Record<string, number> = { Urgent: 3, High: 2, Medium: 1, Low: 0 };
 
-const getSlaLabel = (deadline: number) => {
-  const msLeft = deadline - Date.now();
-  const hoursLeft = Math.floor(Math.abs(msLeft) / (1000 * 60 * 60));
-  const daysLeft  = Math.floor(hoursLeft / 24);
-  const isOverdue = msLeft < 0;
-  return isOverdue
-    ? `${daysLeft > 0 ? `${daysLeft}g ` : ''}${hoursLeft % 24}s geçti`
-    : daysLeft > 0
-      ? `${daysLeft}g ${hoursLeft % 24}s kaldı`
-      : `${hoursLeft}s kaldı`;
+// SLA rozeti/durumu ARTIK getTimeLeft (taskDetails/helpers.ts) üzerinden —
+// bu, totalPausedTime/pausedAt'i hesaba katan TEK doğru kaynak (bkz.
+// lib/sla.ts getRemainingTime). BlockerList tam olarak "engelli/BLOCKED"
+// görevleri listeliyor — yani pause mekanizmasının en çok devrede olduğu
+// senaryo — eskiden burada saf `deadline - Date.now()` farkına dayanan
+// bağımsız bir hesaplama vardı; bu, TaskDetails'teki (daha önce düzeltilen)
+// aynı sınıf hatanın burada tekrarı niteliğindeydi (bkz. kod denetimi).
+const SLA_BADGE_VARIANT: Record<string, 'danger' | 'warning' | 'default'> = {
+  expired: 'danger',
+  warning: 'warning',
+  paused: 'default',
+  safe: 'default',
 };
 
 interface BlockerCardProps {
@@ -91,15 +94,15 @@ const BlockerCard = ({ blocker, index, tasksById, usersById, isAdmin, isSystemAd
             <Badge variant={PRIORITY_BADGE_VARIANT[severity]}>
               {PRIORITY_LABELS[severity]}
             </Badge>
-            {task && (
-              <>
-                {task.deadline > 0 && (
-                  <Badge variant={task.deadline < Date.now() ? 'danger' : 'default'} icon={<Clock className="w-2.5 h-2.5" />}>
-                    {getSlaLabel(task.deadline)}
-                  </Badge>
-                )}
-              </>
-            )}
+            {task && task.deadline > 0 && (() => {
+              const timeLeft = getTimeLeft(task, Date.now());
+              if (!timeLeft) return null;
+              return (
+                <Badge variant={SLA_BADGE_VARIANT[timeLeft.status]} icon={<Clock className="w-2.5 h-2.5" />}>
+                  {timeLeft.label}
+                </Badge>
+              );
+            })()}
           </div>
         </div>
         <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
@@ -196,14 +199,7 @@ const BlockerListSkeleton = () => (
 
 export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = false, isLoading = false, onResolve, onEditBlocker, onDeleteBlocker, onViewTask }: BlockerListProps) => {
   const tasksById = useMemo(() => new Map(tasks.map(t => [t.id, t])), [tasks]);
-  const usersById = useMemo(() => {
-    const map = new Map<string, User>();
-    for (const u of users) {
-      map.set(u.uid, u);
-      map.set(u.email, u);
-    }
-    return map;
-  }, [users]);
+  const usersById = useMemo(() => buildUsersById(users), [users]);
 
   const activeBlockers = useMemo(() => {
     const taskPriorityWeightById = new Map<string, number>();

@@ -18,30 +18,43 @@ export const DEFAULT_SLA_CONFIG: Record<'Low' | 'Medium' | 'High' | 'Urgent', SL
 const WORK_START_HOUR = 9;
 const WORK_END_HOUR = 18;
 
-// Türkiye Resmi Tatilleri (2026 yılı için)
-const OFFICIAL_HOLIDAYS_2026 = [
-  '2026-01-01', // Yılbaşı
-  '2026-04-23', // Ulusal Egemenlik ve Çocuk Bayramı
-  '2026-05-01', // Emek ve Dayanışma Günü
-  '2026-05-19', // Atatürk'ü Anma, Gençlik ve Spor Bayramı
-  '2026-07-15', // Demokrasi ve Milli Birlik Günü
-  '2026-08-30', // Zafer Bayramı
-  '2026-10-29', // Cumhuriyet Bayramı
-  
-  // Dini Bayramlar 2026 (Tahmini Hicri-Miladi Takvim)
-  // Ramazan Bayramı 2026
-  '2026-03-19', // Arife
-  '2026-03-20', // 1. Gün
-  '2026-03-21', // 2. Gün
-  '2026-03-22', // 3. Gün
-  
-  // Kurban Bayramı 2026
-  '2026-05-26', // Arife
-  '2026-05-27', // 1. Gün
-  '2026-05-28', // 2. Gün
-  '2026-05-29', // 3. Gün
-  '2026-05-30', // 4. Gün
-];
+// Türkiye Resmi Tatilleri — yıl bazında anahtarlanır. Dini bayramlar (Ramazan/
+// Kurban) Hicri takvime göre her yıl ~11 gün öne kayar ve güvenilir biçimde
+// hesaplanabilmesi için doğrulanmış bir Hicri-Miladi dönüşüm kaynağı gerekir;
+// burada YALNIZCA elle doğrulanmış yıllar listelenir. Eskiden tek bir sabit
+// 2026 listesi vardı ve bir sonraki yıla taşan SLA hesaplamaları (ör. Aralık
+// 2026'da açılan, Low öncelikli 15 iş günlük bir görev) hiçbir uyarı vermeden
+// sessizce yanlış hesaplanıyordu (bkz. kod denetimi). Listelenmemiş bir yıl
+// için isWeekendOrHoliday artık en azından GÖZLEMLENEBİLİR şekilde uyarı
+// veriyor (bkz. aşağısı) — davranış aynı (hafta sonu hariç tatil atlanmaz)
+// ama artık sessiz değil.
+const OFFICIAL_HOLIDAYS: Record<number, string[]> = {
+  2026: [
+    '2026-01-01', // Yılbaşı
+    '2026-04-23', // Ulusal Egemenlik ve Çocuk Bayramı
+    '2026-05-01', // Emek ve Dayanışma Günü
+    '2026-05-19', // Atatürk'ü Anma, Gençlik ve Spor Bayramı
+    '2026-07-15', // Demokrasi ve Milli Birlik Günü
+    '2026-08-30', // Zafer Bayramı
+    '2026-10-29', // Cumhuriyet Bayramı
+
+    // Dini Bayramlar 2026 (Tahmini Hicri-Miladi Takvim)
+    // Ramazan Bayramı 2026
+    '2026-03-19', // Arife
+    '2026-03-20', // 1. Gün
+    '2026-03-21', // 2. Gün
+    '2026-03-22', // 3. Gün
+
+    // Kurban Bayramı 2026
+    '2026-05-26', // Arife
+    '2026-05-27', // 1. Gün
+    '2026-05-28', // 2. Gün
+    '2026-05-29', // 3. Gün
+    '2026-05-30', // 4. Gün
+  ],
+};
+
+const warnedMissingHolidayYears = new Set<number>();
 
 export function isWeekendOrHoliday(date: Date): boolean {
   if (isWeekend(date)) return true;
@@ -50,8 +63,17 @@ export function isWeekendOrHoliday(date: Date): boolean {
   // önceki güne düşer; bu durumda resmi tatil günleri yanlış sınıflanabilirdi
   // (bkz. kod denetimi). Hafta sonu kontrolü (isWeekend) zaten yerel saati
   // kullandığından, tatil karşılaştırması da aynı zaman dilimiyle yapılmalı.
+  const year = date.getFullYear();
+  const holidays = OFFICIAL_HOLIDAYS[year];
+  if (!holidays) {
+    if (!warnedMissingHolidayYears.has(year)) {
+      warnedMissingHolidayYears.add(year);
+      logger.warn(`[SLA] ${year} yılı için resmi tatil listesi tanımlı değil — SLA hesaplamaları bu yıl için yalnızca hafta sonlarını atlayacak, resmi tatilleri DEĞİL. OFFICIAL_HOLIDAYS'e (src/lib/sla.ts) güncel yıl eklenmeli.`);
+    }
+    return false;
+  }
   const dateStr = format(date, 'yyyy-MM-dd');
-  return OFFICIAL_HOLIDAYS_2026.includes(dateStr);
+  return holidays.includes(dateStr);
 }
 
 /**
@@ -96,21 +118,37 @@ function addBusinessHours(startDate: Date, hours: number): Date {
 
 /**
  * Belirtilen tarihe iş günü ekler. Hafta sonlarını ve resmi tatilleri es geçer.
+ * `days` kesirli olabilir (ör. eski/legacy localStorage config'i `0.5` gibi
+ * bir sayı olarak saklamış olabilir, bkz. calculateDeadline'daki "geriye
+ * dönük uyumluluk" dalı) — tam sayı kısmı iş günü olarak eklenir, kesir
+ * kısmı ise bir iş gününün saat karşılığına (WORK_END_HOUR-WORK_START_HOUR)
+ * çevrilip addBusinessHours'a devredilir. Eskiden `daysAdded < days`
+ * döngüsü yalnızca tam sayı adımlarla ilerlediğinden HERHANGİ bir kesirli
+ * değer (0.5 dahil) sessizce yukarı yuvarlanıp tam 1 gün ekliyordu (bkz.
+ * kod denetimi).
  */
 function addBusinessDays(startDate: Date, days: number): Date {
+  const wholeDays = Math.floor(days);
+  const fractionalDays = days - wholeDays;
+
   let currentDate = new Date(startDate.getTime());
-  
+
   // Mesai dışındaysa mesai başlangıcına çek
   currentDate = adjustToWorkingHours(currentDate);
-  
+
   let daysAdded = 0;
-  while (daysAdded < days) {
+  while (daysAdded < wholeDays) {
     currentDate = addDays(currentDate, 1);
     if (!isWeekendOrHoliday(currentDate)) {
       daysAdded++;
     }
   }
-  
+
+  if (fractionalDays > 0) {
+    const workDayHours = WORK_END_HOUR - WORK_START_HOUR;
+    currentDate = addBusinessHours(currentDate, fractionalDays * workDayHours);
+  }
+
   return currentDate;
 }
 

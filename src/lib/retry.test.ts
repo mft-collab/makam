@@ -40,4 +40,33 @@ describe('runWithRetry — Exponential Backoff', () => {
     expect(obj.id).toBe('123');
     expect(obj.count).toBe(5);
   });
+
+  describe('deterministik iş kuralı hataları hiç yeniden denenmez', () => {
+    // Eskiden bu hatalar da 3 kez (~1.5sn exponential backoff) denenip
+    // sonunda aynı hatayla başarısız oluyordu — retry sonucu asla
+    // değiştirmeyeceği için bu, kullanıcının (ör. bir düzenleme çakışması
+    // uyarısını görene kadar) anlamsız yere beklemesine yol açıyordu
+    // (bkz. kod denetimi).
+    it.each([
+      'VERSION_MISMATCH: Beklenen Versiyon 2, Sunucu Versiyonu 3',
+      "INVALID_TRANSITION: 'COMPLETED' durumundan 'BLOCKED' durumuna geçiş izinli değil.",
+      'Admin rolündeki kullanıcı irtibatlı olarak atanamaz.',
+      'Alt talimatlar yalnızca Memur rolündeki personele atanabilir.',
+      'İzin/mazeret devri yalnızca Müdür rolündeki personele yapılabilir.',
+    ])('%s → tek denemede fırlatılır', async (message) => {
+      let callCount = 0;
+      await expect(
+        runWithRetry(async () => { callCount++; throw new Error(message); }, 3, 0)
+      ).rejects.toThrow(message);
+      expect(callCount).toBe(1);
+    });
+
+    it('bilinmeyen/genel bir hata (ör. geçici ağ hatası) yine de maxRetries kadar denenir', async () => {
+      let callCount = 0;
+      await expect(
+        runWithRetry(async () => { callCount++; throw new Error('Network error'); }, 3, 0)
+      ).rejects.toThrow('Network error');
+      expect(callCount).toBe(3);
+    });
+  });
 });

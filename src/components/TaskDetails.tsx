@@ -9,7 +9,7 @@ import { Task, User as UserType, TaskBlocker, AuditLog, TaskStatus, TaskPriority
 import { STATUS_LABELS, STATUS_LABELS_SHORT, PRIORITY_LABELS, PRIORITY_BADGE_VARIANT, STATUS_BADGE_VARIANT } from '../constants';
 import { format, formatDistanceToNow } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import { cn } from '../lib/utils';
+import { cn, buildUsersById } from '../lib/utils';
 import { Badge } from './ui/Badge';
 import { Avatar } from './ui/Avatar';
 import { Modal } from './ui/Modal';
@@ -79,20 +79,36 @@ export const TaskDetails = ({
     }
   };
 
-  const handleToggleChecklistItem = (itemId: string) => {
-    if (!onUpdateTask) return;
+  // handleAddChecklistItem'daki AYNI isSubmittingChecklist koruması —
+  // eskiden yalnızca ekleme korunuyordu, hızlı ardışık checkbox tıklamaları/
+  // silmeler korumasızdı. Veri kaybı riski yoktu (lockVersion optimistic
+  // locking zaten çakışan yazımları VERSION_MISMATCH ile reddediyor), ama
+  // gereksiz hata/toast riskini önlemek için tutarlı hale getirildi (bkz.
+  // kod denetimi).
+  const handleToggleChecklistItem = async (itemId: string) => {
+    if (!onUpdateTask || isSubmittingChecklist) return;
     const currentChecklist = task.checklist || [];
-    const updatedChecklist = currentChecklist.map(item => 
+    const updatedChecklist = currentChecklist.map(item =>
       item.id === itemId ? { ...item, isCompleted: !item.isCompleted } : item
     );
-    onUpdateTask({ checklist: updatedChecklist });
+    setIsSubmittingChecklist(true);
+    try {
+      await Promise.resolve(onUpdateTask({ checklist: updatedChecklist }));
+    } finally {
+      setIsSubmittingChecklist(false);
+    }
   };
 
-  const handleDeleteChecklistItem = (itemId: string) => {
-    if (!onUpdateTask) return;
+  const handleDeleteChecklistItem = async (itemId: string) => {
+    if (!onUpdateTask || isSubmittingChecklist) return;
     const currentChecklist = task.checklist || [];
     const updatedChecklist = currentChecklist.filter(item => item.id !== itemId);
-    onUpdateTask({ checklist: updatedChecklist });
+    setIsSubmittingChecklist(true);
+    try {
+      await Promise.resolve(onUpdateTask({ checklist: updatedChecklist }));
+    } finally {
+      setIsSubmittingChecklist(false);
+    }
   };
 
   const checklistStats = useMemo(() => computeChecklistStats(task.checklist), [task.checklist]);
@@ -141,14 +157,7 @@ export const TaskDetails = ({
     return () => { cancelled = true; };
   }, [activeTab, task.id, logsRetryNonce]);
 
-  const usersById = useMemo(() => {
-    const map = new Map<string, UserType>();
-    for (const u of users) {
-      map.set(u.uid, u);
-      map.set(u.email, u);
-    }
-    return map;
-  }, [users]);
+  const usersById = useMemo(() => buildUsersById(users), [users]);
   const assignee = usersById.get(task.assigneeId);
   const creator  = usersById.get(task.creatorId);
   // Koordinatörü görevin coordinatorId alanına göre bul
@@ -834,11 +843,12 @@ export const TaskDetails = ({
                     className="flex items-center justify-between p-3.5 bg-makam-glass border border-surface-border rounded-xl group/item hover:bg-surface-elevated transition-all"
                   >
                     <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
-                      <input 
+                      <input
                         type="checkbox"
                         checked={item.isCompleted}
                         onChange={() => handleToggleChecklistItem(item.id)}
-                        className="w-4 h-4 rounded accent-status-success cursor-pointer"
+                        disabled={isSubmittingChecklist}
+                        className="w-4 h-4 rounded accent-status-success cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                       />
                       <span className={cn(
                         "text-[12px] font-medium leading-snug tracking-tight truncate",
@@ -851,7 +861,8 @@ export const TaskDetails = ({
                     {onUpdateTask && (
                       <button
                         onClick={() => handleDeleteChecklistItem(item.id)}
-                        className="w-7 h-7 flex items-center justify-center text-text-tertiary hover:text-status-danger hover:bg-status-danger/10 rounded-md opacity-0 group-hover/item:opacity-100 focus-visible:opacity-100 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger"
+                        disabled={isSubmittingChecklist}
+                        className="w-7 h-7 flex items-center justify-center text-text-tertiary hover:text-status-danger hover:bg-status-danger/10 rounded-md opacity-0 group-hover/item:opacity-100 focus-visible:opacity-100 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger disabled:opacity-30 disabled:cursor-not-allowed"
                         title="Alt İşlemi Sil"
                         aria-label="Alt işlemi sil"
                       >

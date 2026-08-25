@@ -56,7 +56,7 @@ describe('useFirestoreData', () => {
 
     dataStoreMock = {
       tasks: [], users: [], blockers: [], isHydrated: true, taskLimit: 200,
-      setTasks: vi.fn(), setUsers: vi.fn(), setBlockers: vi.fn(), setStats: vi.fn(),
+      setTasks: vi.fn(), setUsers: vi.fn(), setBlockers: vi.fn(), setStats: vi.fn(), reset: vi.fn(),
     };
     vi.mocked(useDataStore).mockReturnValue(dataStoreMock as any);
   });
@@ -96,6 +96,27 @@ describe('useFirestoreData', () => {
     it('user null ise hiçbir listener kurulmaz', () => {
       renderHook(() => useFirestoreData(null, onError));
 
+      expect(firebase.onSnapshot).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('çıkışta store sıfırlama', () => {
+    it('kullanıcı oturumu kapatıp uid undefined olduğunda dataStore.reset() çağrılır — önceki kullanıcının verisi kalmaz', () => {
+      const { rerender } = renderHook(
+        ({ user }: { user: User | null }) => useFirestoreData(user, onError),
+        { initialProps: { user: makeUser({ role: 'Admin' }) } }
+      );
+      expect(dataStoreMock.reset).not.toHaveBeenCalled();
+
+      rerender({ user: null });
+
+      expect(dataStoreMock.reset).toHaveBeenCalledOnce();
+    });
+
+    it('hiç giriş yapılmamışken (user hep null) reset no-op olarak çağrılabilir ama listener kurulmaz', () => {
+      renderHook(() => useFirestoreData(null, onError));
+
+      expect(dataStoreMock.reset).toHaveBeenCalledOnce();
       expect(firebase.onSnapshot).not.toHaveBeenCalled();
     });
   });
@@ -143,6 +164,12 @@ describe('useFirestoreData', () => {
   });
 
   describe('users listener — tekilleştirme', () => {
+    it('sorgu limit(1000) ile kurulur (tasks/blockers ile tutarlı, sınırsız okuma riski önlenir)', () => {
+      renderHook(() => useFirestoreData(makeUser({ role: 'Admin' }), onError));
+
+      expect(firebase.limit).toHaveBeenCalledWith(1000);
+    });
+
     it('aynı email\'e sahip iki kayıt tekilleştirilir; geçici (email-benzeri) uid yerine gerçek uid tercih edilir', () => {
       renderHook(() => useFirestoreData(makeUser({ role: 'Admin' }), onError));
 
@@ -169,10 +196,13 @@ describe('useFirestoreData', () => {
   });
 
   describe('blockers listener', () => {
-    it('sorgu isResolved=false filtresi ve limit(100) ile kurulur', () => {
+    it('sorgu isResolved=false filtresi, createdAt desc orderBy ve limit(100) ile kurulur', () => {
       renderHook(() => useFirestoreData(makeUser({ role: 'Admin' }), onError));
 
       expect(firebase.where).toHaveBeenCalledWith('isResolved', '==', false);
+      // orderBy olmadan limit(100) hangi 100 dokümanın döneceğini garanti
+      // etmez — bkz. kod denetimi.
+      expect(firebase.orderBy).toHaveBeenCalledWith('createdAt', 'desc');
       expect(firebase.limit).toHaveBeenCalledWith(100);
     });
 
@@ -186,6 +216,23 @@ describe('useFirestoreData', () => {
       const [list] = vi.mocked(dataStoreMock.setBlockers as any).mock.calls[0]!;
       expect(list).toEqual([{ id: 'b1', taskId: 't1', reason: 'x', isResolved: false, createdAt: 1 }]);
     });
+
+    it('şemaya uymayan bir engel dokümanı listeden düşürülmez, sadece konsola uyarı yazılır', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      renderHook(() => useFirestoreData(makeUser({ role: 'Admin' }), onError));
+
+      act(() => {
+        // reason boş string — TaskBlockerSchema.reason min(1) ihlali
+        listeners[2]!.onNext(mockQuerySnap([mockDocSnap('bad-blocker', { taskId: 't1', reason: '', isResolved: false, createdAt: 1 })]));
+      });
+
+      expect(warnSpy).toHaveBeenCalled();
+      const [list] = vi.mocked(dataStoreMock.setBlockers as any).mock.calls[0]!;
+      expect(list).toHaveLength(1);
+      expect(list[0].id).toBe('bad-blocker');
+
+      warnSpy.mockRestore();
+    });
   });
 
   describe('stats listener', () => {
@@ -194,7 +241,16 @@ describe('useFirestoreData', () => {
 
       act(() => { listeners[3]!.onNext({ exists: () => true, data: () => ({ totalTasks: 5 }) }); });
 
-      expect(dataStoreMock.setStats).toHaveBeenCalledWith({ totalTasks: 5 });
+      expect(dataStoreMock.setStats).toHaveBeenCalledWith(expect.objectContaining({ totalTasks: 5 }));
+    });
+
+    it('eksik sayaç alanları zod .default(0) ile doldurulur (ham cast yerine doğrulanmış veri)', () => {
+      renderHook(() => useFirestoreData(makeUser({ role: 'Admin' }), onError));
+
+      act(() => { listeners[3]!.onNext({ exists: () => true, data: () => ({ totalTasks: 5 }) }); });
+
+      const [stats] = vi.mocked(dataStoreMock.setStats as any).mock.calls[0]!;
+      expect(stats).toMatchObject({ totalTasks: 5, status_ASSIGNED: 0, status_CRISIS: 0 });
     });
 
     it('doküman yoksa setStats çağrılmaz', () => {

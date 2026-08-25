@@ -5,6 +5,7 @@ import { Task, User, TaskBlocker } from '../types';
 import { STATUS_LABELS_SHORT } from '../constants';
 import { cn } from '../lib/utils';
 import { isCompletedOnTime } from '../lib/sla';
+import { computeCompletionRatePercent } from './dashboard/helpers';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, CartesianGrid
 } from 'recharts';
@@ -106,15 +107,25 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
     return Array.from(depts);
   }, [users, tasks]);
 
+  // dateFrom/dateTo salt tarih (yyyy-MM-dd) string'leri; saat eklenmeden
+  // parse edilirse ECMAScript bunu UTC gece yarısı sayar, saat eklenirse
+  // (ör. 'T23:59:59') YEREL saat sayar. İkisini karıştırmak (eskiden `to`
+  // saat ekliyor, `from` eklemiyordu) TR (UTC+3) için başlangıç gününün
+  // 00:00–02:59 aralığındaki kayıtların sessizce filtreden düşmesine yol
+  // açıyordu (bkz. kod denetimi). Her iki sınır da AÇIKÇA yerel saatle
+  // parse edilir ki gün sınırları tutarlı olsun.
+  const rangeStart = useMemo(() => new Date(dateFrom + 'T00:00:00'), [dateFrom]);
+  const rangeEnd = useMemo(() => new Date(dateTo + 'T23:59:59'), [dateTo]);
+
   const filteredTasks = useMemo(() => {
-    const from = new Date(dateFrom).getTime();
-    const to = new Date(dateTo + 'T23:59:59').getTime();
+    const from = rangeStart.getTime();
+    const to = rangeEnd.getTime();
     return tasks.filter(t => {
       const matchDate = t.createdAt >= from && t.createdAt <= to;
       const matchDept = selectedDept === 'ALL' || t.departmentId === selectedDept;
       return matchDate && matchDept;
     });
-  }, [tasks, dateFrom, dateTo, selectedDept]);
+  }, [tasks, rangeStart, rangeEnd, selectedDept]);
 
   // Seçili tarih/birim filtresine giren görevlere bağlı engeller — KPI kartının
   // diğer metriklerle aynı kapsamı yansıtması için (öncesinde tüm sistemi
@@ -132,8 +143,8 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
     try {
       const { exportTasksToPDF } = await import('../services/exportService');
       await exportTasksToPDF(filteredTasks, users, {
-        from: new Date(dateFrom),
-        to: new Date(dateTo + 'T23:59:59'),
+        from: rangeStart,
+        to: rangeEnd,
       });
     } catch (err) {
       console.error('PDF export hatası:', err);
@@ -141,15 +152,15 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
     } finally {
       setIsExporting(false);
     }
-  }, [filteredTasks, users, dateFrom, dateTo]);
+  }, [filteredTasks, users, rangeStart, rangeEnd]);
 
   const handleExportCSV = useCallback(async () => {
     const { exportTasksToCSV } = await import('../services/exportService');
     exportTasksToCSV(filteredTasks, users, {
-      from: new Date(dateFrom),
-      to: new Date(dateTo + 'T23:59:59'),
+      from: rangeStart,
+      to: rangeEnd,
     });
-  }, [filteredTasks, users, dateFrom, dateTo]);
+  }, [filteredTasks, users, rangeStart, rangeEnd]);
 
   const managers = useMemo(() => {
     return users.filter(u => u.role === 'Manager' && (selectedDept === 'ALL' || u.departmentId === selectedDept));
@@ -180,7 +191,11 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
     const completed = mt.filter(t => t.status === 'COMPLETED').length;
     const blocked   = mt.filter(t => t.status === 'BLOCKED').length;
     const total     = mt.length;
-    const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+    // dashboard/helpers.ts'teki MERKEZİ tanım kullanılır (CANCELLED görevler
+    // paydadan çıkarılır) — eskiden burada bağımsız bir formül vardı ve
+    // Dashboard ile Reports aynı kavram için farklı rakamlar gösteriyordu
+    // (bkz. kod denetimi).
+    const completionRate = computeCompletionRatePercent(mt);
     const onTimeCompleted = mt.filter(isCompletedOnTime).length;
     const slaRate = completed > 0 ? Math.round((onTimeCompleted / completed) * 100) : 100;
     // total === 0 iken completionRate sabit %0 (kırmızı), slaRate sabit %100
@@ -204,9 +219,9 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
   }, [filteredTasks]);
 
   const avgDays = Math.round(averageCompletionTime / (1000 * 60 * 60 * 24));
-  const completionRate = filteredTasks.length > 0
-    ? Math.round((filteredTasks.filter(t => t.status === 'COMPLETED').length / filteredTasks.length) * 100)
-    : 0;
+  // dashboard/helpers.ts'teki MERKEZİ tanım (bkz. yukarıdaki managerPerformance
+  // yorumu) — eskiden burada da bağımsız bir formül vardı.
+  const completionRate = computeCompletionRatePercent(filteredTasks);
 
   // #6 — Son 14 gün SLA uyum oranı (trend)
   // Önceki hali her gün için filteredTasks'ı baştan tarıyordu (14 × O(görev)).
@@ -359,7 +374,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
         <Calendar className="w-3 h-3 flex-shrink-0" aria-hidden="true" />
         <span className="tabular-nums">{filteredTasks.length} talimat</span>
         <span>·</span>
-        <span className="tabular-nums">{format(new Date(dateFrom), 'd MMM yyyy', { locale: tr })} — {format(new Date(dateTo), 'd MMM yyyy', { locale: tr })}</span>
+        <span className="tabular-nums">{format(rangeStart, 'd MMM yyyy', { locale: tr })} — {format(rangeEnd, 'd MMM yyyy', { locale: tr })}</span>
       </div>
 
       {/* ── KPI Cards — 1 col mobile, 3 cols sm+ ─────────────────── */}

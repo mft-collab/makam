@@ -76,7 +76,13 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
   const [loadingLogs, setLoadingLogs] = useState(false);
 
   useEffect(() => {
-    if (!selectedUser) {
+    // Denetim İzi yalnızca Admin'e VEYA kendi profiline bakan kullanıcıya
+    // gösterilir. Eskiden herkes herkesin geçmişini görebiliyordu; bu geçmiş
+    // ilgili görevin başlık/açıklama/kanıt gibi alan-bazlı değişikliklerini
+    // içerdiğinden, başka departmandaki bir görev için de sızdırılabiliyordu
+    // (bkz. kod denetimi + firestore.rules'taki audit_logs departman kısıtı).
+    const canViewAuditTrail = !!selectedUser && (currentUser?.role === 'Admin' || selectedUser.uid === currentUser?.uid);
+    if (!selectedUser || !canViewAuditTrail) {
       setUserLogs([]);
       setModalTab('tasks');
       return;
@@ -97,7 +103,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
       }
     };
     fetchUserLogs();
-  }, [selectedUser]);
+  }, [selectedUser, currentUser]);
 
   const handleEdit = (user: User) => {
     setEditingUser(user);
@@ -549,7 +555,9 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                       </span>
                     </div>
                   </div>
-                  {/* Tab Selector inside profile details */}
+                  {/* Tab Selector inside profile details — Denetim İzi sekmesi
+                      yalnızca Admin'e veya kendi profiline bakan kullanıcıya
+                      gösterilir (bkz. kod denetimi: departman izolasyonu). */}
                   <div className="flex bg-surface-glass p-0.5 rounded-xl border border-executive-blue/[0.04] items-center gap-0.5 mt-2.5">
                     <button
                       onClick={() => setModalTab('tasks')}
@@ -560,21 +568,23 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                     >
                       Sorumluluk Alanı
                     </button>
-                    <button
-                      onClick={() => setModalTab('logs')}
-                      className={cn(
-                        "flex-1 py-1.5 rounded-lg text-[9px] uppercase tracking-wider font-bold transition-all duration-300 cursor-pointer text-center",
-                        modalTab === 'logs' ? "bg-executive-blue text-[color:var(--executive-blue-text)] shadow-sm" : "text-text-muted hover:text-text-heading"
-                      )}
-                    >
-                      Denetim İzi
-                    </button>
+                    {(isAdmin || selectedUser.uid === currentUser?.uid) && (
+                      <button
+                        onClick={() => setModalTab('logs')}
+                        className={cn(
+                          "flex-1 py-1.5 rounded-lg text-[9px] uppercase tracking-wider font-bold transition-all duration-300 cursor-pointer text-center",
+                          modalTab === 'logs' ? "bg-executive-blue text-[color:var(--executive-blue-text)] shadow-sm" : "text-text-muted hover:text-text-heading"
+                        )}
+                      >
+                        Denetim İzi
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* Tasks / Logs Tab views */}
-              {modalTab === 'tasks' ? (
+              {modalTab === 'tasks' || !(isAdmin || selectedUser.uid === currentUser?.uid) ? (
                 <div>
                   <div className="flex items-center gap-2 mb-3 mt-1">
                     <Target className="w-3.5 h-3.5 text-executive-gold" />

@@ -36,9 +36,14 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
     if (loading) return;
     setLoading(true);
     try {
+      // dateFrom saat eklenmeden parse edilirse UTC gece yarısı, dateTo saat
+      // eklenerek parse edildiğinden YEREL saat sayılır — bu karışım TR
+      // (UTC+3) için başlangıç gününün 00:00–02:59 aralığındaki kayıtları
+      // sessizce filtreden düşürüyordu (bkz. kod denetimi). dateFrom'a da
+      // AÇIKÇA yerel gece yarısı saati eklenir.
       const { logs: newLogs, lastDoc, hasMore: more } = await auditLogService.fetchFiltered({
         changedBy: selectedUser !== 'ALL' ? selectedUser : undefined,
-        fromMs: dateFrom ? new Date(dateFrom).getTime() : undefined,
+        fromMs: dateFrom ? new Date(dateFrom + 'T00:00:00').getTime() : undefined,
         toMs: dateTo ? new Date(dateTo + 'T23:59:59.999').getTime() : undefined,
         pageSize: 15,
         cursor
@@ -253,7 +258,19 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
           !loading && (
             <div className="py-16 flex flex-col items-center justify-center bg-surface-glass border border-dashed border-executive-blue/[0.05] rounded-2xl gap-4">
               <ShieldCheck className="w-10 h-10 text-surface-border/50 stroke-[1]" />
-              <span className="text-[9px] text-text-tertiary uppercase tracking-[0.4em]">Kayıt Bulunamadı</span>
+              {/* logsState (sunucudan çekilen ham sayfa) dolu ama filteredLogs
+                  (istemci tarafı tip filtresinden geçenler) boşsa, bu sayfada
+                  seçili türde kayıt olmadığı ama başka kayıtların var olduğu
+                  anlamına gelir — "Kayıt Bulunamadı" (hiç kayıt yok izlenimi)
+                  ile aynı anda "Daha Fazla Yükle" butonunun gösterilmesi
+                  çelişkiliydi (bkz. kod denetimi). */}
+              {logsState.length > 0 ? (
+                <span className="text-[9px] text-text-tertiary uppercase tracking-[0.4em] text-center px-4">
+                  Bu sayfada seçili türde kayıt yok — daha fazla yükleyin veya filtreleri değiştirin
+                </span>
+              ) : (
+                <span className="text-[9px] text-text-tertiary uppercase tracking-[0.4em]">Kayıt Bulunamadı</span>
+              )}
             </div>
           )
         )}

@@ -127,19 +127,19 @@ export const notificationService = {
     }
   },
 
-  async markAllAsRead(userId: string) {
+  // Kullanıcının panelde GÖRDÜĞÜ (useNotifications'ın limit(5) ile çektiği)
+  // bildirimlerin id'leri geçilir — eskiden burada sunucudan TÜM okunmamış
+  // bildirimler sorgulanıp toptan işaretleniyordu; panel yalnızca en yeni 5'ini
+  // gösterdiğinden, 5'ten eski hiç görülmemiş bir bildirim (ör. bir Kriz
+  // uyarısı) kullanıcı hiç görmeden sessizce "okundu" işaretlenip kalıcı
+  // olarak kayboluyordu (bkz. kod denetimi). Artık yalnızca gerçekten
+  // gösterilmiş olan id'ler işaretlenir — hiçbir bildirim görülmeden kaybolmaz.
+  async markManyAsRead(notificationIds: string[]) {
+    if (notificationIds.length === 0) return;
     try {
-      const q = query(
-        collection(db, 'notifications'),
-        where('userId', '==', userId),
-        where('isRead', '==', false)
-      );
-      const snapshot = await getDocs(q);
-      
-      // Batch update to mark all as read
       const batch = writeBatch(db);
-      snapshot.docs.forEach(document => {
-        batch.update(document.ref, { isRead: true });
+      notificationIds.forEach(id => {
+        batch.update(doc(db, 'notifications', id), { isRead: true });
       });
       await batch.commit();
     } catch (error) {

@@ -7,6 +7,7 @@ import { PRIORITY_LABELS, ROLE_LABELS } from '../constants';
 import { cn } from '../lib/utils';
 import { FileText, Target, Users, Calendar, AlertCircle } from 'lucide-react';
 import { DatePicker } from './ui/DatePicker';
+import { Button } from './ui/Button';
 
 const taskSchema = z.object({
   title: z.string().min(1, 'Başlık zorunludur.').trim(),
@@ -243,20 +244,26 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
 
       {/* Aksiyonlar */}
       <div className="flex justify-end gap-5 pt-10 border-t border-makam-border/5">
-        <button 
-          type="button" 
-          onClick={onClose} 
-          className="makam-button-secondary px-10 h-14 font-normal"
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={onClose}
+          className="px-10 h-14 font-normal"
         >
           İPTAL
-        </button>
-        <button 
-          type="submit" 
-          disabled={isSubmitting}
-          className="makam-button-primary px-12 h-14 font-semibold tracking-[0.16em]"
+        </Button>
+        {/* Paylaşımlı Button'ın isLoading'i — eskiden gönderim sırasında etiket
+            metni tamamen "İŞLENİYOR..." ile değiştiriliyordu; uygulamanın geri
+            kalanı (TeamList/AuditLogList/BlockerList/TaskDetails/Settings/vb.)
+            etiketi koruyup yanına dönen bir spinner ekleyen TEK bir kalıp
+            kullanıyor (bkz. kod denetimi: iki farklı loading-state dili). */}
+        <Button
+          type="submit"
+          isLoading={isSubmitting}
+          className="px-12 h-14 font-semibold tracking-[0.16em]"
         >
-          {isSubmitting ? 'İŞLENİYOR...' : (task ? 'GÜNCELLE' : 'ATAMAYI TAMAMLA')}
-        </button>
+          {task ? 'GÜNCELLE' : 'ATAMAYI TAMAMLA'}
+        </Button>
       </div>
     </form>
   );

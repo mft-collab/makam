@@ -14,7 +14,11 @@ interface Props {
    *  doğrudan çağırmıyor (bkz. kod denetimi: "okundu işaretleme" bir yazma
    *  işlemidir ve merkezi handler katmanını atlamamalıdır). */
   markNotificationRead: (notificationId: string) => Promise<void>;
-  markAllNotificationsRead: () => Promise<void>;
+  /** Yalnızca panelde GERÇEKTEN gösterilen bildirimlerin id'leri işaretlenir
+   *  (bkz. kod denetimi: sunucudan bağımsız "tümünü getir" sorgusu, panelin
+   *  limit(5) ile sınırlı görünümünün dışında kalan hiç görülmemiş bir
+   *  bildirimi — ör. eski bir Kriz uyarısını — sessizce kaybedebiliyordu). */
+  markAllNotificationsRead: (notificationIds: string[]) => Promise<void>;
 }
 
 export function NotificationPanel({
@@ -51,7 +55,7 @@ export function NotificationPanel({
         <button
           onClick={async (e) => {
             e.stopPropagation();
-            await markAllNotificationsRead();
+            await markAllNotificationsRead(notifications.map(n => n.id));
             setShowNotifications(false);
           }}
           className="text-[8px] text-text-tertiary hover:text-executive-blue uppercase tracking-[0.25em] font-medium transition-colors px-2 py-1 rounded-lg hover:bg-surface-glass"

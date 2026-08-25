@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { calculateDeadline, getRemainingTime, getSLAConfigForPriority, DEFAULT_SLA_CONFIG, isWeekendOrHoliday } from '../lib/sla';
+import { logger } from '../lib/logger';
 
 // Sabitleme: Pazartesi 09:00 sabahı (iş günü başı)
 const MONDAY_9AM = new Date('2024-01-08T09:00:00').getTime();
@@ -204,6 +205,54 @@ describe('SLA Hesaplama Motoru', () => {
       expect(d.getUTCDate()).toBe(31); // UTC günü: 31 Aralık — tatil listesinde YOK
       expect(d.getDate()).toBe(1);     // Yerel (İstanbul) günü: 1 Ocak — tatil listesinde VAR
       expect(isWeekendOrHoliday(d)).toBe(true);
+    });
+  });
+
+  // ─── isWeekendOrHoliday — tatil listesi tanımlı olmayan yıl ────────────────
+  // Regresyon: eskiden tatil listesi tek bir sabit 2026 dizisiydi; 2026 dışı
+  // bir yıl için hesaplama sessizce "tatil yok" varsayıyordu (bkz. kod
+  // denetimi). Artık davranış AYNI (hafta sonu hariç hiçbir şey atlanmaz) ama
+  // en az bir kez gözlemlenebilir bir uyarı loglanıyor.
+  describe('isWeekendOrHoliday — tatil listesi olmayan bir yıl', () => {
+    it('sadece hafta sonu kontrolü yapılır ve BİR KEZ uyarı loglanır (yıl başına spam önlenir)', () => {
+      const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+      // 2027 için tatil listesi tanımlı değil — 1 Ocak 2027 bir Cuma (hafta
+      // sonu değil), bu yüzden yalnızca tatil-listesi-eksik dalı devreye girer.
+      expect(isWeekendOrHoliday(new Date('2027-01-01T10:00:00'))).toBe(false);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+
+      // Aynı yıl için tekrar çağrılırsa uyarı TEKRARLANMAZ.
+      isWeekendOrHoliday(new Date('2027-06-15T10:00:00'));
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+
+      warnSpy.mockRestore();
+    });
+
+    it('2026 için tanımlı liste hâlâ doğru çalışır (regresyon değil)', () => {
+      expect(isWeekendOrHoliday(new Date('2026-01-01T10:00:00'))).toBe(true); // Yılbaşı
+    });
+  });
+
+  // ─── addBusinessDays (calculateDeadline üzerinden) — kesirli gün değeri ────
+  describe('calculateDeadline — kesirli gün değeri (geriye dönük uyumluluk)', () => {
+    it('0.5 iş günü, tam güne yuvarlanmaz — yarım iş günü (4.5 saat) kadar ileri gider', () => {
+      // Legacy format sayı olarak saklanmış olabilir (bkz. getSLAConfigForPriority
+      // testi: `{ Urgent: 0.5 }`) — calculateDeadline(start, 0.5) bu yüzden
+      // desteklenmeli. Bir iş günü 9 saat (09:00-18:00) olduğundan 0.5 gün = 4.5 saat.
+      const result = calculateDeadline(new Date(MONDAY_9AM), 0.5);
+      const date = new Date(result);
+      expect(date.getDay()).toBe(1); // hâlâ Pazartesi (tam gün atlanmadı)
+      expect(date.getHours()).toBe(13);
+      expect(date.getMinutes()).toBe(30);
+    });
+
+    it('1.5 iş günü = 1 tam iş günü + yarım iş günü (4.5 saat)', () => {
+      const result = calculateDeadline(new Date(MONDAY_9AM), 1.5);
+      const date = new Date(result);
+      expect(date.getDay()).toBe(2); // Salı (1 tam gün eklendi)
+      expect(date.getHours()).toBe(13);
+      expect(date.getMinutes()).toBe(30);
     });
   });
 });

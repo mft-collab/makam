@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Timestamp } from 'firebase/firestore';
+import type { User } from '../types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -64,6 +65,23 @@ export function formatTime(timestamp: number | Timestamp): string {
 /** "24.08.2026 14:35" — tarih + saat (saniyesiz, formatDateTime'dan farkı budur). */
 export function formatDateTimeShort(timestamp: number | Timestamp): string {
   return new Date(toMillis(timestamp)).toLocaleDateString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * uid VE email'e göre çift anahtarlı bir kullanıcı lookup Map'i kurar —
+ * Firestore'da `assigneeId`/`changedBy` gibi referans alanları bazen uid
+ * bazen (henüz ilk girişini yapmamış davet edilmiş bir kullanıcı için) email
+ * olabildiğinden ikisiyle de arama yapılabilmesi gerekir. Eskiden TaskBoard/
+ * TaskDetails/BlockerList her biri bu ~6 satırlık kurulumu bağımsız olarak
+ * kopyalıyordu (bkz. kod denetimi).
+ */
+export function buildUsersById(users: User[]): Map<string, User> {
+  const map = new Map<string, User>();
+  for (const u of users) {
+    map.set(u.uid, u);
+    map.set(u.email, u);
+  }
+  return map;
 }
 
 export function cleanData<T extends object>(obj: T): T {

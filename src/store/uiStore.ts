@@ -39,10 +39,6 @@ interface UIStore {
   // Toast bildirimleri
   toasts: ToastItem[];
 
-  // Offline durum
-  isOffline: boolean;
-  offlineQueueLength: number;
-
   // Aksiyonlar — mevcut
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   setActiveTab: (tab: string) => void;
@@ -50,7 +46,6 @@ interface UIStore {
   resetFilter: () => void;
   addToast: (toast: Omit<ToastItem, 'id'>) => void;
   removeToast: (id: string) => void;
-  setOfflineStatus: (isOffline: boolean, queueLength?: number) => void;
 
   // Aksiyonlar — yeni (App seviyesi modal yönetimi)
   setIsCreateModalOpen: (open: boolean) => void;
@@ -90,10 +85,6 @@ export const useUIStore = create<UIStore>()(
       // Toastlar
       toasts: [],
 
-      // Offline
-      isOffline: typeof window !== 'undefined' ? !window.navigator.onLine : false,
-      offlineQueueLength: 0,
-
       // Tema
       theme: 'system',
 
@@ -127,13 +118,6 @@ export const useUIStore = create<UIStore>()(
     removeToast: (id) => set((state) => ({
       toasts: state.toasts.filter(t => t.id !== id),
     })),
-
-    // ─── Offline ────────────────────────────────────────────────────────────
-
-    setOfflineStatus: (isOffline, queueLength = 0) => set({
-      isOffline,
-      offlineQueueLength: queueLength,
-    }),
 
     // ─── App Seviyesi Modal Aksiyonları ──────────────────────────────────────
 

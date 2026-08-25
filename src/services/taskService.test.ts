@@ -226,43 +226,74 @@ describe('taskService', () => {
   // ─── createTask — iş kuralları ──────────────────────────────────────────────
 
   describe('createTask', () => {
-    it('Admin rolündeki kullanıcı irtibatlı olarak atanamaz', async () => {
+    it('Admin rolündeki kullanıcı irtibatlı olarak atanamaz — transaction hiç başlatılmaz', async () => {
       vi.mocked(firebase.getDoc).mockResolvedValue({ exists: () => true, data: () => ({ role: 'Admin' }) } as any);
 
       await expect(
         taskService.createTask({ title: 'Test', coordinatorId: 'admin-uid' }, 'user-1')
       ).rejects.toThrow(/Admin rolündeki kullanıcı irtibatlı/);
 
-      expect(firebase.addDoc).not.toHaveBeenCalled();
+      expect(firebase.runTransaction).not.toHaveBeenCalled();
     }, 10_000);
 
-    it('alt talimat yalnızca Staff (memur) rolüne atanabilir', async () => {
+    it('alt talimat yalnızca Staff (memur) rolüne atanabilir — transaction hiç başlatılmaz', async () => {
       vi.mocked(firebase.getDoc).mockResolvedValue({ exists: () => true, data: () => ({ role: 'Manager' }) } as any);
 
       await expect(
         taskService.createTask({ title: 'Alt görev', parentId: 'parent-1', assigneeId: 'manager-uid' }, 'user-1')
       ).rejects.toThrow(/yalnızca Memur/);
 
-      expect(firebase.addDoc).not.toHaveBeenCalled();
+      expect(firebase.runTransaction).not.toHaveBeenCalled();
     }, 10_000);
 
-    it('başarılı oluşturmada lockVersion=0, totalPausedTime=0 ile kaydedilir; stats ve audit log yazılır', async () => {
-      const fakeTaskRef = { id: 'new-task-id' };
-      vi.mocked(firebase.addDoc).mockImplementation(async (col: any) => {
-        return col?.__name === 'tasks' ? fakeTaskRef : { id: 'audit-id' };
+    it('başarılı oluşturmada görev + audit log + stats TEK transaction içinde atomik yazılır (çift-kayıt riskine karşı)', async () => {
+      let capturedTransaction: any;
+      vi.mocked(firebase.runTransaction).mockImplementationOnce(async (_db: any, fn: any) => {
+        const mock = makeTransactionMock({});
+        capturedTransaction = mock;
+        return fn(mock.transaction);
       });
-      vi.mocked(firebase.updateDoc).mockResolvedValue(undefined as any);
-      vi.mocked(firebase.setDoc).mockResolvedValue(undefined as any);
 
       const id = await taskService.createTask({ title: 'Yeni Görev', priority: 'Medium' }, 'user-1');
 
-      expect(id).toBe('new-task-id');
-      const taskCreateCall = vi.mocked(firebase.addDoc).mock.calls.find(([col]: any) => col?.__name === 'tasks');
-      expect(taskCreateCall?.[1]).toMatchObject({ status: 'ASSIGNED', lockVersion: 0, totalPausedTime: 0 });
+      // taskRef, runTransaction'dan ÖNCE (transaction dışında) sabitlenir —
+      // bu sayede bir runWithRetry tekrarı aynı dokümana idempotent yazar,
+      // addDoc'un her seferinde yeni ID üretmesiyle oluşan çift-kayıt riski yok.
+      expect(id).toBe('ref-1');
 
-      expect(firebase.setDoc).toHaveBeenCalledOnce();
-      const [, statsData] = vi.mocked(firebase.setDoc).mock.calls[0]!;
-      expect(statsData).toMatchObject({ totalTasks: { __increment: 1 }, status_ASSIGNED: { __increment: 1 } });
+      const taskSetCall = capturedTransaction.set.mock.calls.find(([, data]: any) => data?.status === 'ASSIGNED');
+      expect(taskSetCall?.[1]).toMatchObject({ id: 'ref-1', status: 'ASSIGNED', lockVersion: 0, totalPausedTime: 0 });
+
+      const auditSetCall = capturedTransaction.set.mock.calls.find(([, data]: any) => data?.newValue === 'Talimat Oluşturuldu ve Atandı');
+      expect(auditSetCall?.[1]).toMatchObject({ taskId: 'ref-1', changedBy: 'user-1' });
+
+      const statsSetCall = capturedTransaction.set.mock.calls.find(([, data]: any) => 'status_ASSIGNED' in (data ?? {}));
+      expect(statsSetCall?.[1]).toMatchObject({ totalTasks: { __increment: 1 }, status_ASSIGNED: { __increment: 1 } });
+    });
+
+    it('ağ hatası sonrası runWithRetry tekrar denediğinde AYNI taskRef ile yazar (idempotent, çift doküman oluşmaz)', async () => {
+      let callCount = 0;
+      let capturedTransaction: any;
+      vi.mocked(firebase.runTransaction).mockImplementation(async (_db: any, fn: any) => {
+        callCount++;
+        if (callCount === 1) {
+          // İlk deneme ağ hatasıyla başarısız olur.
+          throw new Error('unavailable');
+        }
+        const mock = makeTransactionMock({});
+        capturedTransaction = mock;
+        return fn(mock.transaction);
+      });
+
+      const id = await taskService.createTask({ title: 'Tekrar Denenen Görev' }, 'user-1');
+
+      expect(callCount).toBe(2);
+      // taskRef, runWithRetry döngüsünün DIŞINDA yalnızca bir kez üretildi —
+      // bu yüzden ilk deneme başarısız olsa da ikinci deneme aynı ID'yi
+      // kullanıyor (addDoc kullanılsaydı her deneme yeni bir ID üretirdi).
+      expect(id).toBe('ref-1');
+      const taskSetCall = capturedTransaction.set.mock.calls.find(([, data]: any) => data?.status === 'ASSIGNED');
+      expect(taskSetCall?.[1]).toMatchObject({ id: 'ref-1' });
     });
   });
 
@@ -277,6 +308,33 @@ describe('taskService', () => {
         taskService.updateTask('task-1', { coordinatorId: 'admin-uid' }, oldTask, 'user-1')
       ).rejects.toThrow(/Admin rolündeki kullanıcı irtibatlı/);
     }, 10_000);
+
+    it('data.status geçersiz bir geçişse (durum makinesi ihlali) güncelleme reddedilir', async () => {
+      // updateTaskInTransaction eskiden data.status'u hiç kontrol etmiyordu —
+      // durum geçişleri her zaman transitionTaskInTransaction'dan gittiği için
+      // bugüne kadar hiçbir çağıran bunu kötüye kullanmadı, ama kural kod
+      // seviyesinde zorlanmıyordu (bkz. kod denetimi: savunma derinliği
+      // kırılabilirdi).
+      const { transaction, update } = makeTransactionMock({ status: 'COMPLETED', lockVersion: 3 });
+      vi.mocked(firebase.runTransaction).mockImplementation(async (_db: any, fn: any) => fn(transaction));
+      const oldTask = { id: 'task-1', status: 'COMPLETED', lockVersion: 3 } as Task;
+
+      await expect(
+        taskService.updateTask('task-1', { status: 'IN_PROGRESS' }, oldTask, 'user-1')
+      ).rejects.toThrow(/INVALID_TRANSITION/);
+
+      expect(update).not.toHaveBeenCalled();
+    }, 10_000);
+
+    it('data.status geçerli bir geçişse (ör. IN_PROGRESS→COMPLETED) güncelleme uygulanır', async () => {
+      const { transaction, update } = makeTransactionMock({ status: 'IN_PROGRESS', lockVersion: 3 });
+      vi.mocked(firebase.runTransaction).mockImplementationOnce(async (_db: any, fn: any) => fn(transaction));
+      const oldTask = { id: 'task-1', status: 'IN_PROGRESS', lockVersion: 3 } as Task;
+
+      await taskService.updateTask('task-1', { status: 'COMPLETED' }, oldTask, 'user-1');
+
+      expect(update).toHaveBeenCalledOnce();
+    });
 
     it('sunucu versiyonu beklenenle uyuşmazsa güncelleme uygulanmaz', async () => {
       const { transaction, update } = makeTransactionMock({ status: 'IN_PROGRESS', lockVersion: 7 });

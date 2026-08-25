@@ -92,6 +92,32 @@ describe('BlockerList', () => {
     });
   });
 
+  describe('SLA rozeti — pause-farkında hesaplama', () => {
+    // Eskiden bu rozet saf `deadline - Date.now()` farkına bakıyordu ve
+    // BLOCKED durumdaki (yani pause mekanizmasının tam olarak devrede
+    // olduğu) bir görevin duraklama süresini hiç hesaba katmıyordu — ham
+    // deadline geçmiş olsa bile görev aslında duraklatıldığı için henüz
+    // "gecikmiş" sayılmaması gerekir (bkz. kod denetimi, taskDetails/
+    // helpers.ts getTimeLeft ile aynı düzeltmenin burada tekrarı).
+    it('ham deadline şu an geçmiş görünüyor ama duraklama ANINDA henüz geçmemişti — rozet "geçti" değil "kaldı (Duraklatıldı)" gösterir', () => {
+      // deadline "şimdi"den 5sn önce (ham karşılaştırma onu geçmiş sayardı),
+      // ama görev 100sn önce (deadline'dan ÖNCE) duraklatılmış — pause anındaki
+      // gerçek durum hâlâ "süre var". Eski (pause-farkında olmayan) hesaplama
+      // bunu yanlışlıkla "danger/gecikmiş" gösterirdi.
+      const task = makeTask({
+        status: 'BLOCKED',
+        deadline: Date.now() - 5_000,
+        pausedAt: Date.now() - 100_000,
+        totalPausedTime: 0,
+      });
+      renderList({ tasks: [task], blockers: [makeBlocker()] });
+
+      expect(screen.getByText(/Duraklatıldı/)).toBeInTheDocument();
+      expect(screen.getByText(/kaldı/)).toBeInTheDocument();
+      expect(screen.queryByText(/geçti/)).not.toBeInTheDocument();
+    });
+  });
+
   describe('rol bazlı aksiyon görünürlüğü', () => {
     it('isAdmin=false: Düzenle/Sil/Çözüldü butonlarının hiçbiri gösterilmez', () => {
       const task = makeTask();

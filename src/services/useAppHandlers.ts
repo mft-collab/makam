@@ -117,7 +117,7 @@ export function useAppHandlers({
         if (!hasBlocker) {
           // Kaydırma ile hızlı kriz bildirimi bir kullanıcı seçimi içermez —
           // "Yüksek" varsayılan ciddiyet, bu yolun bilinçli acil-durum niteliğini yansıtır.
-          await blockerService.addBlocker(taskId, 'Hızlı kaydırma ile kriz bildirimi.', user.uid, oldTask?.status ?? 'IN_PROGRESS', oldTask?.lockVersion, 'High');
+          await blockerService.addBlocker(taskId, 'Hızlı kaydırma ile kriz bildirimi.', user.uid, oldTask?.lockVersion, 'High');
         } else {
           await taskService.updateTaskStatus(taskId, newStatus, oldTask?.status, user.uid, evidence, evidenceType, oldTask?.lockVersion);
         }
@@ -249,9 +249,15 @@ export function useAppHandlers({
     }
 
     try {
-      await blockerService.addBlocker(taskId, reason, user.uid, task.status, task.lockVersion, severity);
+      await blockerService.addBlocker(taskId, reason, user.uid, task.lockVersion, severity);
     } catch (err) {
-      onError(err, 'create', 'blockers');
+      // addBlocker HER ZAMAN transitionTaskInTransaction (görevi BLOCKED'a alma)
+      // içerir — bir VERSION_MISMATCH burada aslında görevin lockVersion'ı
+      // hakkındadır. path 'tasks/{taskId}' olarak verilir ki App.tsx'teki
+      // handleFirestoreError bunu genel bir sistem hatası yerine "Düzenleme
+      // Çakışması" olarak tanıyıp doğru toast'ı göstersin (bkz. kod denetimi:
+      // eskiden 'blockers' path'i bu algılamayı hiç tetiklemiyordu).
+      onError(err, 'create', `tasks/${taskId}`);
     }
   }, [user, tasks, toast, onError]);
 
@@ -286,7 +292,11 @@ export function useAppHandlers({
       const task = tasks.find(t => t.id === blocker.taskId);
       await blockerService.resolveBlocker(blockerId, blocker.taskId, taskBlockers.length - 1, user.uid, task?.lockVersion);
     } catch (err) {
-      onError(err, 'update', `blockers/${blockerId}`);
+      // Son aktif engelse resolveBlocker de transitionTaskInTransaction
+      // içerir (görevi IN_PROGRESS'e döndürme) — bkz. addBlocker'daki aynı
+      // path-seçim gerekçesi (kod denetimi: conflictDetectionService'in
+      // tasks/ dışı path'lerde hiç tetiklenmemesi sorunu).
+      onError(err, 'update', `tasks/${blocker.taskId}`);
     }
   }, [user, blockers, tasks, toast, onError]);
 
@@ -339,31 +349,43 @@ export function useAppHandlers({
   // ─── Kullanıcı yönetimi ──────────────────────────────────────────────────
   const addUser = useCallback(async (data: { email: string; fullName: string; role: UserRole; departmentId?: string }) => {
     if (!user) return;
-    try { await userService.addUser(data); }
+    try { await userService.addUser(data, user.uid); }
     catch (err) { onError(err, 'create', 'users'); }
   }, [user, onError]);
 
   const updateUserRole = useCallback(async (userId: string, data: Partial<User>) => {
     if (!user) return;
-    try { await userService.updateUser(userId, data); }
+    try { await userService.updateUser(userId, data, user.uid); }
     catch (err) { onError(err, 'update', `users/${userId}`); }
   }, [user, onError]);
 
   const deleteUser = useCallback(async (userId: string) => {
     if (!user) return;
-    try { await userService.deleteUser(userId); }
+    try { await userService.deleteUser(userId, user.uid); }
     catch (err) { onError(err, 'delete', `users/${userId}`); }
   }, [user, onError]);
 
   // ─── Blocker yönetimi ────────────────────────────────────────────────────
   const updateBlocker = useCallback(async (blockerId: string, reason: string) => {
     if (!user) return;
-    try { await blockerService.editBlocker(blockerId, reason); }
+    const blocker = blockers.find(b => b.id === blockerId);
+    if (!blocker) return;
+    try { await blockerService.editBlocker(blockerId, reason, user.uid, blocker.taskId); }
     catch (err) { onError(err, 'update', `blockers/${blockerId}`); }
-  }, [user, onError]);
+  }, [user, blockers, onError]);
 
   const deleteBlocker = useCallback(async (blockerId: string) => {
     if (!user) return;
+    if (user.role !== 'Admin') {
+      // firestore.rules: blockers/{id} silme YALNIZCA Admin'e açık — diğer
+      // koleksiyonlardaki "aynı departman Manager" istisnası burada YOK.
+      // UI (BlockerList) zaten bu butonu isAdmin'e göre gizliyor; bu erken
+      // dönüş, o kontrolü atlayan bir çağrı olursa sunucudan gelecek
+      // anlaşılmaz bir permission-denied yerine net bir uyarı gösterir
+      // (bkz. kod denetimi: client/rules rol asimetrisi).
+      toast('⛔ Yetkisiz İşlem', 'Risk unsuru silme yalnızca Yöneticilere açıktır.', 'danger');
+      return;
+    }
     const blocker = blockers.find(b => b.id === blockerId);
     if (!blocker) return;
 
@@ -390,16 +412,18 @@ export function useAppHandlers({
     }
 
     try {
-      if (isLastActiveBlocker) {
-        // Engel silme + görevin IN_PROGRESS'e dönmesi TEK transaction'da (bkz.
-        // blockerService.deleteBlocker) — biri başarısız olursa diğeri de olmaz,
-        // görev çözülecek engeli olmadan BLOCKED'da kilitli kalmaz.
-        await blockerService.deleteBlocker(blockerId, blocker.taskId, 0, user.uid, task?.lockVersion);
-      } else {
-        await blockerService.deleteBlocker(blockerId);
-      }
+      // taskId/userId HER ZAMAN geçilir (son aktif engel olsun ya da olmasın)
+      // — blockerService.deleteBlocker, otherActiveCount===0 değilse zaten
+      // transaction'a girmiyor, sadece audit_logs yazımı için bu bilgiye
+      // ihtiyaç duyuyor (bkz. kod denetimi: eskiden son-engel-olmayan dalda
+      // hiç audit log yazılmıyordu).
+      await blockerService.deleteBlocker(blockerId, blocker.taskId, others.length, user.uid, task?.lockVersion);
     } catch (err) {
-      onError(err, 'delete', `blockers/${blockerId}`);
+      // Son aktif engelse deleteBlocker de transitionTaskInTransaction içerir
+      // (görevi IN_PROGRESS'e döndürme) — bkz. addBlocker'daki aynı path-seçim
+      // gerekçesi. Son engel değilse VERSION_MISMATCH zaten hiç oluşamaz,
+      // bu path seçimi o durumda zararsızdır.
+      onError(err, 'delete', `tasks/${blocker.taskId}`);
     }
   }, [user, blockers, tasks, toast, onError]);
 
@@ -410,9 +434,14 @@ export function useAppHandlers({
     catch (err) { onError(err, 'update', `notifications/${notificationId}`); }
   }, [user, onError]);
 
-  const markAllNotificationsRead = useCallback(async () => {
+  // notificationIds: panelde GERÇEKTEN gösterilmiş bildirimlerin id'leri —
+  // sunucudan bağımsız bir "tümünü getir" sorgusu YAPILMAZ, aksi halde
+  // kullanıcının hiç görmediği (ör. limit(5)'in dışında kalan eski bir Kriz
+  // bildirimi) bir kayıt sessizce okundu işaretlenip kaybolabilir (bkz. kod
+  // denetimi).
+  const markAllNotificationsRead = useCallback(async (notificationIds: string[]) => {
     if (!user) return;
-    try { await notificationService.markAllAsRead(user.uid); }
+    try { await notificationService.markManyAsRead(notificationIds); }
     catch (err) { onError(err, 'update', 'notifications'); }
   }, [user, onError]);
 

@@ -96,7 +96,7 @@ describe('useAppHandlers', () => {
 
       await act(async () => { await handlers.updateTaskStatus('task-1', 'BLOCKED'); });
 
-      expect(blockerService.addBlocker).toHaveBeenCalledWith('task-1', 'Hızlı kaydırma ile kriz bildirimi.', 'user-1', 'IN_PROGRESS', 3, 'High');
+      expect(blockerService.addBlocker).toHaveBeenCalledWith('task-1', 'Hızlı kaydırma ile kriz bildirimi.', 'user-1', 3, 'High');
       expect(taskService.updateTaskStatus).not.toHaveBeenCalled();
     });
 
@@ -329,7 +329,7 @@ describe('useAppHandlers', () => {
 
       await act(async () => { await handlers.addBlocker('task-1', 'Sunucu çöktü'); });
 
-      expect(blockerService.addBlocker).toHaveBeenCalledWith('task-1', 'Sunucu çöktü', 'user-1', 'IN_PROGRESS', 5, 'Medium');
+      expect(blockerService.addBlocker).toHaveBeenCalledWith('task-1', 'Sunucu çöktü', 'user-1', 5, 'Medium');
     });
 
     it('online: severity açıkça verilirse aynen iletilir', async () => {
@@ -337,16 +337,20 @@ describe('useAppHandlers', () => {
 
       await act(async () => { await handlers.addBlocker('task-1', 'Sunucu çöktü', 'Urgent'); });
 
-      expect(blockerService.addBlocker).toHaveBeenCalledWith('task-1', 'Sunucu çöktü', 'user-1', 'IN_PROGRESS', 5, 'Urgent');
+      expect(blockerService.addBlocker).toHaveBeenCalledWith('task-1', 'Sunucu çöktü', 'user-1', 5, 'Urgent');
     });
 
-    it('servis reddederse onError(err, \'create\', \'blockers\') çağrılır', async () => {
+    it('servis reddederse onError(err, \'create\', \'tasks/{taskId}\') çağrılır (VERSION_MISMATCH tespiti için)', async () => {
+      // addBlocker HER ZAMAN görevi BLOCKED'a alan bir transaction içeriyor —
+      // path 'tasks/{taskId}' olmalı ki App.tsx'teki handleFirestoreError bir
+      // VERSION_MISMATCH'i "Düzenleme Çakışması" olarak tanıyabilsin (bkz. kod
+      // denetimi: eskiden 'blockers' path'i bu algılamayı hiç tetiklemiyordu).
       vi.mocked(blockerService.addBlocker).mockRejectedValueOnce(new Error('x'));
       const { handlers, onError } = setup({ tasks: [makeTask()] });
 
       await act(async () => { await handlers.addBlocker('task-1', 'Sebep'); });
 
-      expect(onError).toHaveBeenCalledWith(expect.any(Error), 'create', 'blockers');
+      expect(onError).toHaveBeenCalledWith(expect.any(Error), 'create', 'tasks/task-1');
     });
 
     it('offline: blocker+görev geçişi tek birleşik enqueue çağrısında kuyruğa alınır', async () => {
@@ -392,13 +396,13 @@ describe('useAppHandlers', () => {
       expect(blockerService.resolveBlocker).toHaveBeenCalledWith('blocker-1', 'task-1', 1, 'user-1', 3);
     });
 
-    it('servis reddederse onError(err, \'update\', \'blockers/{id}\') çağrılır', async () => {
+    it('servis reddederse onError(err, \'update\', \'tasks/{taskId}\') çağrılır (VERSION_MISMATCH tespiti için)', async () => {
       vi.mocked(blockerService.resolveBlocker).mockRejectedValueOnce(new Error('x'));
       const { handlers, onError } = setup({ tasks: [makeTask()], blockers: [makeBlocker()] });
 
       await act(async () => { await handlers.resolveBlocker('blocker-1'); });
 
-      expect(onError).toHaveBeenCalledWith(expect.any(Error), 'update', 'blockers/blocker-1');
+      expect(onError).toHaveBeenCalledWith(expect.any(Error), 'update', 'tasks/task-1');
     });
 
     it('offline + son aktif engelse: engel+görev geçişi TEK birleşik enqueue çağrısında kuyruğa alınır', async () => {
@@ -517,10 +521,10 @@ describe('useAppHandlers', () => {
   });
 
   describe('kullanıcı yönetimi (addUser / updateUserRole / deleteUser) — offline dalı yok', () => {
-    it('addUser: online userService.addUser çağrılır', async () => {
+    it('addUser: online userService.addUser çağrılır (actorId ile)', async () => {
       const { handlers } = setup();
       await act(async () => { await handlers.addUser({ email: 'a@b.com', fullName: 'X', role: 'Staff' }); });
-      expect(userService.addUser).toHaveBeenCalledWith({ email: 'a@b.com', fullName: 'X', role: 'Staff' });
+      expect(userService.addUser).toHaveBeenCalledWith({ email: 'a@b.com', fullName: 'X', role: 'Staff' }, 'user-1');
     });
 
     it('addUser: cihaz çevrimdışıyken de doğrudan servisi çağırır (offlineQueue kullanılmaz)', async () => {
@@ -538,10 +542,10 @@ describe('useAppHandlers', () => {
       expect(onError).toHaveBeenCalledWith(expect.any(Error), 'create', 'users');
     });
 
-    it('updateUserRole: userService.updateUser doğru argümanlarla çağrılır', async () => {
+    it('updateUserRole: userService.updateUser doğru argümanlarla (actorId ile) çağrılır', async () => {
       const { handlers } = setup();
       await act(async () => { await handlers.updateUserRole('target-uid', { role: 'Manager' }); });
-      expect(userService.updateUser).toHaveBeenCalledWith('target-uid', { role: 'Manager' });
+      expect(userService.updateUser).toHaveBeenCalledWith('target-uid', { role: 'Manager' }, 'user-1');
     });
 
     it('updateUserRole: servis reddederse onError(err, \'update\', \'users/{id}\') çağrılır', async () => {
@@ -551,10 +555,10 @@ describe('useAppHandlers', () => {
       expect(onError).toHaveBeenCalledWith(expect.any(Error), 'update', 'users/target-uid');
     });
 
-    it('deleteUser: userService.deleteUser çağrılır', async () => {
+    it('deleteUser: userService.deleteUser çağrılır (actorId ile)', async () => {
       const { handlers } = setup();
       await act(async () => { await handlers.deleteUser('target-uid'); });
-      expect(userService.deleteUser).toHaveBeenCalledWith('target-uid');
+      expect(userService.deleteUser).toHaveBeenCalledWith('target-uid', 'user-1');
     });
 
     it('deleteUser: servis reddederse onError(err, \'delete\', \'users/{id}\') çağrılır', async () => {
@@ -578,15 +582,21 @@ describe('useAppHandlers', () => {
   });
 
   describe('updateBlocker — offline dalı yok', () => {
-    it('online: blockerService.editBlocker çağrılır', async () => {
-      const { handlers } = setup();
+    it('engel lokal listede bulunamazsa hiçbir şey yapmaz', async () => {
+      const { handlers } = setup({ blockers: [] });
       await act(async () => { await handlers.updateBlocker('blocker-1', 'Yeni sebep'); });
-      expect(blockerService.editBlocker).toHaveBeenCalledWith('blocker-1', 'Yeni sebep');
+      expect(blockerService.editBlocker).not.toHaveBeenCalled();
+    });
+
+    it('online: blockerService.editBlocker actorId + taskId ile çağrılır (audit log için)', async () => {
+      const { handlers } = setup({ blockers: [makeBlocker()] });
+      await act(async () => { await handlers.updateBlocker('blocker-1', 'Yeni sebep'); });
+      expect(blockerService.editBlocker).toHaveBeenCalledWith('blocker-1', 'Yeni sebep', 'user-1', 'task-1');
     });
 
     it('cihaz çevrimdışıyken de doğrudan servisi çağırır (offlineQueue kullanılmaz)', async () => {
       goOffline();
-      const { handlers } = setup();
+      const { handlers } = setup({ blockers: [makeBlocker()] });
       await act(async () => { await handlers.updateBlocker('blocker-1', 'Yeni sebep'); });
       expect(blockerService.editBlocker).toHaveBeenCalledOnce();
       expect(offlineQueue.enqueue).not.toHaveBeenCalled();
@@ -594,15 +604,32 @@ describe('useAppHandlers', () => {
 
     it('servis reddederse onError(err, \'update\', \'blockers/{id}\') çağrılır', async () => {
       vi.mocked(blockerService.editBlocker).mockRejectedValueOnce(new Error('x'));
-      const { handlers, onError } = setup();
+      const { handlers, onError } = setup({ blockers: [makeBlocker()] });
       await act(async () => { await handlers.updateBlocker('blocker-1', 'Yeni sebep'); });
       expect(onError).toHaveBeenCalledWith(expect.any(Error), 'update', 'blockers/blocker-1');
     });
   });
 
   describe('deleteBlocker', () => {
+    // firestore.rules: blockers/{id} silme YALNIZCA Admin'e açık (diğer
+    // koleksiyonlardaki "aynı departman Manager" istisnası burada YOK) —
+    // bu describe bloğundaki setup() çağrıları bu yüzden açıkça Admin
+    // kullanıyor; varsayılan test kullanıcısı (Manager) aşağıdaki yeni
+    // "yetkisiz" testinde ayrıca doğrulanıyor (bkz. kod denetimi).
+    const admin = () => makeUser({ role: 'Admin' });
+
+    it('Admin olmayan bir kullanıcı (varsayılan: Manager) denerse servis hiç çağrılmaz, uyarı toast\'ı gösterilir', async () => {
+      const { handlers } = setup({ tasks: [makeTask()], blockers: [makeBlocker()] });
+
+      await act(async () => { await handlers.deleteBlocker('blocker-1'); });
+
+      expect(blockerService.deleteBlocker).not.toHaveBeenCalled();
+      expect(offlineQueue.enqueue).not.toHaveBeenCalled();
+      expect(uiState.addToast).toHaveBeenCalledWith(expect.objectContaining({ type: 'danger' }));
+    });
+
     it('engel lokal listede bulunamazsa hiçbir şey yapmaz', async () => {
-      const { handlers } = setup({ blockers: [] });
+      const { handlers } = setup({ user: admin(), blockers: [] });
       await act(async () => { await handlers.deleteBlocker('blocker-1'); });
       expect(blockerService.deleteBlocker).not.toHaveBeenCalled();
     });
@@ -614,7 +641,7 @@ describe('useAppHandlers', () => {
       // denetimi: görev çözülecek engeli olmadan BLOCKED'da kilitli kalabiliyordu).
       const task = makeTask({ status: 'BLOCKED', lockVersion: 4 });
       const blocker = makeBlocker();
-      const { handlers } = setup({ tasks: [task], blockers: [blocker] });
+      const { handlers } = setup({ user: admin(), tasks: [task], blockers: [blocker] });
 
       await act(async () => { await handlers.deleteBlocker('blocker-1'); });
 
@@ -622,35 +649,38 @@ describe('useAppHandlers', () => {
       expect(taskService.updateTaskStatus).not.toHaveBeenCalled();
     });
 
-    it('online + görevde başka aktif engel kalıyorsa: taskService.updateTaskStatus çağrılmaz', async () => {
+    it('online + görevde başka aktif engel kalıyorsa: taskService.updateTaskStatus çağrılmaz, otherActiveCount pozitif iletilir (audit log için)', async () => {
       const task = makeTask({ status: 'BLOCKED' });
       const b1 = makeBlocker({ id: 'blocker-1' });
       const b2 = makeBlocker({ id: 'blocker-2' });
-      const { handlers } = setup({ tasks: [task], blockers: [b1, b2] });
+      const { handlers } = setup({ user: admin(), tasks: [task], blockers: [b1, b2] });
 
       await act(async () => { await handlers.deleteBlocker('blocker-1'); });
 
-      expect(blockerService.deleteBlocker).toHaveBeenCalledWith('blocker-1');
+      // taskId/userId artık HER ZAMAN iletiliyor (audit log yazımı için) —
+      // blockerService bu durumda otherActiveCount!==0 olduğundan yine de
+      // transaction/task-geçişi başlatmaz, yalnızca audit kaydı yazar.
+      expect(blockerService.deleteBlocker).toHaveBeenCalledWith('blocker-1', 'task-1', 1, 'user-1', 3);
       expect(taskService.updateTaskStatus).not.toHaveBeenCalled();
     });
 
     it('online + son aktif engel ama görev BLOCKED değilse: taskService.updateTaskStatus çağrılmaz', async () => {
       const task = makeTask({ status: 'IN_PROGRESS' });
       const blocker = makeBlocker();
-      const { handlers } = setup({ tasks: [task], blockers: [blocker] });
+      const { handlers } = setup({ user: admin(), tasks: [task], blockers: [blocker] });
 
       await act(async () => { await handlers.deleteBlocker('blocker-1'); });
 
       expect(taskService.updateTaskStatus).not.toHaveBeenCalled();
     });
 
-    it('servis reddederse onError(err, \'delete\', \'blockers/{id}\') çağrılır', async () => {
+    it('servis reddederse onError(err, \'delete\', \'tasks/{taskId}\') çağrılır (VERSION_MISMATCH tespiti için)', async () => {
       vi.mocked(blockerService.deleteBlocker).mockRejectedValueOnce(new Error('x'));
-      const { handlers, onError } = setup({ tasks: [makeTask()], blockers: [makeBlocker()] });
+      const { handlers, onError } = setup({ user: admin(), tasks: [makeTask()], blockers: [makeBlocker()] });
 
       await act(async () => { await handlers.deleteBlocker('blocker-1'); });
 
-      expect(onError).toHaveBeenCalledWith(expect.any(Error), 'delete', 'blockers/blocker-1');
+      expect(onError).toHaveBeenCalledWith(expect.any(Error), 'delete', 'tasks/task-1');
     });
 
     it('offline + son aktif engel + görev BLOCKED: engel silme + görev geçişi TEK enqueue çağrısıyla (linkedTaskTransition) kuyruğa alınır', async () => {
@@ -661,7 +691,7 @@ describe('useAppHandlers', () => {
       goOffline();
       const task = makeTask({ status: 'BLOCKED', lockVersion: 4 });
       const blocker = makeBlocker();
-      const { handlers } = setup({ tasks: [task], blockers: [blocker] });
+      const { handlers } = setup({ user: admin(), tasks: [task], blockers: [blocker] });
 
       await act(async () => { await handlers.deleteBlocker('blocker-1'); });
 
@@ -677,7 +707,7 @@ describe('useAppHandlers', () => {
       const task = makeTask({ status: 'BLOCKED' });
       const b1 = makeBlocker({ id: 'blocker-1' });
       const b2 = makeBlocker({ id: 'blocker-2' });
-      const { handlers } = setup({ tasks: [task], blockers: [b1, b2] });
+      const { handlers } = setup({ user: admin(), tasks: [task], blockers: [b1, b2] });
 
       await act(async () => { await handlers.deleteBlocker('blocker-1'); });
 

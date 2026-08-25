@@ -19,6 +19,7 @@ const baseState = {
   setStats: () => {},
   setHydrated: () => {},
   loadMoreTasks: () => {},
+  reset: () => {},
 };
 
 describe('mergeDataState — IDB rehydration yarışı koruması', () => {
@@ -53,3 +54,11 @@ describe('mergeDataState — IDB rehydration yarışı koruması', () => {
     expect(result.stats).toEqual({ totalTasks: 5 }); // canlı stats korunur, IDB'deki bayat değer değil
   });
 });
+
+// NOT: `reset` action'ının kendisi burada DOĞRUDAN test edilmiyor — gerçek
+// useDataStore örneğini çağırmak persist middleware'i (idb-keyval →
+// IndexedDB) tetikliyor ve jsdom'da IndexedDB olmadığından yakalanmamış
+// promise reddi üretiyor (bu dosyanın geri kalanının neden yalnızca saf
+// `mergeDataState` fonksiyonunu test ettiğinin nedeni de bu). `reset`'in
+// doğru zamanda (logout) çağrıldığı, store'un mock'landığı
+// hooks/useFirestoreData.test.ts içinde ayrıca test ediliyor.

@@ -199,9 +199,19 @@ export const scheduledDailyAudit = functions
         .where('role', 'in', ['Admin', 'Manager'])
         .get();
 
-      // 5. Her admin'e bildirim oluştur
-      const notifBatch = db.batch();
+      // 5. Her admin'e bildirim oluştur — yukarıdaki idle-task döngüsüyle AYNI
+      // 450'lik chunk koruması: admin/manager sayısı pratikte küçük kalsa da,
+      // tek bir sınırsız db.batch() burada Firestore'un 500 işlem limitini
+      // aşabilirdi (bkz. kod denetimi: aynı fonksiyonda tutarsız disiplin).
+      const notifBatches: admin.firestore.WriteBatch[] = [];
+      let notifBatch = db.batch();
+      let notifWriteCount = 0;
       for (const adminDoc of adminsSnap.docs) {
+        if (notifWriteCount >= 450) {
+          notifBatches.push(notifBatch);
+          notifBatch = db.batch();
+          notifWriteCount = 0;
+        }
         const notifRef = db.collection('notifications').doc();
         notifBatch.set(notifRef, {
           userId: adminDoc.id,
@@ -211,8 +221,10 @@ export const scheduledDailyAudit = functions
           timestamp: now,
           isRead: false,
         });
+        notifWriteCount++;
       }
-      await notifBatch.commit();
+      if (notifWriteCount > 0) notifBatches.push(notifBatch);
+      await Promise.all(notifBatches.map(b => b.commit()));
       console.log(`[DailyAudit] ${adminsSnap.size} yöneticiye bildirim gönderildi.`);
 
       // 6. Audit logu kaydet

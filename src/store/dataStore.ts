@@ -54,6 +54,14 @@ interface DataState {
   setStats: (stats: GlobalStats) => void;
   setHydrated: () => void;
   loadMoreTasks: () => void;
+  /** Çıkış (logout) yapıldığında çağrılır — aksi halde önceki kullanıcının
+   *  görev/kullanıcı/engel verisi hem bellekte hem idb-keyval diskinde kalır
+   *  ve aynı cihazda giriş yapan bir sonraki kullanıcıya (yeni onSnapshot
+   *  verisi gelene kadar, offline'sa hiç gelmeyebilir) görünür kalabilir
+   *  (bkz. kod denetimi). hasLive* bayrakları da sıfırlanır ki yeni oturumun
+   *  ilk IDB rehydration'ı mergeDataState tarafından doğru değerlendirilsin.
+   */
+  reset: () => void;
 }
 
 // IDB okuması Firestore'un ilk canlı anlık görüntüsünden daha uzun sürerse,
@@ -93,6 +101,17 @@ export const useDataStore = create<DataState>()(
       setStats: (stats) => set({ stats, hasLiveStats: true }),
       setHydrated: () => set({ isHydrated: true }),
       loadMoreTasks: () => set((state) => ({ taskLimit: state.taskLimit + 200 })),
+      reset: () => set({
+        tasks: [],
+        users: [],
+        blockers: [],
+        stats: null,
+        hasLiveTasks: false,
+        hasLiveUsers: false,
+        hasLiveBlockers: false,
+        hasLiveStats: false,
+        taskLimit: 200,
+      }),
     }),
     {
       name: 'makam-data-storage',

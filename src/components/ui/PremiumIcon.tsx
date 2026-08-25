@@ -11,13 +11,22 @@ interface PremiumIconProps {
   active?: boolean;
 }
 
-export const PremiumIcon = ({ 
-  icon: Icon, 
-  variant = 'glass', 
-  size = 'md', 
+export const PremiumIcon = ({
+  icon: Icon,
+  variant = 'glass',
+  size = 'md',
   className,
   active = false
 }: PremiumIconProps) => {
+  // Sabit "appleIconSquircle" id'si her PremiumIcon örneğinde tekrarlanıyordu
+  // — Sidebar gibi birden çok örneğin aynı sayfada render edildiği yerlerde
+  // DOM'da geçersiz/tekrarlı ID oluşuyor, `url(#appleIconSquircle)`
+  // referansının hangi örneğe bağlanacağı spesifikasyon gereği belirsiz
+  // kalıyordu (bkz. kod denetimi). React.useId() her örnek için kararlı,
+  // benzersiz bir kimlik üretir.
+  const clipPathId = `appleIconSquircle-${React.useId()}`;
+  const clipPathUrl = `url(#${clipPathId})`;
+
   const sizes = {
     sm: 'w-8 h-8 p-1.5',
     md: 'w-10 h-10 p-2',
@@ -41,7 +50,7 @@ export const PremiumIcon = ({
       {/* Mathematical G2 Curvature Continuous Squircle Definition for Icons */}
       <svg width="0" height="0" className="absolute">
         <defs>
-          <clipPath id="appleIconSquircle" clipPathUnits="objectBoundingBox">
+          <clipPath id={clipPathId} clipPathUnits="objectBoundingBox">
             <path d="M 0.5,0 
                      C 0.88,0 1,0.12 1,0.5 
                      C 1,0.88 0.88,1 0.5,1 
@@ -54,7 +63,7 @@ export const PremiumIcon = ({
       <motion.div
         whileHover={{ scale: 1.08, rotate: [0, -3, 3, 0] }}
         whileTap={{ scale: 0.95 }}
-        style={{ clipPath: 'url(#appleIconSquircle)' }}
+        style={{ clipPath: clipPathUrl }}
         className={cn(
           "relative flex items-center justify-center border transition-all duration-500 rounded-[14px]",
           "will-change-transform transform-gpu backface-visibility-hidden retina-perfect", // GPU acceleration for subpixel aliasing
@@ -84,7 +93,7 @@ export const PremiumIcon = ({
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              style={{ clipPath: 'url(#appleIconSquircle)' }}
+              style={{ clipPath: clipPathUrl }}
               className="absolute inset-0 bg-executive-gold/10 blur-sm -z-0"
             />
           )}
@@ -92,7 +101,7 @@ export const PremiumIcon = ({
 
         {/* Subtle Shine Effect */}
         <div 
-          style={{ clipPath: 'url(#appleIconSquircle)' }}
+          style={{ clipPath: clipPathUrl }}
           className="absolute inset-0 overflow-hidden pointer-events-none"
         >
           <motion.div 

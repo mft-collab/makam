@@ -8,7 +8,7 @@ import {
   auth, db, googleProvider, signInWithPopup, signInWithCustomToken, signOut, onAuthStateChanged,
   doc, getDoc, updateDoc, onSnapshot, writeBatch, isUsingFirebaseEmulator
 } from './firebase';
-import { User, Task } from './types';
+import { User, Task, UserSchema } from './types';
 import { TAB_ROLES, type AppTabId } from './constants';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -54,7 +54,7 @@ import { WarningModal } from './components/WarningModal';
 import { conflictDetectionService } from './services/conflictDetectionService';
 import { logError } from './services/errorLoggingService';
 import { useAppHandlers } from './services/useAppHandlers';
-import { useFirestoreData, fetchTaskById } from './hooks/useFirestoreData';
+import { useFirestoreData, fetchTaskById, validateOrPassthrough } from './hooks/useFirestoreData';
 import { useNotifications } from './hooks/useNotifications';
 import { useOfflineQueue } from './hooks/useOfflineQueue';
 import { applyOfflineMutations } from './lib/offlineQueue';
@@ -217,18 +217,27 @@ export default function App() {
   // Derived tasks/blockers state — offline kuyruktaki bekleyen mutasyonlar
   // Firestore verisinin üzerine bindirilir (bkz. lib/offlineQueue.ts
   // applyOfflineMutations — tasks ve blockers için eskiden burada neredeyse
-  // birebir kopyalanmış iki ayrı IIFE vardı, bkz. kod denetimi).
-  const tasks = (() => {
+  // birebir kopyalanmış iki ayrı IIFE vardı, bkz. kod denetimi). useMemo
+  // olmadan bu iki hesaplama HER render'da (ör. ilgisiz bir toast eklenip
+  // kaldırıldığında) taze dizi referansı üretiyordu — bu da aşağıdaki
+  // filteredTasksByFocus/filteredBlockersByFocus useMemo'larını da fiilen
+  // etkisiz kılıyordu (bağımlılıkları her zaman "değişmiş" görünüyordu,
+  // bkz. kod denetimi). pendingMutations (useOfflineQueue) yalnızca kuyruk
+  // GERÇEKTEN değiştiğinde yeni referans ürettiğinden, bu artık gerçek bir
+  // memoizasyon kazancı sağlıyor.
+  const tasks = useMemo(() => {
     const result = applyOfflineMutations(firestoreTasks, offlineMutations, 'tasks');
     result.sort((a, b) => b.updatedAt - a.updatedAt);
     return result;
-  })();
+  }, [firestoreTasks, offlineMutations]);
 
   tasksRef.current = tasks;
   usersRef.current = users;
 
-  const blockers = applyOfflineMutations(firestoreBlockers, offlineMutations, 'blockers')
-    .filter(b => !b.isResolved);
+  const blockers = useMemo(
+    () => applyOfflineMutations(firestoreBlockers, offlineMutations, 'blockers').filter(b => !b.isResolved),
+    [firestoreBlockers, offlineMutations]
+  );
 
   // ─── Global Focus Filter (Birim Odak Filtresi) ───────────────────────────
   const [globalFocusDept, setGlobalFocusDept] = useState<string>('ALL');
@@ -280,9 +289,23 @@ export default function App() {
     if (!selectedTaskId) { setFetchedTask(null); return; }
     if (tasks.find(t => t.id === selectedTaskId)) { setFetchedTask(null); return; }
     fetchTaskById(selectedTaskId)
-      .then(setFetchedTask)
-      .catch(() => setFetchedTask(null));
-  }, [selectedTaskId, tasks]);
+      .then((result) => {
+        setFetchedTask(result);
+        // Doküman gerçekten yok (silinmiş/erişilemez) — modal, sebepsiz görünen
+        // boş bir "Talimat Detayı" ekranıyla açık kalmak yerine kapatılır ve
+        // kullanıcıya neden gösterildiği açıklanır (bkz. kod denetimi: eskiden
+        // bu durum tamamen sessizdi, ne toast ne EmptyState devreye giriyordu).
+        if (result === null) {
+          setSelectedTaskId(null);
+          addToast({ title: '⚠️ Talimat Bulunamadı', body: 'Bu talimat silinmiş veya artık erişiminiz olmayabilir.', type: 'warning' });
+        }
+      })
+      .catch(() => {
+        setFetchedTask(null);
+        setSelectedTaskId(null);
+        addToast({ title: '⚠️ Talimat Yüklenemedi', body: 'Talimat getirilirken bir hata oluştu. Lütfen tekrar deneyin.', type: 'danger' });
+      });
+  }, [selectedTaskId, tasks, addToast, setSelectedTaskId]);
 
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || fetchedTask;
 
@@ -332,7 +355,13 @@ export default function App() {
 
         unsubscribeUserDoc = onSnapshot(doc(db, 'users', firebaseUser.uid), async (userDoc) => {
           if (userDoc.exists()) {
-            const userData = userDoc.data() as User;
+            // useFirestoreData.ts'teki diğer TÜM users okumalarıyla AYNI zod
+            // doğrulaması — bu doküman RBAC'in (TAB_ROLES) doğrudan dayandığı
+            // `role` alanını taşıyor; eskiden burada ham `as User` cast'i
+            // yapılıyordu, bozuk/eksik bir role alanı hiçbir uyarı vermeden
+            // sessizce davranışı bozabiliyordu (bkz. kod denetimi).
+            const raw = { ...userDoc.data(), uid: userDoc.data().uid || userDoc.id } as User;
+            const userData = validateOrPassthrough(UserSchema, raw, userDoc.id, 'users');
             if (firebaseUser.photoURL && firebaseUser.photoURL !== userData.photoURL) {
               try {
                 await updateDoc(doc(db, 'users', firebaseUser.uid), { photoURL: firebaseUser.photoURL });

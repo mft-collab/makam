@@ -183,6 +183,43 @@ describe('OfflineQueue', () => {
       expect(useUIStore.getState().toasts[0]).toMatchObject({ type: 'danger' });
     });
 
+    it('INVALID_TRANSITION (geçersiz durum geçişi) sonsuza dek denenmez, kuyruktan düşürülür ve toast gösterilir', async () => {
+      // transitionTaskInTransaction bu hatayı düz bir Error olarak fırlatır
+      // (FirebaseError DEĞİL) — eskiden NON_RETRYABLE_CODES yalnızca
+      // FirebaseError kodlarına baktığından bu mutasyon sonsuza dek
+      // "remaining"e itilip sessizce yeniden deneniyordu (bkz. kod denetimi).
+      vi.mocked(firebase.runTransaction).mockRejectedValueOnce(
+        new Error("INVALID_TRANSITION: 'COMPLETED' durumundan 'BLOCKED' durumuna geçiş izinli değil.")
+      );
+      useUIStore.setState({ toasts: [] });
+
+      offlineQueue.enqueue(
+        'tasks', 'update', {}, 'task-1', undefined, undefined,
+        { newStatus: 'BLOCKED', userId: 'user-1', expectedVersion: 2 }
+      );
+      const result = await offlineQueue.sync();
+
+      // Kalıcı/deterministik hata "başarısız senkron" değil — mutasyon bilerek düşürülür
+      expect(result).toBe(true);
+      expect(offlineQueue.getQueue()).toHaveLength(0);
+      expect(useUIStore.getState().toasts).toHaveLength(1);
+      expect(useUIStore.getState().toasts[0]).toMatchObject({ type: 'danger' });
+    });
+
+    it('genel/bilinmeyen bir Error (FirebaseError değil, iş kuralı imzasıyla eşleşmiyor) yine de retry için kuyrukta kalır', async () => {
+      // isNonRetryableError yalnızca bilinen iş-kuralı hata imzalarını
+      // (INVALID_TRANSITION, Admin/Memur/Müdür kısıtları) non-retryable
+      // sayar — rastgele bir Error mesajı (ör. geçici bir SDK içi hata)
+      // yanlışlıkla kalıcı sayılıp düşürülmemeli.
+      vi.mocked(firebase.addDoc).mockRejectedValueOnce(new Error('Something unexpected happened'));
+
+      offlineQueue.enqueue('tasks', 'create', { id: 'temp-unexpected', title: 'Beklenmedik' });
+      const result = await offlineQueue.sync();
+
+      expect(result).toBe(false);
+      expect(offlineQueue.getQueue()).toHaveLength(1);
+    });
+
     it('kısmi başarı: başarılı olanlar silinir, başarısız olanlar kalır', async () => {
       const fakeRef = { id: 'real-id' };
       vi.mocked(firebase.addDoc).mockResolvedValueOnce(fakeRef as any);
@@ -580,14 +617,13 @@ describe('OfflineQueue', () => {
   // güncellemesi offline yolda da online ile birebir aynı şekilde uygulanır.
 
   describe('sync — business-kurallı create/update (actorId)', () => {
-    it('actorId ile create: taskService.createTask üzerinden audit-log ve stats uygulanır', async () => {
-      const fakeTaskRef = { id: 'real-task-id' };
-      const fakeAuditRef = { id: 'audit-ref' };
-      vi.mocked(firebase.addDoc)
-        .mockResolvedValueOnce(fakeTaskRef as any)
-        .mockResolvedValueOnce(fakeAuditRef as any);
-      vi.mocked(firebase.updateDoc).mockResolvedValue(undefined as any);
-      vi.mocked(firebase.setDoc).mockResolvedValue(undefined as any);
+    it('actorId ile create: taskService.createTask üzerinden audit-log ve stats TEK transaction\'da uygulanır', async () => {
+      // taskService.createTask artık addDoc/updateDoc/setDoc değil, atomik bir
+      // runTransaction kullanıyor (bkz. kod denetimi: çift-kayıt riski düzeltmesi).
+      const transactionSet = vi.fn();
+      vi.mocked(firebase.runTransaction).mockImplementationOnce(async (_db: any, fn: any) => {
+        return fn({ set: transactionSet } as any);
+      });
 
       offlineQueue.enqueue(
         'tasks', 'create',
@@ -599,21 +635,18 @@ describe('OfflineQueue', () => {
       expect(result).toBe(true);
       expect(offlineQueue.getQueue()).toHaveLength(0);
 
-      const auditCall = vi.mocked(firebase.addDoc).mock.calls.find(([, data]: any) => data?.changedBy === 'user-1');
+      const auditCall = transactionSet.mock.calls.find(([, data]: any) => data?.changedBy === 'user-1');
       expect(auditCall?.[1]).toMatchObject({ changedBy: 'user-1', newValue: 'Talimat Oluşturuldu ve Atandı' });
 
-      expect(firebase.setDoc).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ totalTasks: { __increment: 1 } }),
-        { merge: true }
-      );
+      const statsCall = transactionSet.mock.calls.find(([, data]: any) => 'totalTasks' in (data ?? {}));
+      expect(statsCall?.[1]).toMatchObject({ totalTasks: { __increment: 1 } });
     });
 
     it('actorId ile create: bağımlı sonraki mutasyondaki geçici ID gerçek ID ile değiştirilir', async () => {
-      const fakeTaskRef = { id: 'real-task-id' };
-      vi.mocked(firebase.addDoc).mockResolvedValue(fakeTaskRef as any);
-      vi.mocked(firebase.updateDoc).mockResolvedValue(undefined as any);
-      vi.mocked(firebase.setDoc).mockResolvedValue(undefined as any);
+      const transactionSet = vi.fn();
+      vi.mocked(firebase.runTransaction).mockImplementationOnce(async (_db: any, fn: any) => {
+        return fn({ set: transactionSet } as any);
+      });
       vi.mocked(firebase.deleteDoc).mockResolvedValue(undefined as any);
 
       offlineQueue.enqueue(
@@ -625,10 +658,13 @@ describe('OfflineQueue', () => {
 
       await offlineQueue.sync();
 
-      // Sonraki mutasyonun docId'si geçici ID'den ('temp-biz-2') gerçek ID'ye
-      // ('real-task-id') yamalanmış olmalı — deleteDoc gerçek ID ile çağrılır.
+      // taskRef, transaction'dan ÖNCE doc(collection(db,'tasks')) ile üretilir
+      // (mock: her doc() çağrısı sırayla 'generated-ref-N' döner) — createTask
+      // BUNU İLK doc() çağrısı olarak üretir, bu yüzden ID 'generated-ref-1'
+      // olur. Sonraki delete mutasyonunun geçici docId'si ('temp-biz-2') bu
+      // gerçek ID ile yamalanmış olmalı.
       expect(vi.mocked(firebase.deleteDoc)).toHaveBeenCalledOnce();
-      const docCallForDelete = vi.mocked(firebase.doc).mock.calls.find(args => args[2] === 'real-task-id');
+      const docCallForDelete = vi.mocked(firebase.doc).mock.calls.find(args => args[2] === 'generated-ref-1');
       expect(docCallForDelete).toBeDefined();
       expect(offlineQueue.getQueue()).toHaveLength(0);
     });

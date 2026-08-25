@@ -217,26 +217,37 @@ describe('notificationService', () => {
     });
   });
 
-  describe('markAllAsRead', () => {
-    it('okunmamış her doküman için batch.update çağrılır ve tek seferde commit edilir', async () => {
+  describe('markManyAsRead', () => {
+    // Eskiden markAllAsRead(userId) sunucudan TÜM okunmamış bildirimleri
+    // sorgulayıp toptan işaretliyordu — panel (useNotifications) yalnızca
+    // en yeni 5'ini gösterdiğinden, kullanıcının hiç görmediği eski bir
+    // bildirim (ör. bir Kriz uyarısı) sessizce "okundu" olup kayboluyordu
+    // (bkz. kod denetimi). Artık yalnızca AÇIKÇA verilen id listesi
+    // işaretlenir — çağıran taraf (NotificationPanel) bu listeyi panelde
+    // gerçekten gösterilen bildirimlerden türetir.
+    it('verilen her id için batch.update çağrılır ve tek seferde commit edilir', async () => {
       const batchUpdate = vi.fn();
       const batchCommit = vi.fn();
       vi.mocked(firebase.writeBatch).mockReturnValueOnce({ update: batchUpdate, commit: batchCommit } as any);
-      vi.mocked(firebase.getDocs).mockResolvedValueOnce({
-        docs: [{ ref: { __ref: 'n1' } }, { ref: { __ref: 'n2' } }],
-      } as any);
 
-      await notificationService.markAllAsRead('u1');
+      await notificationService.markManyAsRead(['n1', 'n2']);
 
       expect(batchUpdate).toHaveBeenCalledTimes(2);
-      expect(batchUpdate).toHaveBeenCalledWith({ __ref: 'n1' }, { isRead: true });
+      expect(batchUpdate).toHaveBeenCalledWith({ __doc: [firebase.db, 'notifications', 'n1'] }, { isRead: true });
       expect(batchCommit).toHaveBeenCalledOnce();
     });
 
-    it('getDocs reddederse JSON hata fırlatılır', async () => {
-      vi.mocked(firebase.getDocs).mockRejectedValueOnce(new Error('network-error'));
+    it('boş id listesiyle çağrılırsa hiçbir şey yapmaz (batch/commit hiç çağrılmaz)', async () => {
+      await notificationService.markManyAsRead([]);
 
-      await expect(notificationService.markAllAsRead('u1')).rejects.toThrow(/"operationType":"write"/);
+      expect(firebase.writeBatch).not.toHaveBeenCalled();
+    });
+
+    it('batch.commit reddederse JSON hata fırlatılır', async () => {
+      const batchCommit = vi.fn().mockRejectedValueOnce(new Error('network-error'));
+      vi.mocked(firebase.writeBatch).mockReturnValueOnce({ update: vi.fn(), commit: batchCommit } as any);
+
+      await expect(notificationService.markManyAsRead(['n1'])).rejects.toThrow(/"operationType":"write"/);
     });
   });
 });

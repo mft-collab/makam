@@ -97,6 +97,22 @@ export const TaskBlockerSchema = z.object({
 });
 export type TaskBlocker = z.infer<typeof TaskBlockerSchema>;
 
+// system/stats dokümanı için zod şeması — useFirestoreData.ts'teki tasks/users
+// okumalarıyla AYNI validateOrPassthrough disiplinine tabi tutmak için (bkz.
+// kod denetimi: eskiden bu doküman `as any` ile ham cast ediliyordu). Tüm
+// alanlar .default(0) ile eksik/bozuk bir sayaç alanının uygulamayı hiç
+// çökertmemesini, yalnızca 0'a düşmesini sağlar.
+export const GlobalStatsSchema = z.object({
+  totalTasks: z.number().default(0),
+  status_ASSIGNED: z.number().default(0),
+  status_IN_PROGRESS: z.number().default(0),
+  status_AWAITING_APPROVAL: z.number().default(0),
+  status_COMPLETED: z.number().default(0),
+  status_BLOCKED: z.number().default(0),
+  status_CANCELLED: z.number().default(0),
+  status_CRISIS: z.number().default(0),
+});
+
 export const AuditLogSchema = z.object({
   id: z.string(),
   taskId: z.string(),

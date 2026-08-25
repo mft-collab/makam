@@ -1,20 +1,29 @@
 import {
   collection,
   doc,
-  updateDoc,
   deleteDoc,
+  writeBatch,
   runTransaction,
   db
 } from '../firebase';
 import { transitionTaskInTransaction } from './taskService';
 import { runWithRetry } from '../lib/retry';
-import { TaskPriority, TaskStatus } from '../types';
+import { TaskPriority } from '../types';
 
 export const blockerService = {
   // Engel dokümanı ve görevin BLOCKED'a alınması AYNI transaction'da yapılır —
   // biri başarısız olursa diğeri de uygulanmaz (ör. sahipsiz bir engel kaydı
-  // kalıp görevin durumu güncellenmemiş olması engellenir).
-  async addBlocker(taskId: string, reason: string, userId: string, _oldStatus: TaskStatus, expectedVersion?: number, severity: TaskPriority = 'Medium') {
+  // kalıp görevin durumu güncellenmemiş olması engellenir). Görev geçişi zaten
+  // transitionTaskInTransaction içinde audit_logs'a yazıyor, bu yüzden burada
+  // AYRICA bir audit log gerekmiyor (kod denetimi: yalnızca transaction-DIŞI
+  // yollar — editBlocker ve deleteBlocker'ın son-engel-olmayan dalı — audit
+  // log'suzdu, aşağıda düzeltildi).
+  // NOT: eskiden burada bir `_oldStatus: TaskStatus` parametresi vardı —
+  // hiçbir zaman kullanılmıyordu (transitionTaskInTransaction kendi
+  // transaction.get()'iyle sunucudaki güncel durumu zaten okuyor), yalnızca
+  // çağıranların hâlâ görevin eski durumunu geçirmesini gerektiren yanıltıcı
+  // bir ölü parametreydi (bkz. kod denetimi).
+  async addBlocker(taskId: string, reason: string, userId: string, expectedVersion?: number, severity: TaskPriority = 'Medium') {
     const blockerRef = doc(collection(db, 'blockers'));
     await runWithRetry(async () => {
       await runTransaction(db, async (transaction) => {
@@ -40,6 +49,7 @@ export const blockerService = {
     if (otherActiveCount === 0) {
       // Son aktif engel çözülüyorsa: engel dokümanı + görevin IN_PROGRESS'e
       // dönmesi tek transaction'da — biri başarısız olursa diğeri de olmaz.
+      // Görev geçişi audit_logs'a kendi içinde yazıyor.
       await runWithRetry(async () => {
         await runTransaction(db, async (transaction) => {
           await transitionTaskInTransaction(transaction, taskId, 'IN_PROGRESS', userId, { expectedVersion });
@@ -47,16 +57,40 @@ export const blockerService = {
         });
       });
     } else {
-      await updateDoc(blockerRef, {
-        isResolved: true,
-        resolvedAt: Date.now()
+      // Görev durumu değişmiyor (başka aktif engel var) — burada bir görev
+      // transaction'ı yok, dolayısıyla otomatik audit log da yok; kendi
+      // audit kaydımızı ayrıca yazıyoruz (bkz. kod denetimi).
+      await runWithRetry(async () => {
+        const batch = writeBatch(db);
+        batch.update(blockerRef, { isResolved: true, resolvedAt: Date.now() });
+        batch.set(doc(collection(db, 'audit_logs')), {
+          taskId,
+          changedBy: userId,
+          oldValue: 'Risk Unsuru Aktif',
+          newValue: 'Risk Unsuru Çözüldü',
+          timestamp: Date.now(),
+        });
+        await batch.commit();
       });
     }
   },
 
-  async editBlocker(blockerId: string, reason: string) {
+  async editBlocker(blockerId: string, reason: string, actorId: string, taskId: string) {
+    // Eskiden bu fonksiyon audit_logs'a hiç yazmıyordu — bir risk/engel
+    // gerekçesinin ne zaman/kim tarafından değiştirildiği iz bırakmıyordu
+    // (bkz. kod denetimi). writeBatch ile blocker güncellemesi + audit kaydı
+    // atomik yazılır.
     await runWithRetry(async () => {
-      await updateDoc(doc(db, 'blockers', blockerId), { reason });
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'blockers', blockerId), { reason });
+      batch.set(doc(collection(db, 'audit_logs')), {
+        taskId,
+        changedBy: actorId,
+        oldValue: 'Risk Gerekçesi',
+        newValue: reason,
+        timestamp: Date.now(),
+      });
+      await batch.commit();
     });
   },
 
@@ -67,6 +101,7 @@ export const blockerService = {
       // Son aktif engel siliniyorsa: engel dokümanının silinmesi + görevin
       // IN_PROGRESS'e dönmesi (ve pausedAt/totalPausedTime'ın transitionTaskInTransaction
       // tarafından temizlenmesi) TEK transaction'da — biri başarısız olursa diğeri de olmaz.
+      // Görev geçişi audit_logs'a kendi içinde yazıyor.
       await runWithRetry(async () => {
         await runTransaction(db, async (transaction) => {
           await transitionTaskInTransaction(transaction, taskId, 'IN_PROGRESS', userId, { expectedVersion });
@@ -76,8 +111,25 @@ export const blockerService = {
       return;
     }
 
+    // Başka aktif engel varsa görev durumu değişmiyor — otomatik audit log
+    // yok, bu yüzden burada ayrıca yazılır (taskId/userId varsa; eski/legacy
+    // çağrılarda bu bilgi yoksa audit kaydı atlanır, en azından silme işlemi
+    // eskisi gibi çalışmaya devam eder — bkz. kod denetimi).
     await runWithRetry(async () => {
-      await deleteDoc(blockerRef);
+      if (taskId !== undefined && userId !== undefined) {
+        const batch = writeBatch(db);
+        batch.delete(blockerRef);
+        batch.set(doc(collection(db, 'audit_logs')), {
+          taskId,
+          changedBy: userId,
+          oldValue: 'Risk Unsuru Aktif',
+          newValue: 'Risk Unsuru Silindi',
+          timestamp: Date.now(),
+        });
+        await batch.commit();
+      } else {
+        await deleteDoc(blockerRef);
+      }
     });
   }
 };

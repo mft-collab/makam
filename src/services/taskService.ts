@@ -1,8 +1,6 @@
 import {
   collection,
   doc,
-  addDoc,
-  updateDoc,
   deleteDoc,
   query,
   getDocs,
@@ -10,7 +8,6 @@ import {
   runTransaction,
   writeBatch,
   getDoc,
-  setDoc,
   increment,
   db
 } from '../firebase';
@@ -190,6 +187,18 @@ async function updateTaskInTransaction(
     throw new Error(`VERSION_MISMATCH: Beklenen Versiyon ${expectedVersion}, Sunucu Versiyonu ${currentServerVersion}`);
   }
 
+  // Client-side savunma hattı — transitionTaskInTransaction'daki AYNI kontrol.
+  // Bu genel (durum-dışı) güncelleme yolu durum makinesini hiç kontrol
+  // etmiyordu; bugüne kadar hiçbir çağıran `data.status`'u buraya geçirmedi
+  // (durum geçişleri her zaman transitionTaskInTransaction'dan gider), ama bu
+  // yalnızca çağıran disiplinine dayanıyordu — kod seviyesinde zorlanmıyordu
+  // (bkz. kod denetimi: savunma derinliği kırılabilirdi). firestore.rules
+  // zaten bunu ayrıca uyguluyor; bu yalnızca hatayı daha erken/anlaşılır
+  // yakalar.
+  if (data.status && data.status !== task.status && !isValidTaskTransition(task.status, data.status)) {
+    throw new Error(`INVALID_TRANSITION: '${task.status}' durumundan '${data.status}' durumuna geçiş izinli değil.`);
+  }
+
   const now = options?.timestampOverride ?? Date.now();
 
   transaction.update(taskRef, cleanData({
@@ -232,31 +241,44 @@ export { updateTaskInTransaction };
 
 export const taskService = {
   async createTask(taskData: Partial<Task>, userId: string, options?: { timestampOverride?: number }) {
-    return runWithRetry(async () => {
-      const now = options?.timestampOverride ?? Date.now();
-      const slaConfig = getSLAConfigForPriority(taskData.priority ?? 'Medium');
-      const deadline = typeof taskData.deadline === 'number' && taskData.deadline > 0
-        ? taskData.deadline
-        : calculateDeadline(new Date(now), slaConfig);
+    const now = options?.timestampOverride ?? Date.now();
+    const slaConfig = getSLAConfigForPriority(taskData.priority ?? 'Medium');
+    const deadline = typeof taskData.deadline === 'number' && taskData.deadline > 0
+      ? taskData.deadline
+      : calculateDeadline(new Date(now), slaConfig);
 
-      // İş Kuralı: Admin irtibatlı atanamaz
-      if (taskData.coordinatorId) {
-        const coordSnap = await getDoc(doc(db, 'users', taskData.coordinatorId!));
-        if (coordSnap.exists() && (coordSnap.data() as User).role === 'Admin') {
-          throw new Error('Admin rolündeki kullanıcı irtibatlı olarak atanamaz.');
-        }
+    // İş Kuralı: Admin irtibatlı atanamaz
+    if (taskData.coordinatorId) {
+      const coordSnap = await getDoc(doc(db, 'users', taskData.coordinatorId!));
+      if (coordSnap.exists() && (coordSnap.data() as User).role === 'Admin') {
+        throw new Error('Admin rolündeki kullanıcı irtibatlı olarak atanamaz.');
       }
+    }
 
-      // İş Kuralı: Alt talimatlar yalnızca Staff (memur) rolüne atanabilir
-      if (taskData.parentId) {
-        const assigneeSnap = await getDoc(doc(db, 'users', taskData.assigneeId!));
-        if (assigneeSnap.exists() && (assigneeSnap.data() as User).role !== 'Staff') {
-          throw new Error('Alt talimatlar yalnızca Memur rolündeki personele atanabilir.');
-        }
+    // İş Kuralı: Alt talimatlar yalnızca Staff (memur) rolüne atanabilir
+    if (taskData.parentId) {
+      const assigneeSnap = await getDoc(doc(db, 'users', taskData.assigneeId!));
+      if (assigneeSnap.exists() && (assigneeSnap.data() as User).role !== 'Staff') {
+        throw new Error('Alt talimatlar yalnızca Memur rolündeki personele atanabilir.');
       }
+    }
 
-      const docRef = await addDoc(collection(db, 'tasks'), cleanData({
+    // Doküman ID'si transaction'dan ÖNCE sabitlenir: addDoc kullanılırsa her
+    // çağrı yeni bir ID üretir, bu yüzden runWithRetry bir ağ hatası sonrası
+    // tüm fonksiyonu yeniden çalıştırdığında (transaction başarıyla commit
+    // olduğu halde yalnızca ONAY yanıtı ağ hatasıyla kaybolmuş olsa bile)
+    // İKİNCİ bir görev dokümanı oluşabiliyordu (bkz. kod denetimi). Sabit bir
+    // taskRef ile retry, aynı dokümana idempotent bir tekrar-yazım yapar —
+    // görev+audit-log+stats artık TEK bir transaction'da atomik yazılıyor.
+    const taskRef = doc(collection(db, 'tasks'));
+
+    return runWithRetry(async () => runTransaction(db, async (transaction) => {
+      const auditRef = doc(collection(db, 'audit_logs'));
+      const statsRef = doc(db, 'system', 'stats');
+
+      transaction.set(taskRef, cleanData({
         ...taskData,
+        id: taskRef.id,
         status: 'ASSIGNED',
         deadline,
         createdAt: now,
@@ -264,25 +286,22 @@ export const taskService = {
         lockVersion: 0,
         totalPausedTime: 0
       }));
-      
-      await updateDoc(docRef, { id: docRef.id });
-      
-      // Audit Log
-      await addDoc(collection(db, 'audit_logs'), {
-        taskId: docRef.id,
+
+      transaction.set(auditRef, {
+        taskId: taskRef.id,
         changedBy: userId,
         oldValue: 'Yok',
         newValue: 'Talimat Oluşturuldu ve Atandı',
         timestamp: now
       });
-      // Aggregate Stats
-      await setDoc(doc(db, 'system', 'stats'), {
+
+      transaction.set(statsRef, {
         totalTasks: increment(1),
         status_ASSIGNED: increment(1)
       }, { merge: true });
-      
-      return docRef.id;
-    });
+
+      return taskRef.id;
+    }));
   },
 
   async transitionTask(

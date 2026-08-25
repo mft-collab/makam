@@ -11,7 +11,7 @@ import {
   onSnapshot,
   db
 } from '../firebase';
-import { Task, User, TaskBlocker, AuditLog, TaskSchema, UserSchema } from '../types';
+import { Task, User, TaskBlocker, AuditLog, TaskSchema, UserSchema, TaskBlockerSchema, GlobalStatsSchema } from '../types';
 import { useDataStore } from '../store/dataStore';
 import { logger } from '../lib/logger';
 
@@ -21,7 +21,7 @@ import { logger } from '../lib/logger';
  * yazar — aksi halde tek bir hatalı doküman tüm listeyi görünmez yapardı.
  * Doğrulama başarılıysa şemanın .default(...) doldurduğu alanlarla döner.
  */
-function validateOrPassthrough<T>(schema: { safeParse: (data: unknown) => { success: boolean; data?: T; error?: unknown } }, raw: T, docId: string, collectionName: string): T {
+export function validateOrPassthrough<T>(schema: { safeParse: (data: unknown) => { success: boolean; data?: T; error?: unknown } }, raw: T, docId: string, collectionName: string): T {
   const result = schema.safeParse(raw);
   if (!result.success) {
     logger.warn(`[useFirestoreData] Şema doğrulama uyarısı (${collectionName}/${docId}):`, result.error);
@@ -45,7 +45,7 @@ export async function fetchTaskById(taskId: string): Promise<Task | null> {
 }
 
 export function useFirestoreData(user: User | null, onError: (err: any, type: string, path: string) => void) {
-  const { tasks, users, blockers, isHydrated, taskLimit, setTasks, setUsers, setBlockers, setStats } = useDataStore();
+  const { tasks, users, blockers, isHydrated, taskLimit, setTasks, setUsers, setBlockers, setStats, reset } = useDataStore();
   
   // Skeleton is shown if IDB is not yet hydrated and no data exists.
   // Once hydrated, it will use cached data immediately.
@@ -68,7 +68,16 @@ export function useFirestoreData(user: User | null, onError: (err: any, type: st
   // tıklaması bu üç listener'ı da gereksiz yere abonelikten çıkarıp yeniden
   // kurar, ekstra Firestore okuması ve kısa isLoading flicker'ına yol açardı.
   useEffect(() => {
-    if (!uid) return;
+    if (!uid) {
+      // Çıkış yapıldığında (uid tanımlıydı → undefined oldu) veya hiç giriş
+      // yapılmamışken (uid zaten undefined, reset no-op) çalışır. Önceki
+      // kullanıcının görev/kullanıcı/engel verisi hem bellekte hem
+      // idb-keyval diskinde kalıp aynı cihazdaki bir sonraki kullanıcıya
+      // görünür kalmasın diye (bkz. kod denetimi) — reset yalnızca uid
+      // değiştiğinde (dependency array) tetiklenir, her render'da değil.
+      reset();
+      return;
+    }
 
     const isAdmin = role === 'Admin';
     const isStaff = role === 'Staff';
@@ -118,13 +127,21 @@ export function useFirestoreData(user: User | null, onError: (err: any, type: st
     return () => {
       unsubTasks();
     };
-  }, [uid, role, email, departmentId, taskLimit, setTasks, onError]);
+  }, [uid, role, email, departmentId, taskLimit, setTasks, onError, reset]);
 
   useEffect(() => {
     if (!uid) return;
 
+    // users koleksiyonu, tasks (taskLimit) ve blockers (limit(100)) ile
+    // tutarsız biçimde hiç sınırlanmıyordu (bkz. kod denetimi) — sınırsız bir
+    // sorgu, org büyüdükçe okuma/maliyet profilini öngörülemez hale getirir.
+    // 1000 kasıtlı olarak yüksek tutuldu: TeamList'te sayfalama YOK (tüm kadro
+    // tek seferde gösteriliyor), bu yüzden gerçekçi bir dağıtımı kesmeyecek
+    // kadar geniş bir üst sınır — amaç kotayı korumak, kadroyu budamak değil.
+    const usersQuery = query(collection(db, 'users'), limit(1000));
+
     const unsubUsers = onSnapshot(
-      collection(db, 'users'),
+      usersQuery,
       (s) => {
         const rawUsers = s.docs.map(d => {
           const raw = { ...d.data(), uid: d.data().uid || d.id } as User;
@@ -149,16 +166,27 @@ export function useFirestoreData(user: User | null, onError: (err: any, type: st
       (e) => onError(e, 'list', 'users')
     );
 
+    // orderBy eklendi: orderBy olmadan limit(100) uygulanan bir sorguda hangi
+    // 100 dokümanın döneceği Firestore tarafından garanti edilmez — 100'den
+    // fazla çözülmemiş engel varsa bazıları rastgele/tutarsız biçimde dışarıda
+    // kalabilirdi (bkz. kod denetimi, özellikle useSelfHealing bu listeye
+    // "aktif engeli yok" kararı için bakıyor). En yeni engeller önceliklidir.
     const blockersQuery = query(
       collection(db, 'blockers'),
       where('isResolved', '==', false),
+      orderBy('createdAt', 'desc'),
       limit(100)
     );
 
     const unsubBlockers = onSnapshot(
       blockersQuery,
       (s) => {
-        const all = s.docs.map(d => ({ id: d.id, ...d.data() } as TaskBlocker));
+        // tasks/users listener'larıyla AYNI zod doğrulama disiplini — eskiden
+        // burada doğrulamasız ham cast yapılıyordu (bkz. kod denetimi).
+        const all = s.docs.map(d => {
+          const raw = { id: d.id, ...d.data() } as TaskBlocker;
+          return validateOrPassthrough(TaskBlockerSchema, raw, d.id, 'blockers');
+        });
         setBlockers(all);
       },
       (e) => onError(e, 'list', 'blockers')
@@ -168,7 +196,8 @@ export function useFirestoreData(user: User | null, onError: (err: any, type: st
       doc(db, 'system', 'stats'),
       (docSnap) => {
         if (docSnap.exists()) {
-          setStats(docSnap.data() as any);
+          const raw = docSnap.data();
+          setStats(validateOrPassthrough(GlobalStatsSchema, raw, docSnap.id, 'system/stats') as any);
         }
       },
       (e) => onError(e, 'list', 'system/stats')
