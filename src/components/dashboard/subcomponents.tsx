@@ -203,14 +203,25 @@ export const PerformanceRow = ({ profile, index = 0 }: PerformanceRowProps) => {
 // ─── Custom Tooltip for Recharts (Frosted Glass) ──────────────────────────────
 // React.memo: Recharts re-invokes this on every mousemove while hovering the chart;
 // memoizing skips re-render when active/payload/label haven't actually changed.
-export const CustomTooltip = React.memo(({ active, payload, label }: any) => {
+// Not recharts'ın kendi TooltipContentProps'u kullanılmıyor: o tip payload/active
+// gibi alanları ZORUNLU tanımlıyor (recharts bunları content={<CustomTooltip />}
+// render edildikten SONRA React.cloneElement ile enjekte ediyor), bu yüzden JSX'te
+// prop'suz kullanım tip hatası veriyordu. Burada yalnızca gerçekten okunan 3 alanın
+// dar/opsiyonel bir tipi tanımlanır — `any` bulaşmadan.
+interface CustomTooltipProps {
+  active?: boolean;
+  label?: string | number;
+  payload?: ReadonlyArray<{ name?: string; value?: number | string; color?: string }>;
+}
+
+export const CustomTooltip = React.memo(({ active, payload, label }: CustomTooltipProps) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-makam-glass backdrop-blur-xl border border-surface-border p-3 rounded-2xl shadow-xl flex flex-col gap-1.5 min-w-[120px] text-left">
         <span className="text-[9px] font-bold text-text-tertiary uppercase tracking-wider">{label}</span>
         <div className="h-px bg-executive-blue/[0.05]" />
         <div className="flex flex-col gap-1 text-[11px] font-medium">
-          {payload.map((entry: any) => (
+          {payload.map((entry) => (
             <div key={entry.name} className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: entry.color }} />

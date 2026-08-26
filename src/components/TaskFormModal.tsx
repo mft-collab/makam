@@ -131,11 +131,12 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
       <div className="flex flex-col gap-8">
         {/* Başlık */}
         <div className="flex flex-col gap-3">
-          <label className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.18em] px-1 flex items-center gap-2.5">
+          <label htmlFor="task-title-input" className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.18em] px-1 flex items-center gap-2.5">
             <Target className="w-3.5 h-3.5 text-executive-gold stroke-[1.2]" />
             Operasyonel Hedef
           </label>
           <input
+            id="task-title-input"
             type="text"
             placeholder="Talimat Başlığı"
             {...register('title')}
@@ -149,11 +150,12 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
         
         {/* Açıklama */}
         <div className="flex flex-col gap-3">
-          <label className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.18em] px-1 flex items-center gap-2.5">
+          <label htmlFor="task-description-textarea" className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.18em] px-1 flex items-center gap-2.5">
             <FileText className="w-3.5 h-3.5 text-executive-blue stroke-[1.2]" />
             Kapsam & Detaylar
           </label>
           <textarea
+            id="task-description-textarea"
             className={cn(
               "w-full min-h-[140px] resize-none bg-field-surface border border-makam-border/20 text-text-heading placeholder:text-text-muted/30 rounded-xl px-5 py-4 text-[14px] font-light leading-relaxed transition-all outline-none focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
               errors.description && "border-status-danger/50"
@@ -167,7 +169,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
         {/* Görevlendirmeler */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div className="flex flex-col gap-3">
-             <label className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.18em] px-1 flex items-center gap-2.5">
+             <label htmlFor="task-assignee-select" className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.18em] px-1 flex items-center gap-2.5">
                <Users className="w-3.5 h-3.5 text-executive-blue stroke-[1.2]" />
                Sorumlu
              </label>
@@ -184,6 +186,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
                </p>
              )}
              <select
+              id="task-assignee-select"
               {...register('assigneeId')}
               className={cn(
                 "w-full bg-field-surface border border-makam-border/20 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
@@ -199,11 +202,12 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
           </div>
 
           <div className="flex flex-col gap-3">
-             <label className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.18em] px-1 flex items-center gap-2.5">
+             <label htmlFor="task-coordinator-select" className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.18em] px-1 flex items-center gap-2.5">
                <Users className="w-3.5 h-3.5 text-text-muted/40 stroke-[1.2]" />
                İrtibatlı
              </label>
              <select
+              id="task-coordinator-select"
               {...register('coordinatorId')}
               className={cn(
                 "w-full bg-field-surface border border-makam-border/20 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
@@ -225,11 +229,12 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
           </div>
 
           <div className="flex flex-col gap-3">
-             <label className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.18em] px-1 flex items-center gap-2.5">
+             <label htmlFor="task-priority-select" className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.18em] px-1 flex items-center gap-2.5">
                <AlertCircle className="w-3.5 h-3.5 text-executive-gold stroke-[1.2]" />
                Öncelik
              </label>
              <select
+              id="task-priority-select"
               {...register('priority')}
               className="w-full bg-field-surface border border-makam-border/20 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5"
             >

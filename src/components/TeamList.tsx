@@ -727,8 +727,8 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
           <Input label="Tam İsim" placeholder="Örn: Ali Yılmaz" value={newName} onChange={(e) => setNewName(e.target.value)} required />
           <Input label="E-posta" placeholder="orn@makam.com" type="email" value={newEmail} onChange={(e) => { setNewEmail(e.target.value); setAddUserError(''); }} required />
           <div className="flex flex-col gap-1.5">
-            <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.35em] px-0.5">Yetki Seviyesi</label>
-            <Select value={newRole} onChange={(e) => setNewRole(e.target.value as UserRole)} options={[
+            <label htmlFor="add-user-role-select" className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.35em] px-0.5">Yetki Seviyesi</label>
+            <Select id="add-user-role-select" value={newRole} onChange={(e) => setNewRole(e.target.value as UserRole)} options={[
               { value: 'Staff', label: ROLE_LABELS.Staff },
               { value: 'Manager', label: ROLE_LABELS.Manager },
               { value: 'Admin', label: ROLE_LABELS.Admin }
@@ -750,8 +750,8 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
             <>
               <Input label="E-posta" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} required />
               <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.35em] px-0.5">Yetki Seviyesi</label>
-                <Select value={editRole} onChange={(e) => setEditRole(e.target.value as UserRole)} options={[
+                <label htmlFor="edit-user-role-select" className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.35em] px-0.5">Yetki Seviyesi</label>
+                <Select id="edit-user-role-select" value={editRole} onChange={(e) => setEditRole(e.target.value as UserRole)} options={[
                   { value: 'Staff', label: ROLE_LABELS.Staff },
                   { value: 'Manager', label: ROLE_LABELS.Manager },
                   { value: 'Admin', label: ROLE_LABELS.Admin }

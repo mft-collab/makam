@@ -38,7 +38,16 @@ export const SubtasksTab = ({ task, subtasks, onAddSubTask, onViewTask }: Subtas
         subtasks.map(sub => (
           <div
             key={sub.id}
+            role="button"
+            tabIndex={0}
+            aria-label={sub.title}
             onClick={() => onViewTask(sub)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onViewTask(sub);
+              }
+            }}
             className="flex items-center justify-between p-3 bg-makam-glass border border-surface-border rounded-xl group cursor-pointer hover:bg-makam-card hover:shadow-sm transition-all"
           >
             <div className="flex flex-col gap-1">
