@@ -10,7 +10,10 @@ import { usePWAInstall } from '../hooks/usePWAInstall';
 import { useIsAdmin } from '../hooks/useIsAdmin';
 import { getSLAConfigForPriority } from '../lib/sla';
 import { SLA_CONFIG_SYNCED_EVENT } from '../hooks/useSLASync';
-import { SettingsCard, ActionButton, StatusBanner, SlaPriorityInput } from './settings/SharedUI';
+import { SlaPriorityInput } from './settings/SharedUI';
+import { SettingsCard } from './ui/SettingsCard';
+import { ActionButton } from './ui/ActionButton';
+import { StatusBanner } from './ui/StatusBanner';
 import { Skeleton } from './ui/Skeleton';
 
 interface SettingsProps {

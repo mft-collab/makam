@@ -3,7 +3,7 @@ import {
   BookOpen, GitCommit, Clock, Award, AlertTriangle, Flame, ArrowRight,
 } from 'lucide-react';
 import { Modal } from './ui/Modal';
-import { SettingsCard } from './settings/SharedUI';
+import { SettingsCard } from './ui/SettingsCard';
 import { Badge } from './ui/Badge';
 
 interface GuideModalProps {

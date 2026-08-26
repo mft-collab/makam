@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '../../lib/utils';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'gold' | 'success';
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'gold' | 'success' | 'warning';
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
 }
@@ -24,6 +24,10 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       // --status-success-text). İkisi de index.css'te AA-uyumlu tanımlı.
       gold: 'bg-executive-gold text-[color:var(--btn-primary-text)] hover:bg-executive-gold-hover shadow-lg shadow-executive-gold/20',
       success: 'bg-status-success text-[color:var(--status-success-text)] hover:opacity-90 shadow-lg shadow-status-success/10',
+      // ui/ActionButton'ın 'warning' varyantıyla aynı ton — Button'da eskiden
+      // yoktu (bkz. tasarım denetimi: ActionButton'ın taşınma vesilesiyle
+      // eklendi, gelecekte iki ayrı bileşen yerine tek noktadan kullanılabilsin).
+      warning: 'bg-executive-gold/10 text-executive-gold border border-executive-gold/20 hover:bg-executive-gold/20',
     };
 
     const sizes = {

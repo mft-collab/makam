@@ -234,6 +234,28 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
     };
   }, [staffUsers, activeTaskCountByUser]);
 
+  // Tek bir organizasyon-geneli yüzde, "hangi BİRİM gerçekten aşırı yüklü"
+  // sorusuna cevap vermiyordu — iki dengeli departman ortalamada dengeli
+  // görünüp aslında biri boşta biri tıka basa dolu olabilirdi (bkz. tasarım
+  // denetimi). capacityPercent ile AYNI formül (aktif görev / (kişi × 4))
+  // yalnızca departman bazında tekrarlanır. Departmansız ('') personel ayrı
+  // bir grup olarak gösterilir, yoksayılmaz.
+  const departmentCapacity = useMemo(() => {
+    const rows: { department: string; percent: number; staffCount: number }[] = [];
+    for (const [dept, staffList] of staffByDepartment.entries()) {
+      if (staffList.length === 0) continue;
+      let total = 0;
+      for (const u of staffList) total += getActiveTaskCount(u);
+      const max = Math.max(1, staffList.length * 4);
+      rows.push({
+        department: dept || 'Departmansız',
+        percent: Math.min(100, Math.round((total / max) * 100)),
+        staffCount: staffList.length,
+      });
+    }
+    return rows.sort((a, b) => b.percent - a.percent);
+  }, [staffByDepartment, activeTaskCountByUser]);
+
   if (isLoading) return <TeamListSkeleton />;
 
   return (
@@ -287,32 +309,59 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
       </div>
 
       {/* Team Capacity Header Band */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 p-3.5 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl">
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] text-text-muted uppercase tracking-wider font-bold">Kadro Kapasite Endeksi:</span>
-          {hasCapacityData ? (
-            <>
-              <div className="w-24 h-1.5 bg-executive-blue/5 rounded-full overflow-hidden">
-                <div
-                  className={cn(
-                    "h-full rounded-full transition-all duration-300",
-                    capacityPercent >= 85 ? "bg-status-danger" :
-                    capacityPercent >= 55 ? "bg-status-warning" :
-                    "bg-status-success"
-                  )}
-                  style={{ width: `${capacityPercent}%` }}
-                />
+      <div className="flex flex-col gap-3 p-3.5 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] text-text-muted uppercase tracking-wider font-bold">Kadro Kapasite Endeksi:</span>
+            {hasCapacityData ? (
+              <>
+                <div className="w-24 h-1.5 bg-executive-blue/5 rounded-full overflow-hidden">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all duration-300",
+                      capacityPercent >= 85 ? "bg-status-danger" :
+                      capacityPercent >= 55 ? "bg-status-warning" :
+                      "bg-status-success"
+                    )}
+                    style={{ width: `${capacityPercent}%` }}
+                  />
+                </div>
+                <span className="text-[11px] font-bold text-text-heading">%{capacityPercent}</span>
+              </>
+            ) : (
+              <span className="text-[10px] text-text-tertiary">Kapasite verisi için en az 1 aktif talimat gerekli</span>
+            )}
+          </div>
+          <div className="flex gap-4 text-[10px] text-text-muted uppercase tracking-wider font-bold">
+            <span>Müsait Kadro: <span className="text-status-success font-bold">{availableStaffCount}</span></span>
+            <span>Aşırı Yüklü: <span className={overloadedStaffCount > 0 ? "text-status-danger font-bold animate-pulse" : "text-text-muted font-bold"}>{overloadedStaffCount}</span></span>
+          </div>
+        </div>
+
+        {/* Departman bazlı kırılım — yalnızca 2+ departman temsil ediliyorsa
+            anlamlı (tek departmanda zaten yukarıdaki toplamla birebir aynı
+            sayıyı tekrar eder, bkz. tasarım denetimi). */}
+        {hasCapacityData && departmentCapacity.length > 1 && (
+          <div className="flex flex-wrap gap-2.5 pt-3 border-t border-executive-blue/[0.04]">
+            {departmentCapacity.map(row => (
+              <div key={row.department} className="flex items-center gap-2 px-2.5 py-1.5 bg-surface-glass border border-surface-border rounded-xl">
+                <span className="text-[9px] text-text-muted uppercase tracking-wider font-bold truncate max-w-[110px]">{row.department}</span>
+                <div className="w-14 h-1 bg-executive-blue/5 rounded-full overflow-hidden flex-shrink-0">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all duration-300",
+                      row.percent >= 85 ? "bg-status-danger" :
+                      row.percent >= 55 ? "bg-status-warning" :
+                      "bg-status-success"
+                    )}
+                    style={{ width: `${row.percent}%` }}
+                  />
+                </div>
+                <span className="text-[9px] font-bold text-text-heading tabular-nums">%{row.percent}</span>
               </div>
-              <span className="text-[11px] font-bold text-text-heading">%{capacityPercent}</span>
-            </>
-          ) : (
-            <span className="text-[10px] text-text-tertiary">Kapasite verisi için en az 1 aktif talimat gerekli</span>
-          )}
-        </div>
-        <div className="flex gap-4 text-[10px] text-text-muted uppercase tracking-wider font-bold">
-          <span>Müsait Kadro: <span className="text-status-success font-bold">{availableStaffCount}</span></span>
-          <span>Aşırı Yüklü: <span className={overloadedStaffCount > 0 ? "text-status-danger font-bold animate-pulse" : "text-text-muted font-bold"}>{overloadedStaffCount}</span></span>
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Personnel Cards Grid / Org Tree ─────────────────────── */}
