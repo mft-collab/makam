@@ -1,5 +1,6 @@
 import { getToken } from 'firebase/messaging';
 import { collection, addDoc, query, where, getDocs, updateDoc, setDoc, doc, limit, orderBy, writeBatch, db, messaging, auth } from '../firebase';
+import { runWithRetry } from '../lib/retry';
 import type { Notification as AppNotification, User } from '../types';
 
 enum OperationType {
@@ -96,7 +97,7 @@ export const notificationService = {
 
   async createNotification(notification: Omit<AppNotification, 'id'>) {
     try {
-      return await addDoc(collection(db, 'notifications'), notification);
+      return await runWithRetry(() => addDoc(collection(db, 'notifications'), notification));
     } catch (error) {
       return handleFirestoreError(error, OperationType.WRITE, 'notifications');
     }
@@ -111,7 +112,7 @@ export const notificationService = {
       limit(20)
     );
     try {
-      const snapshot = await getDocs(q);
+      const snapshot = await runWithRetry(() => getDocs(q));
       return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AppNotification));
     } catch (error) {
       return handleFirestoreError(error, OperationType.GET, 'notifications');
@@ -121,7 +122,7 @@ export const notificationService = {
   async markAsRead(notificationId: string) {
     const ref = doc(db, 'notifications', notificationId);
     try {
-      return await updateDoc(ref, { isRead: true });
+      return await runWithRetry(() => updateDoc(ref, { isRead: true }));
     } catch (error) {
       return handleFirestoreError(error, OperationType.WRITE, `notifications/${notificationId}`);
     }
@@ -137,11 +138,13 @@ export const notificationService = {
   async markManyAsRead(notificationIds: string[]) {
     if (notificationIds.length === 0) return;
     try {
-      const batch = writeBatch(db);
-      notificationIds.forEach(id => {
-        batch.update(doc(db, 'notifications', id), { isRead: true });
+      await runWithRetry(() => {
+        const batch = writeBatch(db);
+        notificationIds.forEach(id => {
+          batch.update(doc(db, 'notifications', id), { isRead: true });
+        });
+        return batch.commit();
       });
-      await batch.commit();
     } catch (error) {
       return handleFirestoreError(error, OperationType.WRITE, `notifications`);
     }

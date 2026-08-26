@@ -24,8 +24,10 @@ interface UIStore {
   initialTitle: string | undefined;
   selectedTaskId: string | null;
 
-  // Bildirim paneli
-  showNotifications: boolean;
+  // Bildirim paneli — isX adlandırma kuralına uyum için showNotifications'tan
+  // yeniden adlandırıldı (bkz. kod denetimi: isCreateModalOpen/isEditModalOpen
+  // ile tutarsızdı).
+  isNotificationsOpen: boolean;
 
   // Tema
   theme: 'light' | 'dark' | 'system';
@@ -53,7 +55,7 @@ interface UIStore {
   setParentTaskId: (id: string | undefined) => void;
   setInitialTitle: (title: string | undefined) => void;
   setSelectedTaskId: (id: string | null) => void;
-  setShowNotifications: (show: boolean) => void;
+  setIsNotificationsOpen: (open: boolean) => void;
   closeAllModals: () => void;
 }
 
@@ -74,7 +76,7 @@ export const useUIStore = create<UIStore>()(
       selectedTaskId: null,
 
       // Bildirim paneli
-      showNotifications: false,
+      isNotificationsOpen: false,
 
       // Tab
       activeTab: 'dashboard',
@@ -126,7 +128,7 @@ export const useUIStore = create<UIStore>()(
     setParentTaskId: (id) => set({ parentTaskId: id }),
     setInitialTitle: (title) => set({ initialTitle: title }),
     setSelectedTaskId: (id) => set({ selectedTaskId: id }),
-    setShowNotifications: (show) => set({ showNotifications: show }),
+    setIsNotificationsOpen: (open) => set({ isNotificationsOpen: open }),
 
     closeAllModals: () => set({
       isCreateModalOpen: false,

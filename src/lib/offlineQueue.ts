@@ -8,6 +8,7 @@ import {
   addDoc,
   updateDoc,
   runTransaction,
+  writeBatch,
   FirebaseError
 } from '../firebase';
 import { logger } from './logger';
@@ -102,6 +103,24 @@ export interface OfflineMutation {
    *  görüntüsü — audit-log diff'inin "eski değer" tabanı olarak kullanılır
    *  (online updateTask'taki oldTask parametresiyle aynı rol). */
   oldTaskSnapshot?: Task;
+  /** HERHANGİ bir koleksiyonun 'set'/'update'/'delete' mutasyonu için: bu
+   *  yazımla AYNI writeBatch'te bir audit_logs kaydı da oluşturulmalı —
+   *  userService.addUser/updateUser/deleteUser ve blockerService.editBlocker
+   *  online yolda BİREBİR bunu yapıyor (bkz. userService.ts/blockerService.ts).
+   *  Bu alan olmadan sync() generic setDoc/updateDoc/deleteDoc'a düşer ve
+   *  audit_logs'u sessizce atlar — offline yapılan bir kullanıcı-yönetimi/
+   *  risk-düzenleme işlemi hiç iz bırakmadan uygulanmış olurdu (bkz. kod
+   *  denetimi). `taskId` alanı audit_logs şemasının zorunlu alanıdır; görev-dışı
+   *  senaryolarda (ör. kullanıcı yönetimi) etkilenen varlığın id'sini taşır —
+   *  bkz. userService.ts'teki userAuditLogRef yorumu, AYNI ilke.
+   */
+  withAuditLog?: {
+    taskId: string;
+    changedBy: string;
+    oldValue: string;
+    newValue: string;
+    changes?: Record<string, { old: unknown; new: unknown }>;
+  };
 }
 
 /**
@@ -169,6 +188,30 @@ function propagateVersionBump(
 }
 
 /**
+ * `withAuditLog` taşıyan bir mutasyonun ana yazımını (mainWrite) ve buna
+ * bağlı audit_logs kaydını TEK writeBatch'te atomik olarak uygular —
+ * userService.addUser/updateUser/deleteUser ve blockerService.editBlocker'ın
+ * online yolda yaptığı writeBatch'in senkron karşılığı (bkz. OfflineMutation.
+ * withAuditLog yorumu).
+ */
+async function writeWithAuditLog(
+  mainWrite: (batch: ReturnType<typeof writeBatch>) => void,
+  auditLog: NonNullable<OfflineMutation['withAuditLog']>
+) {
+  const batch = writeBatch(db);
+  mainWrite(batch);
+  batch.set(doc(collection(db, 'audit_logs')), {
+    taskId: auditLog.taskId,
+    changedBy: auditLog.changedBy,
+    oldValue: auditLog.oldValue,
+    newValue: auditLog.newValue,
+    timestamp: Date.now(),
+    ...(auditLog.changes ? { changes: auditLog.changes } : {}),
+  });
+  await batch.commit();
+}
+
+/**
  * Bir 'create' mutasyonu sunucuda gerçek bir ID aldığında, kuyrukta ondan
  * SONRA gelen ve enqueue anında geçici (temp) ID'yi referans alan öğeleri
  * (docId veya data içindeki herhangi bir alan) gerçek ID ile yamalar. Hem
@@ -218,7 +261,8 @@ export const offlineQueue = {
     linkedTaskTransition?: OfflineMutation['linkedTaskTransition'],
     statusTransition?: OfflineMutation['statusTransition'],
     actorId?: string,
-    oldTaskSnapshot?: Task
+    oldTaskSnapshot?: Task,
+    withAuditLog?: OfflineMutation['withAuditLog']
   ) {
     const queue = this.getQueue();
 
@@ -227,16 +271,18 @@ export const offlineQueue = {
     // güncelleme yaptığından, N ayrı sıralı update yerine tek birleşik update
     // göndermek davranışsal olarak eşdeğerdir (son değer kazanır) — kuyruk
     // şişmesini ve senkronda gereksiz yazma sayısını azaltır. linkedTaskTransition
-    // taşıyan mutasyonlar (blocker+görev atomik çifti) ve statusTransition taşıyan
-    // mutasyonlar (durum geçişleri) birleştirilmez — her biri kendi audit/pause
-    // hesaplamasını gerektirir, basit alan birleştirmesinden anlamları farklıdır.
-    if (action === 'update' && docId && !linkedTaskTransition && !statusTransition) {
+    // taşıyan mutasyonlar (blocker+görev atomik çifti), statusTransition taşıyan
+    // mutasyonlar (durum geçişleri) ve withAuditLog taşıyan mutasyonlar (her biri
+    // KENDİ oldValue/newValue audit mesajını taşır — iki farklı düzenlemeyi
+    // birleştirmek yanıltıcı/eksik bir tek audit kaydı üretir) birleştirilmez.
+    if (action === 'update' && docId && !linkedTaskTransition && !statusTransition && !withAuditLog) {
       const existing = queue.find(m =>
         m.action === 'update' &&
         m.collectionName === collectionName &&
         m.docId === docId &&
         !m.linkedTaskTransition &&
-        !m.statusTransition
+        !m.statusTransition &&
+        !m.withAuditLog
       );
       if (existing) {
         existing.data = { ...existing.data, ...data };
@@ -266,7 +312,8 @@ export const offlineQueue = {
       linkedTaskTransition,
       statusTransition,
       actorId,
-      oldTaskSnapshot
+      oldTaskSnapshot,
+      withAuditLog
     };
     queue.push(mutation);
     this.saveQueue(queue);
@@ -354,7 +401,18 @@ export const offlineQueue = {
             }
             case 'set':
               if (mutation.docId) {
-                await setDoc(doc(db, mutation.collectionName, mutation.docId), mutation.data, { merge: true });
+                if (mutation.withAuditLog) {
+                  // userService.addUser online yolda merge YAPMADAN tam bir
+                  // doküman yazar (yeni personel kaydı) — merge:true kullanılsaydı
+                  // aynı e-postayla önceden silinmiş bir kullanıcının eski
+                  // alanları (ör. eski rolü) yeni kayıtta sessizce hayatta kalabilirdi.
+                  await writeWithAuditLog(
+                    (batch) => batch.set(doc(db, mutation.collectionName, mutation.docId!), mutation.data),
+                    mutation.withAuditLog
+                  );
+                } else {
+                  await setDoc(doc(db, mutation.collectionName, mutation.docId), mutation.data, { merge: true });
+                }
               }
               break;
             case 'update':
@@ -450,6 +508,14 @@ export const offlineQueue = {
                   if (result.newVersion !== undefined) {
                     propagateVersionBump(workingQueue, i, mutation.docId, result.newVersion);
                   }
+                } else if (mutation.withAuditLog) {
+                  await writeWithAuditLog(
+                    (batch) => batch.update(doc(db, mutation.collectionName, mutation.docId!), {
+                      ...mutation.data,
+                      updatedAt: Date.now()
+                    }),
+                    mutation.withAuditLog
+                  );
                 } else {
                   await updateDoc(doc(db, mutation.collectionName, mutation.docId), {
                     ...mutation.data,
@@ -477,6 +543,11 @@ export const offlineQueue = {
                     }
                     throw transitionErr;
                   }
+                } else if (mutation.withAuditLog) {
+                  await writeWithAuditLog(
+                    (batch) => batch.delete(doc(db, mutation.collectionName, mutation.docId!)),
+                    mutation.withAuditLog
+                  );
                 } else {
                   await deleteDoc(doc(db, mutation.collectionName, mutation.docId));
                 }

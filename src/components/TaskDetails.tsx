@@ -1,31 +1,30 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
-  Calendar, CheckCircle2, AlertTriangle, FileText,
-  ChevronRight, Award, Zap, Activity, Info,
-  Edit2, Trash2, ArrowRight, MessageSquare, History, ListChecks, Send, Plus,
-  GitCommit, Loader2, Hourglass, Clock, Building2, Tag, Flag, ExternalLink, Layers,
+  CheckCircle2, AlertTriangle,
+  Edit2, Trash2, Activity, Info,
+  GitCommit, Hourglass, ListChecks, Zap, Flag, History, MessageSquare,
   type LucideIcon
 } from 'lucide-react';
 import { Task, User as UserType, TaskBlocker, AuditLog, TaskStatus, TaskPriority } from '../types';
 import { STATUS_LABELS, STATUS_LABELS_SHORT, PRIORITY_LABELS, PRIORITY_BADGE_VARIANT, STATUS_BADGE_VARIANT } from '../constants';
-import { format, formatDistanceToNow } from 'date-fns';
-import { tr } from 'date-fns/locale';
 import { cn, buildUsersById } from '../lib/utils';
 import { Badge } from './ui/Badge';
-import { Avatar } from './ui/Avatar';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
-import { EmptyState } from './ui/EmptyState';
-import { Tooltip } from './ui/Tooltip';
 import { auditLogService } from '../services/auditLogService';
-import { getTimeLeft, getSLAColor, computeChecklistStats } from './taskDetails/helpers';
-import { AUDIT_FIELD_LABELS, formatAuditValue } from '../lib/auditLabels';
+import { getTimeLeft, computeChecklistStats, type TaskDetailsTabId } from './taskDetails/helpers';
+import { useIsAdmin } from '../hooks/useIsAdmin';
+import { InfoTab } from './taskDetails/InfoTab';
+import { ChecklistTab } from './taskDetails/ChecklistTab';
+import { SubtasksTab } from './taskDetails/SubtasksTab';
+import { BlockersTab } from './taskDetails/BlockersTab';
+import { HistoryTab } from './taskDetails/HistoryTab';
+import { CommentsTab } from './taskDetails/CommentsTab';
 
 export type { PrimaryAction } from './taskDetails/helpers';
 export { getPrimaryAction } from './taskDetails/helpers';
 export { TaskDetailsFooter } from './taskDetails/Footer';
 
-type TaskDetailsTabId = 'info' | 'checklist' | 'blockers' | 'subtasks' | 'history' | 'comments';
 interface TaskDetailsTab {
   id: TaskDetailsTabId;
   label: string;
@@ -173,8 +172,8 @@ export const TaskDetails = ({
   const coordinator = task.coordinatorId ? usersById.get(task.coordinatorId) : undefined;
   // İş kuralı ihlali: koordinatör Admin ise uyar
   const coordinatorIsAdmin = coordinator?.role === 'Admin';
-  
-  const isAdmin = currentUser?.role === 'Admin';
+
+  const isAdmin = useIsAdmin(currentUser);
   const isManager = currentUser?.role === 'Manager';
 
   // İzin/mazeret devri: yalnızca görevin mevcut sorumlusu olan Müdür,
@@ -203,7 +202,7 @@ export const TaskDetails = ({
   };
 
   const subtasks = useMemo(() => tasks.filter(t => t.parentId === task.id), [tasks, task.id]);
-  
+
   // #4 - Canlı SLA hesaplama (totalPausedTime ve pausedAt dahil)
   const timeLeft = getTimeLeft(task, now);
 
@@ -379,597 +378,77 @@ export const TaskDetails = ({
 
       <div className="flex-1 overflow-y-auto no-scrollbar">
         {activeTab === 'info' && (
-          <div role="tabpanel" id="task-tabpanel-info" aria-labelledby="task-tab-info" className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2 flex flex-col gap-6">
-              <div className="flex flex-col gap-3">
-                <h4 className="text-[9px] font-medium text-text-muted uppercase tracking-[0.18em] flex items-center gap-2">
-                  <FileText className="w-3 h-3 text-executive-blue" />
-                  Stratejik Açıklama
-                </h4>
-                <div className="p-3.5 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl">
-                  <p className="text-executive-blue leading-relaxed font-light text-[13px] font-display">
-                    {task.description || 'Bu talimat için detaylı bir açıklama girilmemiştir.'}
-                  </p>
-                </div>
-                {/* #3 - Etiketler */}
-                {task.tags && task.tags.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5 px-1">
-                    <Tag className="w-3 h-3 text-text-muted shrink-0" aria-hidden="true" />
-                    {task.tags.map(tag => (
-                      <span
-                        key={tag}
-                        className="px-2 py-0.5 rounded-full bg-executive-blue/[0.05] border border-executive-blue/10 text-executive-blue text-[10px] font-medium tracking-wide"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="flex flex-col gap-4">
-                  <h4 className="text-[9px] font-medium text-text-muted uppercase tracking-[0.18em]">Sorumlu Kadro</h4>
-                  <div className="flex flex-col gap-3">
-                    {[
-                      { u: creator,     l: 'Oluşturan',   ring: 'ring-executive-gold/30' },
-                      { u: assignee,    l: 'Sorumlu',     ring: 'ring-executive-blue/20' },
-                      { u: coordinator, l: 'İrtibatlı',   ring: coordinatorIsAdmin ? 'ring-status-danger/40' : 'ring-status-success/40' }
-                    ].filter(x => x.u).map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-2.5 p-2.5 bg-makam-glass backdrop-blur-xl rounded-xl border border-surface-border shadow-sm">
-                        {/* #10 - Avatar bileşeni */}
-                        <Avatar
-                          name={item.u?.fullName ?? ''}
-                          photoURL={(item.u as any)?.photoURL}
-                          size="sm"
-                          ring
-                          className={cn('flex-shrink-0', item.ring)}
-                        />
-                        <div className="flex flex-col gap-0.5 flex-1">
-                          <span className="text-[12px] font-medium text-executive-blue tracking-tight">{item.u?.fullName}</span>
-                          <span className="text-[10px] text-text-tertiary font-medium uppercase tracking-[0.2em]">{item.l}</span>
-                        </div>
-                        {/* Koordinatör Admin ise uyarı + temizle */}
-                        {item.l === 'İrtibatlı' && coordinatorIsAdmin && (isAdmin || isManager) && (
-                          <div className="flex flex-col items-end gap-1">
-                            <Badge variant="danger" className="text-[10px] px-1.5 py-0.5 font-bold">
-                              Hatalı Atama
-                            </Badge>
-                            <button
-                              onClick={onClearCoordinator}
-                              className="text-[11px] px-2 py-1 -mr-2 rounded-md text-status-danger hover:text-status-danger uppercase tracking-widest font-medium underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger"
-                            >
-                              Temizle
-                            </button>
-                          </div>
-                        )}
-                        {/* İzin/mazeret devri: sorumlu Müdür başka bir Müdür'e devredebilir */}
-                        {item.l === 'Sorumlu' && canDelegate && onDelegateTask && (
-                          <button
-                            onClick={() => setIsDelegateModalOpen(true)}
-                            className="text-[11px] px-2 py-1 -mr-2 rounded-md text-executive-blue hover:text-executive-gold uppercase tracking-widest font-medium underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue"
-                          >
-                            Devret
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    {/* #3 - Sorumlu birim (departman) */}
-                    {task.departmentId && (
-                      <div className="flex items-center gap-2.5 p-2.5 bg-makam-glass backdrop-blur-xl rounded-xl border border-surface-border shadow-sm">
-                        <div className="w-8 h-8 rounded-full bg-executive-blue/[0.05] border border-executive-blue/10 flex items-center justify-center flex-shrink-0">
-                          <Building2 className="w-4 h-4 text-executive-blue/70" aria-hidden="true" />
-                        </div>
-                        <div className="flex flex-col gap-0.5 flex-1">
-                          <span className="text-[12px] font-medium text-executive-blue tracking-tight">{task.departmentId}</span>
-                          <span className="text-[10px] text-text-tertiary font-medium uppercase tracking-[0.2em]">Sorumlu Birim</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-center gap-1.5">
-                    <h4 className="text-[9px] font-medium text-text-muted uppercase tracking-[0.18em]">Zaman Yönetimi</h4>
-                    <Tooltip content="Mühlet yalnızca mesai saatleri (09:00–18:00) içinde işler; hafta sonu/resmî tatiller ve Engellendi/Onay Sürecinde geçen süre sayılmaz.">
-                      <Info className="w-3 h-3 text-text-tertiary cursor-help" aria-label="Mühlet hesaplama kuralı" />
-                    </Tooltip>
-                  </div>
-                  <div className="p-3 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-xl flex items-center gap-3">
-                    <Calendar className="w-4 h-4 text-executive-gold stroke-[1.3] flex-shrink-0" />
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-[0.2em]">Bitiş Tarihi</span>
-                      <p className="text-[13px] font-medium text-executive-blue">
-                        {format(task.deadline, 'd MMMM yyyy', { locale: tr })}
-                      </p>
-                      {/* #4 - Canlı SLA geri sayım */}
-                      {timeLeft && (
-                        <span className={cn(
-                          'text-[9px] font-medium tabular-nums mt-0.5',
-                          getSLAColor(timeLeft.status)
-                        )}>
-                          {timeLeft.label}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {/* #3 - Tahmini efor */}
-                  {typeof task.estimatedHours === 'number' && task.estimatedHours > 0 && (
-                    <div className="p-3 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-xl flex items-center gap-3">
-                      <Clock className="w-4 h-4 text-executive-gold stroke-[1.3] flex-shrink-0" aria-hidden="true" />
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-[0.2em]">Tahmini Efor</span>
-                        <p className="text-[13px] font-medium text-executive-blue tabular-nums">
-                          {task.estimatedHours} saat
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-6">
-              {/* Durum-özel bilgi kutuları — birincil aksiyon butonu modal alt çubuğundadır */}
-              {(task.status === 'PENDING_DELEGATION' ||
-                task.status === 'BLOCKED' ||
-                task.status === 'COMPLETED' ||
-                task.status === 'CANCELLED' ||
-                (task.status === 'AWAITING_APPROVAL' && !isAdmin)) && (
-                <div className="flex flex-col gap-4">
-                  <h4 className="text-[9px] font-medium text-text-muted uppercase tracking-[0.18em]">Durum Bilgisi</h4>
-                  <div className="flex flex-col gap-2.5">
-                    {task.status === 'PENDING_DELEGATION' && (
-                      <div className="flex flex-col items-center gap-3 py-4 px-3 bg-executive-gold/[0.06] border border-dashed border-executive-gold/25 rounded-2xl">
-                        <Hourglass className="w-5 h-5 text-executive-gold" aria-hidden="true" />
-                        <span className="text-[10px] text-executive-gold font-medium uppercase tracking-widest text-center">Yetki Devri Bekleniyor</span>
-                        <p className="text-[11px] text-text-muted font-light text-center leading-relaxed">
-                          Talimat devralınmayı bekliyor; süreç ancak devir kabul edildiğinde başlar.
-                        </p>
-                      </div>
-                    )}
-
-                    {task.status === 'AWAITING_APPROVAL' && !isAdmin && (
-                      <div className="flex flex-col items-center gap-3 py-4 px-3 bg-executive-gold/[0.06] border border-dashed border-executive-gold/25 rounded-2xl">
-                        <Hourglass className="w-5 h-5 text-executive-gold" aria-hidden="true" />
-                        <span className="text-[10px] text-executive-gold font-medium uppercase tracking-widest text-center">Makam Onayı Bekleniyor</span>
-                        <p className="text-[11px] text-text-muted font-light text-center leading-relaxed">
-                          Talimat onaya sunuldu; nihai kapanış yönetici onayıyla gerçekleşir.
-                        </p>
-                      </div>
-                    )}
-
-                    {task.status === 'BLOCKED' && (
-                      <div className="flex flex-col items-center gap-3 py-4 px-2 bg-status-danger/5 border border-dashed border-status-danger/20 rounded-2xl">
-                        <AlertTriangle className="w-5 h-5 text-status-danger animate-pulse" />
-                        <span className="text-[10px] text-status-danger font-medium uppercase tracking-widest text-center">İşlem Engellendi</span>
-                        <button
-                          onClick={() => setActiveTab('blockers')}
-                          className="text-[10px] px-2 py-1 rounded-md text-executive-blue font-bold uppercase tracking-widest hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue"
-                        >
-                          ENGELİ ÇÖZ
-                        </button>
-                      </div>
-                    )}
-
-                    {(task.status === 'COMPLETED' || task.status === 'CANCELLED') && (
-                      <div className="flex flex-col items-center gap-3 py-4 px-2 bg-surface-border/30 border border-dashed border-surface-border/50 rounded-2xl">
-                        <CheckCircle2 className="w-5 h-5 text-status-success" />
-                        <span className="text-[10px] text-text-muted font-medium uppercase tracking-widest">Operasyon Sonlandı</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* #7 - Sonuç Belgeleri: Liyakat/İkaz belgeleri ve icra kanıtı */}
-              {((task.status === 'COMPLETED' && task.completedAt) || task.evidence) && (
-                <div className="flex flex-col gap-4">
-                  <h4 className="text-[9px] font-medium text-text-muted uppercase tracking-[0.18em]">Sonuç Belgeleri</h4>
-                  <div className="p-3 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl flex flex-col gap-2">
-                    {task.status === 'COMPLETED' && task.completedAt && task.completedAt <= task.deadline && (
-                      <Tooltip content="Mühleti içinde tamamlanan talimatlar için otomatik olarak hazırlanır." side="bottom" className="w-full">
-                        <button
-                          onClick={() => onShowCertificate?.(task)}
-                          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[11px] font-medium text-executive-gold uppercase tracking-widest hover:bg-executive-gold/10 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue"
-                        >
-                          <Award className="w-4 h-4 shrink-0" aria-hidden="true" />
-                          Liyakat Belgesi
-                        </button>
-                      </Tooltip>
-                    )}
-                    {task.status === 'COMPLETED' && task.completedAt && task.completedAt > task.deadline && (
-                      <Tooltip content="Mühleti aşıldıktan sonra tamamlanan talimatlar için otomatik olarak hazırlanır." side="bottom" className="w-full">
-                        <button
-                          onClick={() => onShowWarning?.(task)}
-                          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[11px] font-medium text-status-danger uppercase tracking-widest hover:bg-status-danger/10 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger"
-                        >
-                          <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
-                          İkaz Belgesi
-                        </button>
-                      </Tooltip>
-                    )}
-                    {task.evidence && (
-                      /^https?:\/\//i.test(task.evidence) ? (
-                        <a
-                          href={task.evidence}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[11px] font-medium text-executive-blue uppercase tracking-widest hover:bg-executive-blue/[0.06] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue"
-                        >
-                          <ExternalLink className="w-4 h-4 shrink-0" aria-hidden="true" />
-                          İcra Kanıtı{task.evidenceType ? ` (${task.evidenceType === 'Image' ? 'Görsel' : task.evidenceType === 'Link' ? 'Bağlantı' : 'PDF'})` : ''}
-                        </a>
-                      ) : (
-                        <div className="flex items-start gap-2.5 px-3 py-2.5">
-                          <FileText className="w-4 h-4 shrink-0 text-executive-blue mt-0.5" aria-hidden="true" />
-                          <span className="text-[11px] text-text-body break-all">{task.evidence}</span>
-                        </div>
-                      )
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+          <InfoTab
+            task={task}
+            creator={creator}
+            assignee={assignee}
+            coordinator={coordinator}
+            coordinatorIsAdmin={coordinatorIsAdmin}
+            isAdmin={isAdmin}
+            isManager={isManager}
+            canDelegate={canDelegate}
+            timeLeft={timeLeft}
+            onClearCoordinator={onClearCoordinator}
+            onOpenDelegateModal={() => setIsDelegateModalOpen(true)}
+            onDelegateTask={onDelegateTask}
+            onShowCertificate={onShowCertificate}
+            onShowWarning={onShowWarning}
+            setActiveTab={setActiveTab}
+          />
         )}
 
         {activeTab === 'subtasks' && (
-          <div role="tabpanel" id="task-tabpanel-subtasks" aria-labelledby="task-tab-subtasks" className="flex flex-col gap-6">
-            {/* #8 - Alt Talimat / Alt İşlem ayrımı ipucu */}
-            <p className="text-[11px] text-text-muted font-light leading-relaxed">
-              Alt talimatlar, ayrı bir sorumluya atanabilen; kendi durumu ve süresi olan bağımsız talimatlardır.
-            </p>
-            <div className="flex items-center justify-between">
-              <h4 className="text-[9px] font-medium text-text-muted uppercase tracking-[0.18em]">Operasyonel Alt Birimler</h4>
-              <Button
-                variant="gold"
-                size="sm"
-                onClick={() => onAddSubTask(task.id, '')}
-                className="gap-2 tracking-widest"
-              >
-                <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-                Yeni Alt Talimat
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {subtasks.length === 0 ? (
-                <EmptyState className="md:col-span-2" icon={<Layers className="w-8 h-8" />} message="Alt talimat bulunamadı" />
-              ) : (
-                subtasks.map(sub => (
-                  <div 
-                    key={sub.id}
-                    onClick={() => onViewTask(sub)}
-                    className="flex items-center justify-between p-3 bg-makam-glass border border-surface-border rounded-xl group cursor-pointer hover:bg-makam-card hover:shadow-sm transition-all"
-                  >
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[13px] font-medium text-text-heading group-hover:text-executive-blue transition-colors">{sub.title}</span>
-                      <span className="text-[9px] text-text-muted uppercase tracking-widest">{STATUS_LABELS[sub.status]}</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-text-muted/20 group-hover:text-executive-blue group-hover:translate-x-1 transition-all" />
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+          <SubtasksTab task={task} subtasks={subtasks} onAddSubTask={onAddSubTask} onViewTask={onViewTask} />
         )}
 
         {activeTab === 'blockers' && (
-          <div role="tabpanel" id="task-tabpanel-blockers" aria-labelledby="task-tab-blockers" className="flex flex-col gap-6">
-            <div className="flex flex-col gap-4">
-              <h4 className="text-[9px] font-medium text-text-muted uppercase tracking-[0.18em]">Aktif Engeller</h4>
-              <div className="flex flex-col gap-3">
-                {blockers.length === 0 ? (
-                  <EmptyState icon={<AlertTriangle className="w-8 h-8" />} message="Engel kaydı bulunamadı" />
-                ) : (
-                  blockers.map(blocker => (
-                    <div key={blocker.id} className={cn(
-                      "flex items-center justify-between p-3 rounded-xl border transition-all",
-                      blocker.isResolved ? "opacity-50 grayscale bg-makam-glass border-surface-border" : "bg-status-danger/5 border-status-danger/15"
-                    )}>
-                      <div className="flex items-center gap-4">
-                        <AlertTriangle className={cn("w-5 h-5", blocker.isResolved ? "text-text-muted" : "text-status-danger")} />
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[14px] font-medium text-text-heading">{blocker.reason}</span>
-                          <div className="flex items-center gap-2">
-                            <Badge variant={PRIORITY_BADGE_VARIANT[blocker.severity ?? 'Medium']}>
-                              {PRIORITY_LABELS[blocker.severity ?? 'Medium']}
-                            </Badge>
-                            <span className="text-[9px] text-text-muted uppercase tracking-widest">
-                              {format(blocker.createdAt, 'd MMM HH:mm', { locale: tr })}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      {!blocker.isResolved && (isAdmin || isManager) && (
-                        <Button
-                          variant="success"
-                          size="sm"
-                          onClick={() => onResolveBlocker(blocker.id)}
-                          className="tracking-widest"
-                        >
-                          ÇÖZÜLDÜ
-                        </Button>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="pt-6 border-t border-makam-border/5">
-              <div className="flex gap-2">
-                <label htmlFor="blocker-reason-input" className="sr-only">Engel açıklaması</label>
-                <input
-                  id="blocker-reason-input"
-                  value={blockerReason}
-                  onChange={(e) => setBlockerReason(e.target.value)}
-                  placeholder="Engeli tanımlayın..."
-                  disabled={isSubmittingBlocker}
-                  className="flex-1 bg-makam-glass border border-makam-border/10 rounded-full px-5 py-3 text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger/10 disabled:opacity-60"
-                />
-                <label htmlFor="blocker-severity-select" className="sr-only">Engel ciddiyeti</label>
-                <select
-                  id="blocker-severity-select"
-                  value={blockerSeverity}
-                  onChange={(e) => setBlockerSeverity(e.target.value as TaskPriority)}
-                  disabled={isSubmittingBlocker}
-                  className="bg-makam-glass border border-makam-border/10 rounded-full px-4 py-3 text-[12px] font-medium text-text-heading focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger/10 disabled:opacity-60"
-                >
-                  {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
-                    <option key={value} value={value} className="bg-surface-base text-text-heading">{label}</option>
-                  ))}
-                </select>
-                <button
-                  onClick={handleAddBlocker}
-                  disabled={!blockerReason.trim() || isSubmittingBlocker}
-                  className="px-6 py-3 bg-status-danger text-[color:var(--status-danger-text)] rounded-full text-[10px] uppercase tracking-widest shadow-lg shadow-status-danger/10 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger focus-visible:ring-offset-2"
-                >
-                  {isSubmittingBlocker ? 'EKLENİYOR…' : 'ENGEL EKLE'}
-                </button>
-              </div>
-            </div>
-          </div>
+          <BlockersTab
+            blockers={blockers}
+            isAdmin={isAdmin}
+            isManager={isManager}
+            onResolveBlocker={onResolveBlocker}
+            blockerReason={blockerReason}
+            setBlockerReason={setBlockerReason}
+            blockerSeverity={blockerSeverity}
+            setBlockerSeverity={setBlockerSeverity}
+            isSubmittingBlocker={isSubmittingBlocker}
+            onAddBlocker={handleAddBlocker}
+          />
         )}
 
         {activeTab === 'history' && (
-          <div role="tabpanel" id="task-tabpanel-history" aria-labelledby="task-tab-history" className="flex flex-col gap-4">
-            <h4 className="text-[9px] font-medium text-text-muted uppercase tracking-[0.18em]">Operasyonel Denetim İzleri</h4>
-            <div className="flex flex-col gap-3">
-              {loadingLogs ? (
-                <div className="py-16 flex justify-center items-center">
-                  <Loader2 className="w-6 h-6 animate-spin text-executive-blue" />
-                </div>
-              ) : logsError ? (
-                <div className="py-12 px-4 flex flex-col items-center justify-center gap-3 bg-status-danger/5 border border-dashed border-status-danger/20 rounded-2xl text-center">
-                  <AlertTriangle className="w-5 h-5 text-status-danger" aria-hidden="true" />
-                  <span className="text-[10px] text-status-danger font-medium uppercase tracking-[0.18em]">
-                    Denetim izleri yüklenemedi
-                  </span>
-                  <button
-                    onClick={() => setLogsRetryNonce(n => n + 1)}
-                    className="text-[11px] px-3 py-1.5 rounded-full text-executive-blue font-bold uppercase tracking-widest hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue"
-                  >
-                    Tekrar Dene
-                  </button>
-                </div>
-              ) : localLogs.length === 0 ? (
-                <EmptyState icon={<History className="w-8 h-8" />} message="Denetim izi kaydı bulunamadı" />
-              ) : (
-                localLogs.map(log => {
-                  const actor = users.find(u => u.uid === log.changedBy || u.email === log.changedBy);
-                  const isSystemActor = log.changedBy?.startsWith('system:');
-                  const hasChanges = log.changes && Object.keys(log.changes).length > 0;
-                  return (
-                    <div key={log.id} className="flex gap-3 p-3 bg-makam-glass border border-surface-border rounded-xl">
-                      <div className="flex-shrink-0 pt-0.5">
-                        <Avatar
-                          name={actor?.fullName ?? (isSystemActor ? 'Dizge' : log.changedBy) ?? 'Dizge'}
-                          photoURL={actor?.photoURL}
-                          size="sm"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[12px] font-medium text-text-heading">
-                            {actor?.fullName || (isSystemActor ? 'Dizge' : log.changedBy) || 'Dizge'}
-                          </span>
-                          <span className="text-[9px] text-text-muted tabular-nums">
-                            {format(log.timestamp, 'd MMM HH:mm', { locale: tr })}
-                          </span>
-                        </div>
-                        {/* #7 - Field-level diff */}
-                        {hasChanges ? (
-                          <div className="flex flex-col gap-1">
-                            {Object.entries(log.changes!)
-                              .filter(([field]) => field in AUDIT_FIELD_LABELS)
-                              .map(([field, change]) => {
-                              const label = AUDIT_FIELD_LABELS[field] ?? field;
-                              return (
-                                <div key={field} className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-[0.2em] bg-surface-glass px-1.5 py-0.5 rounded border border-surface-border">
-                                    {label}
-                                  </span>
-                                  <span className="text-[9px] text-status-danger/70 line-through">{formatAuditValue(field, change.old, users)}</span>
-                                  <ArrowRight className="w-2.5 h-2.5 text-text-tertiary flex-shrink-0" />
-                                  <span className="text-[9px] font-medium text-status-success">{formatAuditValue(field, change.new, users)}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <Badge variant={
-                            log.newValue === 'COMPLETED' ? 'success' :
-                            log.newValue === 'BLOCKED' ? 'danger' :
-                            log.newValue === 'IN_PROGRESS' ? 'info' :
-                            log.newValue === 'AWAITING_APPROVAL' ? 'warning' :
-                            'default'
-                          }>
-                            {STATUS_LABELS[log.newValue as TaskStatus] ?? String(log.newValue)}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
+          <HistoryTab
+            loadingLogs={loadingLogs}
+            logsError={logsError}
+            localLogs={localLogs}
+            users={users}
+            onRetry={() => setLogsRetryNonce(n => n + 1)}
+          />
         )}
 
         {activeTab === 'checklist' && (
-          <div role="tabpanel" id="task-tabpanel-checklist" aria-labelledby="task-tab-checklist" className="flex flex-col gap-5">
-            {/* #8 - Alt Talimat / Alt İşlem ayrımı ipucu */}
-            <p className="text-[11px] text-text-muted font-light leading-relaxed">
-              Alt işlemler bu talimata bağlı kendi kontrol listenizdir — başkasına devredilmez, ayrı bir talimat oluşturmaz.
-            </p>
-            {/* Progress bar info */}
-            <div className="flex flex-col gap-2.5 p-4 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl">
-              <div className="flex justify-between items-center text-[10px] uppercase tracking-wider font-bold">
-                <span className="text-text-muted">Alt İşlemler İlerlemesi</span>
-                <span className="text-executive-blue">
-                  {checklistStats.percent}% ({checklistStats.completed} / {checklistStats.total})
-                </span>
-              </div>
-              <div className="w-full h-2 bg-executive-blue/5 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-status-success transition-all duration-300 rounded-full" 
-                  style={{ width: `${checklistStats.percent}%` }} 
-                />
-              </div>
-            </div>
-
-            {/* Checklist items list */}
-            <div className="flex flex-col gap-3 max-h-[300px] overflow-y-auto no-scrollbar">
-              {(!task.checklist || task.checklist.length === 0) ? (
-                <EmptyState icon={<ListChecks className="w-8 h-8" />} message="Henüz bir alt işlem eklenmemiş" />
-              ) : (
-                task.checklist.map((item) => (
-                  <div 
-                    key={item.id} 
-                    className="flex items-center justify-between p-3.5 bg-makam-glass border border-surface-border rounded-xl group/item hover:bg-surface-elevated transition-all"
-                  >
-                    <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
-                      <input
-                        type="checkbox"
-                        checked={item.isCompleted}
-                        onChange={() => handleToggleChecklistItem(item.id)}
-                        disabled={isSubmittingChecklist}
-                        className="w-4 h-4 rounded accent-status-success cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                      />
-                      <span className={cn(
-                        "text-[12px] font-medium leading-snug tracking-tight truncate",
-                        item.isCompleted ? "line-through text-text-muted opacity-60" : "text-text-heading"
-                      )}>
-                        {item.text}
-                      </span>
-                    </label>
-
-                    {onUpdateTask && (
-                      <button
-                        onClick={() => handleDeleteChecklistItem(item.id)}
-                        disabled={isSubmittingChecklist}
-                        className="w-7 h-7 flex items-center justify-center text-text-tertiary hover:text-status-danger hover:bg-status-danger/10 rounded-md opacity-0 group-hover/item:opacity-100 focus-visible:opacity-100 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Alt İşlemi Sil"
-                        aria-label="Alt işlemi sil"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                      </button>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Checklist Add Form */}
-            {onUpdateTask && (
-              <form onSubmit={handleAddChecklistItem} className="flex gap-2 pt-4 border-t border-makam-border/5">
-                <label htmlFor="checklist-item-input" className="sr-only">Yeni alt işlem</label>
-                <input
-                  id="checklist-item-input"
-                  type="text"
-                  value={newChecklistItem}
-                  onChange={(e) => setNewChecklistItem(e.target.value)}
-                  placeholder="Yeni bir alt işlem yazın..."
-                  disabled={isSubmittingChecklist}
-                  className="flex-1 bg-makam-glass border border-makam-border/10 rounded-xl px-4 py-2 text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue/15 disabled:opacity-60"
-                  required
-                />
-                <button
-                  type="submit"
-                  disabled={!newChecklistItem.trim() || isSubmittingChecklist}
-                  className="px-4 py-2 bg-executive-blue text-[color:var(--executive-blue-text)] rounded-xl flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider hover:bg-executive-blue/90 disabled:opacity-50 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-2"
-                >
-                  <Plus className="w-4 h-4" aria-hidden="true" />
-                  Ekle
-                </button>
-              </form>
-            )}
-          </div>
+          <ChecklistTab
+            task={task}
+            checklistStats={checklistStats}
+            isSubmittingChecklist={isSubmittingChecklist}
+            newChecklistItem={newChecklistItem}
+            setNewChecklistItem={setNewChecklistItem}
+            onAddChecklistItem={handleAddChecklistItem}
+            onToggleChecklistItem={handleToggleChecklistItem}
+            onDeleteChecklistItem={handleDeleteChecklistItem}
+            canEditChecklist={Boolean(onUpdateTask)}
+          />
         )}
 
         {activeTab === 'comments' && (
-          <div role="tabpanel" id="task-tabpanel-comments" aria-labelledby="task-tab-comments" className="flex flex-col gap-6">
-            <div className="flex flex-col gap-4">
-              <h4 className="text-[9px] font-medium text-text-muted uppercase tracking-[0.18em]">Yorumlar & Koordinasyon Notları</h4>
-              <div className="flex flex-col gap-4 max-h-[400px] overflow-y-auto no-scrollbar pr-2">
-                {(!task.comments || task.comments.length === 0) ? (
-                  <EmptyState icon={<MessageSquare className="w-8 h-8" />} message="Henüz yorum girilmemiş" />
-                ) : (
-                  task.comments.map((comment, idx) => {
-                    const commenter = users.find(u => u.uid === comment.userId || u.email === comment.userId);
-                    return (
-                      <div key={idx} className="flex flex-col gap-2 p-3 bg-makam-glass border border-surface-border rounded-xl">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-executive-blue/5 flex items-center justify-center text-[10px] text-executive-blue border border-executive-blue/10">
-                              {(commenter?.fullName || comment.userId || 'Kullanıcı').charAt(0).toUpperCase()}
-                            </div>
-                            <span className="text-[12px] font-medium text-text-heading">{commenter?.fullName || comment.userId}</span>
-                          </div>
-                          <span className="text-[9px] text-text-muted font-light">{formatDistanceToNow(comment.timestamp, { addSuffix: true, locale: tr })}</span>
-                        </div>
-                        <p className="text-[13px] text-text-body leading-relaxed pl-8">{comment.text}</p>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            <div className="mt-auto pt-6 border-t border-makam-border/5">
-              <div className="relative">
-                <label htmlFor="comment-input" className="sr-only">Koordinasyon notu</label>
-                <textarea
-                  id="comment-input"
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                      e.preventDefault();
-                      handleAddComment();
-                    }
-                  }}
-                  placeholder="Bir koordinasyon notu ekleyin..."
-                  disabled={isSubmittingComment}
-                  className="w-full bg-makam-glass border border-makam-border/10 rounded-2xl p-4 pr-16 text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue/10 min-h-[100px] resize-none disabled:opacity-60"
-                />
-                <button
-                  onClick={handleAddComment}
-                  disabled={!newComment.trim() || isSubmittingComment}
-                  aria-label="Yorumu gönder"
-                  className="absolute bottom-4 right-4 w-10 h-10 bg-executive-gold text-[color:var(--btn-primary-text)] rounded-full flex items-center justify-center shadow-lg shadow-executive-gold/25 hover:scale-105 hover:bg-executive-gold-hover active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-2"
-                >
-                  {isSubmittingComment
-                    ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-                    : <Send className="w-4 h-4" aria-hidden="true" />}
-                </button>
-              </div>
-              <p className="mt-2 text-[10px] text-text-tertiary tracking-wide">Göndermek için Ctrl+Enter (Mac: Cmd+Enter)</p>
-            </div>
-          </div>
+          <CommentsTab
+            task={task}
+            users={users}
+            newComment={newComment}
+            setNewComment={setNewComment}
+            isSubmittingComment={isSubmittingComment}
+            onAddComment={handleAddComment}
+          />
         )}
       </div>
     </div>
@@ -1027,5 +506,3 @@ export const TaskDetails = ({
     </>
   );
 };
-
-

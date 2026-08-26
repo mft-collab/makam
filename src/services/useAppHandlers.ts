@@ -347,32 +347,97 @@ export function useAppHandlers({
   }, [user, tasks, toast, onError]);
 
   // ─── Kullanıcı yönetimi ──────────────────────────────────────────────────
+  // Offline dallar userService'in online writeBatch (ana yazım + audit_logs)
+  // atomikliğini offlineQueue.ts'teki withAuditLog mekanizmasıyla korur —
+  // eskiden bu üç fonksiyon offline'ı hiç desteklemiyordu (bkz. kod denetimi).
   const addUser = useCallback(async (data: { email: string; fullName: string; role: UserRole; departmentId?: string }) => {
     if (!user) return;
+
+    if (isOfflineNow()) {
+      // userService.addUser ile AYNI deterministik doküman ID'si (e-posta) —
+      // sync sırasında setDoc bu ID'ye yazar, addDoc gibi rastgele bir ID
+      // ÜRETMEZ (bkz. offlineQueue.ts sync() 'set' dalı).
+      const emailId = data.email.toLowerCase().trim();
+      offlineQueue.enqueue(
+        'users', 'set', { uid: emailId, ...data, email: emailId }, emailId,
+        undefined, undefined, undefined, undefined, undefined,
+        { taskId: emailId, changedBy: user.uid, oldValue: 'Yok', newValue: `Personel Eklendi: ${data.fullName} (${data.role})` }
+      );
+      toast('👤 Çevrimdışı Personel Ekleme', `"${data.fullName}" lokal sıraya alındı.`, 'warning');
+      return;
+    }
+
     try { await userService.addUser(data, user.uid); }
     catch (err) { onError(err, 'create', 'users'); }
-  }, [user, onError]);
+  }, [user, toast, onError]);
 
   const updateUserRole = useCallback(async (userId: string, data: Partial<User>) => {
     if (!user) return;
+
+    if (isOfflineNow()) {
+      offlineQueue.enqueue(
+        'users', 'update', data, userId,
+        undefined, undefined, undefined, undefined, undefined,
+        {
+          taskId: userId, changedBy: user.uid,
+          oldValue: 'Personel Bilgisi', newValue: 'Personel Bilgisi Güncellendi',
+          // userService.updateUser ile AYNI gerekçe: bu katmanda eski değerler
+          // bilinmiyor, yalnızca HANGİ alanların değiştiği ve yeni değerleri
+          // denetim izinde kalıcı olarak görünür (bkz. userService.ts).
+          changes: (Object.keys(data) as (keyof User)[]).reduce((acc, key) => ({
+            ...acc,
+            [key]: { old: null, new: data[key] === undefined ? null : data[key] }
+          }), {} as Record<string, { old: unknown; new: unknown }>)
+        }
+      );
+      toast('🔄 Çevrimdışı Personel Güncelleme', 'Personel bilgisi lokal sıraya alındı.', 'warning');
+      return;
+    }
+
     try { await userService.updateUser(userId, data, user.uid); }
     catch (err) { onError(err, 'update', `users/${userId}`); }
-  }, [user, onError]);
+  }, [user, toast, onError]);
 
   const deleteUser = useCallback(async (userId: string) => {
     if (!user) return;
+
+    if (isOfflineNow()) {
+      offlineQueue.enqueue(
+        'users', 'delete', undefined, userId,
+        undefined, undefined, undefined, undefined, undefined,
+        { taskId: userId, changedBy: user.uid, oldValue: 'Aktif', newValue: 'Personel Silindi' }
+      );
+      toast('🗑 Çevrimdışı Personel Silme', 'Personel silme işlemi lokal sıraya alındı.', 'warning');
+      return;
+    }
+
     try { await userService.deleteUser(userId, user.uid); }
     catch (err) { onError(err, 'delete', `users/${userId}`); }
-  }, [user, onError]);
+  }, [user, toast, onError]);
 
   // ─── Blocker yönetimi ────────────────────────────────────────────────────
   const updateBlocker = useCallback(async (blockerId: string, reason: string) => {
     if (!user) return;
     const blocker = blockers.find(b => b.id === blockerId);
     if (!blocker) return;
+
+    if (isOfflineNow()) {
+      // blockerService.editBlocker ile AYNI atomiklik: offlineQueue.ts'teki
+      // withAuditLog mekanizması, sync sırasında engel güncellemesi + audit_logs
+      // kaydını tek writeBatch'te uygular (bkz. kod denetimi — eskiden bu
+      // fonksiyon hiç offline desteklemiyordu).
+      offlineQueue.enqueue(
+        'blockers', 'update', { reason }, blockerId,
+        undefined, undefined, undefined, undefined, undefined,
+        { taskId: blocker.taskId, changedBy: user.uid, oldValue: 'Risk Gerekçesi', newValue: reason }
+      );
+      toast('🔄 Çevrimdışı Risk Düzenleme', 'Risk gerekçesi lokal sıraya alındı.', 'warning', blocker.taskId);
+      return;
+    }
+
     try { await blockerService.editBlocker(blockerId, reason, user.uid, blocker.taskId); }
     catch (err) { onError(err, 'update', `blockers/${blockerId}`); }
-  }, [user, blockers, onError]);
+  }, [user, blockers, toast, onError]);
 
   const deleteBlocker = useCallback(async (blockerId: string) => {
     if (!user) return;
@@ -428,8 +493,17 @@ export function useAppHandlers({
   }, [user, blockers, tasks, toast, onError]);
 
   // ─── Bildirim yönetimi ───────────────────────────────────────────────────
+  // Bildirim koleksiyonunda audit_logs gerekmez (yalnızca isRead bayrağı) —
+  // withAuditLog olmadan generic offlineQueue 'update' yolu yeterli (bkz. kod
+  // denetimi: eskiden bu iki fonksiyon hiç offline desteklemiyordu).
   const markNotificationRead = useCallback(async (notificationId: string) => {
     if (!user) return;
+
+    if (isOfflineNow()) {
+      offlineQueue.enqueue('notifications', 'update', { isRead: true }, notificationId);
+      return;
+    }
+
     try { await notificationService.markAsRead(notificationId); }
     catch (err) { onError(err, 'update', `notifications/${notificationId}`); }
   }, [user, onError]);
@@ -441,9 +515,21 @@ export function useAppHandlers({
   // denetimi).
   const markAllNotificationsRead = useCallback(async (notificationIds: string[]) => {
     if (!user) return;
+
+    if (isOfflineNow()) {
+      // Kuyruk motoru mutasyon başına tek doküman işler — markManyAsRead'in
+      // tek batch'i N ayrı offline mutasyona bölünür (deleteTask'ın çok
+      // seviyeli engel/alt-görev temizliğindeki AYNI desen).
+      notificationIds.forEach(id => offlineQueue.enqueue('notifications', 'update', { isRead: true }, id));
+      if (notificationIds.length > 0) {
+        toast('🔔 Çevrimdışı Bildirimler', 'Bildirimler okundu olarak lokal sıraya alındı.', 'warning');
+      }
+      return;
+    }
+
     try { await notificationService.markManyAsRead(notificationIds); }
     catch (err) { onError(err, 'update', 'notifications'); }
-  }, [user, onError]);
+  }, [user, toast, onError]);
 
   return {
     updateTaskStatus,

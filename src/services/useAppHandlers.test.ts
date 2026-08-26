@@ -4,6 +4,7 @@ import { useAppHandlers } from './useAppHandlers';
 import { taskService } from './taskService';
 import { userService } from './userService';
 import { blockerService } from './blockerService';
+import { notificationService } from './notificationService';
 import { offlineQueue } from '../lib/offlineQueue';
 import { useUIStore } from '../store/uiStore';
 import type { Task, TaskBlocker, User } from '../types';
@@ -19,6 +20,9 @@ vi.mock('./userService', () => ({
 }));
 vi.mock('./blockerService', () => ({
   blockerService: { addBlocker: vi.fn(), resolveBlocker: vi.fn(), editBlocker: vi.fn(), deleteBlocker: vi.fn() },
+}));
+vi.mock('./notificationService', () => ({
+  notificationService: { markAsRead: vi.fn(), markManyAsRead: vi.fn() },
 }));
 vi.mock('../lib/offlineQueue', () => ({ offlineQueue: { enqueue: vi.fn() } }));
 vi.mock('../store/uiStore', () => ({ useUIStore: vi.fn() }));
@@ -520,19 +524,24 @@ describe('useAppHandlers', () => {
     });
   });
 
-  describe('kullanıcı yönetimi (addUser / updateUserRole / deleteUser) — offline dalı yok', () => {
+  describe('kullanıcı yönetimi (addUser / updateUserRole / deleteUser)', () => {
     it('addUser: online userService.addUser çağrılır (actorId ile)', async () => {
       const { handlers } = setup();
       await act(async () => { await handlers.addUser({ email: 'a@b.com', fullName: 'X', role: 'Staff' }); });
       expect(userService.addUser).toHaveBeenCalledWith({ email: 'a@b.com', fullName: 'X', role: 'Staff' }, 'user-1');
     });
 
-    it('addUser: cihaz çevrimdışıyken de doğrudan servisi çağırır (offlineQueue kullanılmaz)', async () => {
+    it('addUser: offline ise servis çağrılmaz, offlineQueue.enqueue withAuditLog ile (users/set, deterministik e-posta ID\'si) kuyruğa alır', async () => {
       goOffline();
       const { handlers } = setup();
-      await act(async () => { await handlers.addUser({ email: 'a@b.com', fullName: 'X', role: 'Staff' }); });
-      expect(userService.addUser).toHaveBeenCalledOnce();
-      expect(offlineQueue.enqueue).not.toHaveBeenCalled();
+      await act(async () => { await handlers.addUser({ email: 'A@B.com', fullName: 'X', role: 'Staff' }); });
+      expect(userService.addUser).not.toHaveBeenCalled();
+      expect(offlineQueue.enqueue).toHaveBeenCalledOnce();
+      const call = vi.mocked(offlineQueue.enqueue).mock.calls[0]!;
+      expect(call[0]).toBe('users');
+      expect(call[1]).toBe('set');
+      expect(call[3]).toBe('a@b.com');
+      expect(call[9]).toMatchObject({ taskId: 'a@b.com', changedBy: 'user-1' });
     });
 
     it('addUser: servis reddederse onError(err, \'create\', \'users\') çağrılır', async () => {
@@ -548,6 +557,20 @@ describe('useAppHandlers', () => {
       expect(userService.updateUser).toHaveBeenCalledWith('target-uid', { role: 'Manager' }, 'user-1');
     });
 
+    it('updateUserRole: offline ise servis çağrılmaz, offlineQueue.enqueue withAuditLog ile (users/update) kuyruğa alır', async () => {
+      goOffline();
+      const { handlers } = setup();
+      await act(async () => { await handlers.updateUserRole('target-uid', { role: 'Manager' }); });
+      expect(userService.updateUser).not.toHaveBeenCalled();
+      expect(offlineQueue.enqueue).toHaveBeenCalledOnce();
+      const call = vi.mocked(offlineQueue.enqueue).mock.calls[0]!;
+      expect(call[0]).toBe('users');
+      expect(call[1]).toBe('update');
+      expect(call[2]).toEqual({ role: 'Manager' });
+      expect(call[3]).toBe('target-uid');
+      expect(call[9]).toMatchObject({ taskId: 'target-uid', changedBy: 'user-1' });
+    });
+
     it('updateUserRole: servis reddederse onError(err, \'update\', \'users/{id}\') çağrılır', async () => {
       vi.mocked(userService.updateUser).mockRejectedValueOnce(new Error('x'));
       const { handlers, onError } = setup();
@@ -559,6 +582,19 @@ describe('useAppHandlers', () => {
       const { handlers } = setup();
       await act(async () => { await handlers.deleteUser('target-uid'); });
       expect(userService.deleteUser).toHaveBeenCalledWith('target-uid', 'user-1');
+    });
+
+    it('deleteUser: offline ise servis çağrılmaz, offlineQueue.enqueue withAuditLog ile (users/delete) kuyruğa alır', async () => {
+      goOffline();
+      const { handlers } = setup();
+      await act(async () => { await handlers.deleteUser('target-uid'); });
+      expect(userService.deleteUser).not.toHaveBeenCalled();
+      expect(offlineQueue.enqueue).toHaveBeenCalledOnce();
+      const call = vi.mocked(offlineQueue.enqueue).mock.calls[0]!;
+      expect(call[0]).toBe('users');
+      expect(call[1]).toBe('delete');
+      expect(call[3]).toBe('target-uid');
+      expect(call[9]).toMatchObject({ taskId: 'target-uid', changedBy: 'user-1' });
     });
 
     it('deleteUser: servis reddederse onError(err, \'delete\', \'users/{id}\') çağrılır', async () => {
@@ -581,7 +617,7 @@ describe('useAppHandlers', () => {
     });
   });
 
-  describe('updateBlocker — offline dalı yok', () => {
+  describe('updateBlocker', () => {
     it('engel lokal listede bulunamazsa hiçbir şey yapmaz', async () => {
       const { handlers } = setup({ blockers: [] });
       await act(async () => { await handlers.updateBlocker('blocker-1', 'Yeni sebep'); });
@@ -594,12 +630,18 @@ describe('useAppHandlers', () => {
       expect(blockerService.editBlocker).toHaveBeenCalledWith('blocker-1', 'Yeni sebep', 'user-1', 'task-1');
     });
 
-    it('cihaz çevrimdışıyken de doğrudan servisi çağırır (offlineQueue kullanılmaz)', async () => {
+    it('offline ise servis çağrılmaz, offlineQueue.enqueue withAuditLog ile (blockers/update) kuyruğa alır', async () => {
       goOffline();
       const { handlers } = setup({ blockers: [makeBlocker()] });
       await act(async () => { await handlers.updateBlocker('blocker-1', 'Yeni sebep'); });
-      expect(blockerService.editBlocker).toHaveBeenCalledOnce();
-      expect(offlineQueue.enqueue).not.toHaveBeenCalled();
+      expect(blockerService.editBlocker).not.toHaveBeenCalled();
+      expect(offlineQueue.enqueue).toHaveBeenCalledOnce();
+      const call = vi.mocked(offlineQueue.enqueue).mock.calls[0]!;
+      expect(call[0]).toBe('blockers');
+      expect(call[1]).toBe('update');
+      expect(call[2]).toEqual({ reason: 'Yeni sebep' });
+      expect(call[3]).toBe('blocker-1');
+      expect(call[9]).toMatchObject({ taskId: 'task-1', changedBy: 'user-1', newValue: 'Yeni sebep' });
     });
 
     it('servis reddederse onError(err, \'update\', \'blockers/{id}\') çağrılır', async () => {
@@ -713,6 +755,62 @@ describe('useAppHandlers', () => {
 
       expect(offlineQueue.enqueue).toHaveBeenCalledWith('blockers', 'delete', undefined, 'blocker-1');
       expect(offlineQueue.enqueue).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('bildirim yönetimi (markNotificationRead / markAllNotificationsRead)', () => {
+    it('markNotificationRead: online notificationService.markAsRead çağrılır', async () => {
+      const { handlers } = setup();
+      await act(async () => { await handlers.markNotificationRead('notif-1'); });
+      expect(notificationService.markAsRead).toHaveBeenCalledWith('notif-1');
+    });
+
+    it('markNotificationRead: offline ise servis çağrılmaz, offlineQueue.enqueue notifications/update ile kuyruğa alır', async () => {
+      goOffline();
+      const { handlers } = setup();
+      await act(async () => { await handlers.markNotificationRead('notif-1'); });
+      expect(notificationService.markAsRead).not.toHaveBeenCalled();
+      expect(offlineQueue.enqueue).toHaveBeenCalledWith('notifications', 'update', { isRead: true }, 'notif-1');
+    });
+
+    it('markNotificationRead: servis reddederse onError(err, \'update\', \'notifications/{id}\') çağrılır', async () => {
+      vi.mocked(notificationService.markAsRead).mockRejectedValueOnce(new Error('x'));
+      const { handlers, onError } = setup();
+      await act(async () => { await handlers.markNotificationRead('notif-1'); });
+      expect(onError).toHaveBeenCalledWith(expect.any(Error), 'update', 'notifications/notif-1');
+    });
+
+    it('markAllNotificationsRead: online notificationService.markManyAsRead çağrılır', async () => {
+      const { handlers } = setup();
+      await act(async () => { await handlers.markAllNotificationsRead(['n1', 'n2']); });
+      expect(notificationService.markManyAsRead).toHaveBeenCalledWith(['n1', 'n2']);
+    });
+
+    it('markAllNotificationsRead: offline ise servis çağrılmaz, her id için ayrı bir offlineQueue.enqueue kuyruğa alır', async () => {
+      goOffline();
+      const { handlers } = setup();
+      await act(async () => { await handlers.markAllNotificationsRead(['n1', 'n2']); });
+      expect(notificationService.markManyAsRead).not.toHaveBeenCalled();
+      expect(offlineQueue.enqueue).toHaveBeenCalledWith('notifications', 'update', { isRead: true }, 'n1');
+      expect(offlineQueue.enqueue).toHaveBeenCalledWith('notifications', 'update', { isRead: true }, 'n2');
+      expect(offlineQueue.enqueue).toHaveBeenCalledTimes(2);
+    });
+
+    it('markAllNotificationsRead: servis reddederse onError(err, \'update\', \'notifications\') çağrılır', async () => {
+      vi.mocked(notificationService.markManyAsRead).mockRejectedValueOnce(new Error('x'));
+      const { handlers, onError } = setup();
+      await act(async () => { await handlers.markAllNotificationsRead(['n1']); });
+      expect(onError).toHaveBeenCalledWith(expect.any(Error), 'update', 'notifications');
+    });
+
+    it('user null ise iki handler da hiçbir şey yapmaz', async () => {
+      const { handlers } = setup({ user: null });
+      await act(async () => {
+        await handlers.markNotificationRead('n1');
+        await handlers.markAllNotificationsRead(['n1']);
+      });
+      expect(notificationService.markAsRead).not.toHaveBeenCalled();
+      expect(notificationService.markManyAsRead).not.toHaveBeenCalled();
     });
   });
 });

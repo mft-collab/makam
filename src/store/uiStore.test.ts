@@ -70,11 +70,11 @@ describe('useUIStore', () => {
       expect(useUIStore.getState().selectedTaskId).toBe('task-9');
     });
 
-    it('setSelectedTaskId ve setShowNotifications bağımsız çalışır', () => {
+    it('setSelectedTaskId ve setIsNotificationsOpen bağımsız çalışır', () => {
       useUIStore.getState().setSelectedTaskId('task-42');
-      useUIStore.getState().setShowNotifications(true);
+      useUIStore.getState().setIsNotificationsOpen(true);
       expect(useUIStore.getState().selectedTaskId).toBe('task-42');
-      expect(useUIStore.getState().showNotifications).toBe(true);
+      expect(useUIStore.getState().isNotificationsOpen).toBe(true);
     });
   });
 

@@ -50,7 +50,14 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_.@-]+$');
+      // '+' KASITLI olarak karakter sınıfına dahildir: assigneeId/creatorId/
+      // coordinatorId gibi referans alanları bazen uid yerine gerçek bir
+      // e-posta adresi taşır (bkz. bu dosyadaki `assigneeId == request.auth.token.email`
+      // karşılaştırmaları) ve Gmail "artı adresleme" (ör. ali+is@gmail.com)
+      // yaygın ve geçerli bir e-posta biçimidir — '+' hariç tutulsaydı bu tür
+      // gerçek kullanıcıların meşru yazma işlemleri sessizce reddedilirdi
+      // (bkz. kod denetimi, isValidUser'daki email regex'i zaten '+' kabul ediyor).
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_.@+-]+$');
     }
 
     function incoming() {
@@ -143,10 +150,10 @@ service cloud.firestore {
              data.status == 'ASSIGNED' && // Yeni görev sadece ASSIGNED olarak başlayabilir
              data.priority in ['Low', 'Medium', 'High', 'Urgent'] &&
              data.deadline is number && data.deadline > 0 &&
-             data.creatorId is string &&
-             data.assigneeId is string &&
+             isValidId(data.creatorId) &&
+             isValidId(data.assigneeId) &&
              (!('parentId' in data) || data.parentId is string) &&
-             (!('coordinatorId' in data) || data.coordinatorId == null || data.coordinatorId is string) &&
+             (!('coordinatorId' in data) || data.coordinatorId == null || isValidId(data.coordinatorId)) &&
              (!('evidence' in data) || (data.evidence is string && data.evidence.size() <= 1000)) &&
              (!('comments' in data) || (data.comments is list && data.comments.size() <= 200)) &&
              (!('completedAt' in data) || data.completedAt is number) &&
@@ -166,9 +173,9 @@ service cloud.firestore {
              (!('parentId' in data) || data.parentId is string) &&
              (!('title' in data) || (data.title is string && data.title.size() >= 1 && data.title.size() <= 200)) &&
              (!('description' in data) || (data.description is string && data.description.size() >= 1 && data.description.size() <= 2000)) &&
-             (!('creatorId' in data) || data.creatorId is string) &&
-             (!('assigneeId' in data) || data.assigneeId is string) &&
-             (!('coordinatorId' in data) || data.coordinatorId == null || data.coordinatorId is string) &&
+             (!('creatorId' in data) || isValidId(data.creatorId)) &&
+             (!('assigneeId' in data) || isValidId(data.assigneeId)) &&
+             (!('coordinatorId' in data) || data.coordinatorId == null || isValidId(data.coordinatorId)) &&
              (!('status' in data) || (data.status in ['ASSIGNED', 'PENDING_DELEGATION', 'IN_PROGRESS', 'BLOCKED', 'AWAITING_APPROVAL', 'COMPLETED', 'CANCELLED', 'CRISIS'])) &&
              (!('priority' in data) || (data.priority in ['Low', 'Medium', 'High', 'Urgent'])) &&
              (!('deadline' in data) || (data.deadline is number && data.deadline > 0)) &&

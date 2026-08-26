@@ -1,9 +1,19 @@
+import { useEffect, useRef } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { motion, AnimatePresence } from 'motion/react'
 import { RefreshCw, X } from 'lucide-react'
 import { logger } from '../lib/logger'
 
+// Varsayılan davranış yalnızca route/navigasyon geçişlerinde kontrol eder —
+// uzun süre tek sekmede açık kalan bir kullanıcı (bu SPA'da navigasyon sayfa
+// yenilemesi YAPMIYOR) bir güncelleme uyarısını hiç görmeyebilirdi (bkz. kod
+// denetimi). Saatte bir `registration.update()` çağrılarak yeni bir
+// service worker olup olmadığı periyodik olarak sorgulanır.
+const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+
 export function ReloadPrompt() {
+  const registrationRef = useRef<ServiceWorkerRegistration | undefined>(undefined);
+
   const {
     offlineReady: [offlineReady, setOfflineReady],
     needRefresh: [needRefresh, setNeedRefresh],
@@ -11,11 +21,21 @@ export function ReloadPrompt() {
   } = useRegisterSW({
     onRegistered(r) {
       logger.debug('SW Registered: ' + r)
+      registrationRef.current = r;
     },
     onRegisterError(error) {
       logger.error('SW registration error', error)
     },
   })
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      registrationRef.current?.update().catch(err => {
+        logger.debug('[ReloadPrompt] Periyodik güncelleme kontrolü başarısız (zararsız, bir sonraki koşuda tekrar denenir):', err);
+      });
+    }, UPDATE_CHECK_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, []);
 
   const close = () => {
     setOfflineReady(false)

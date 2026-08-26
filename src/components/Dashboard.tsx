@@ -10,6 +10,7 @@ import { cn, formatTimeAgo, formatTime } from '../lib/utils';
 import { STATUS_LABELS, STATUS_BADGE_VARIANT } from '../constants';
 import { DashboardSkeleton } from './ui/Skeleton';
 import { useDataStore } from '../store/dataStore';
+import { useIsAdmin } from '../hooks/useIsAdmin';
 import { getInterventionQueue, getUserPerformanceProfiles } from '../lib/executiveMetrics';
 import {
   computeDeltas, computeStats, computeLast7DaysData, filterStatTasks,
@@ -33,6 +34,7 @@ interface DashboardProps {
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoading = false, isFiltered = false }: DashboardProps) => {
+  const isAdmin = useIsAdmin(user);
   const [selectedStatCategory, setSelectedStatCategory] = useState<StatCategory | null>(null);
   // Müdahale kuyruğu sinyal filtresi (chip'e tıklayınca aç/kapa)
   const [queueFilter, setQueueFilter] = useState<QueueSignalKey | null>(null);
@@ -255,7 +257,7 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
             <h3 className="text-[13px] font-medium text-executive-blue tracking-tight font-display">Performans Analitiği</h3>
             <p className="text-[9px] text-text-tertiary uppercase tracking-[0.3em] mt-0.5">Son 7 Gün</p>
           </div>
-          {user?.role === 'Admin' && (
+          {isAdmin && (
             <button
               onClick={() => setActiveTab?.('reports')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-executive-blue/[0.03] border border-executive-blue/[0.06] text-text-muted hover:bg-executive-blue hover:text-[color:var(--executive-blue-text)] transition-all duration-300 text-[9px] font-medium uppercase tracking-[0.2em]"

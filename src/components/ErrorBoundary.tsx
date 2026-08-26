@@ -6,6 +6,14 @@ import { logError } from '../services/errorLoggingService';
 
 interface Props {
   children: ReactNode;
+  // 'full' — kök seviyesindeki tek global sınır (App.tsx'i tamamen sarar):
+  // tüm uygulama kabuğunu (Sidebar/AppHeader dahil) tam ekran bir hata
+  // sayfasıyla değiştirir. 'inline' — yalnızca aktif sekmenin içerik alanını
+  // sarar: bir sekmedeki render hatası artık Sidebar/AppHeader/MobileDock'u
+  // görünmez kılmıyor, kullanıcı çalışan başka bir sekmeye geçebiliyor (bkz.
+  // kod denetimi: eskiden TEK global sınır vardı, herhangi bir sekmedeki
+  // hata tüm dizgeyi tam ekran hata sayfasına düşürüyordu).
+  variant?: 'full' | 'inline';
 }
 
 interface State {
@@ -34,69 +42,119 @@ export class ErrorBoundary extends Component<Props, State> {
     });
   }
 
-  private handleReset = () => {
+  private handleReload = () => {
     this.setState({ hasError: false, error: null });
     window.location.reload();
   };
 
-  public render() {
-    if (this.state.hasError) {
-      let errorMessage = 'Beklenmedik bir operasyonel hata oluştu.';
-      let isFirebaseError = false;
+  // 'inline' sınırlar için sayfayı YENİDEN YÜKLEMEDEN yalnızca yerel hata
+  // durumunu temizler — diğer sekmeler zaten etkilenmediğinden tam sayfa
+  // reload burada gereksiz. Ayrıca activeTab değiştiğinde App.tsx bu
+  // bileşeni `key={activeTab}` ile zaten yeniden monte eder (bkz. App.tsx).
+  private handleRetry = () => {
+    this.setState({ hasError: false, error: null });
+  };
 
-      try {
-        const parsedError = JSON.parse(this.state.error?.message || '');
-        if (parsedError.error && parsedError.operationType) {
-          errorMessage = `Veritabanı erişim protokolü ihlali: ${parsedError.operationType} işlemi sırasında yetki kısıtlaması tespit edildi.`;
-          isFirebaseError = true;
-        }
-      } catch {
-        // Not a JSON error
+  private getErrorMessage(): { message: string; isFirebaseError: boolean } {
+    let errorMessage = 'Beklenmedik bir operasyonel hata oluştu.';
+    let isFirebaseError = false;
+    try {
+      const parsedError = JSON.parse(this.state.error?.message || '');
+      if (parsedError.error && parsedError.operationType) {
+        errorMessage = `Veritabanı erişim protokolü ihlali: ${parsedError.operationType} işlemi sırasında yetki kısıtlaması tespit edildi.`;
+        isFirebaseError = true;
       }
+    } catch {
+      // Not a JSON error
+    }
+    return { message: errorMessage, isFirebaseError };
+  }
 
-      return (
-        <div className="min-h-screen bg-surface-base flex items-center justify-center p-8 font-sans">
-          <div className="max-w-lg w-full makam-card !p-12 flex flex-col items-center text-center gap-10 bg-makam-glass border-surface-border shadow-2xl backdrop-blur-[40px]">
-            <Logo size="lg" withText={false} />
-            
-            <div className="w-20 h-20 bg-status-danger/10 text-status-danger rounded-2xl flex items-center justify-center border border-status-danger/20 shadow-inner">
-              <ShieldAlert className="w-10 h-10 stroke-[1.2]" />
-            </div>
-            
-            <div className="flex flex-col gap-4">
-              <h2 className="text-3xl font-light text-text-heading tracking-tight font-serif uppercase">Dizge Kesintisi</h2>
-              <p className="text-text-muted text-[15px] font-light leading-relaxed">
-                {errorMessage}
-              </p>
-              {isFirebaseError && (
-                <div className="inline-flex mx-auto mt-4 px-6 py-2 bg-status-danger/10 border border-status-danger/20 rounded-full">
-                  <p className="text-[10px] text-status-danger font-medium uppercase tracking-[0.16em]">
-                    Yetki Doğrulama Hatası (RBAC Protocol)
-                  </p>
-                </div>
-              )}
-            </div>
+  private renderInline() {
+    const { message, isFirebaseError } = this.getErrorMessage();
+    return (
+      <div className="min-h-[320px] flex items-center justify-center p-8 font-sans">
+        <div className="max-w-md w-full makam-card !p-8 flex flex-col items-center text-center gap-6 bg-makam-glass border-surface-border">
+          <div className="w-14 h-14 bg-status-danger/10 text-status-danger rounded-2xl flex items-center justify-center border border-status-danger/20 shadow-inner">
+            <ShieldAlert className="w-7 h-7 stroke-[1.2]" />
+          </div>
 
-            <div className="flex flex-col gap-4 w-full pt-8 border-t border-makam-border/5">
-              <Button
-                onClick={this.handleReset}
-                className="w-full h-16 tracking-[0.16em]"
-              >
-                <RefreshCw className="w-5 h-5 mr-3 stroke-[1.5]" />
-                DİZGEYİ YENİLE
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => window.location.href = '/'}
-                className="w-full h-16 tracking-[0.16em]"
-              >
-                <Home className="w-5 h-5 mr-3 stroke-[1.5]" />
-                ANA SAYFAYA DÖN
-              </Button>
-            </div>
+          <div className="flex flex-col gap-2">
+            <h3 className="text-lg font-light text-text-heading tracking-tight font-serif uppercase">Modül Yüklenemedi</h3>
+            <p className="text-text-muted text-[13px] font-light leading-relaxed">
+              {message}
+            </p>
+            {isFirebaseError && (
+              <div className="inline-flex mx-auto mt-2 px-4 py-1.5 bg-status-danger/10 border border-status-danger/20 rounded-full">
+                <p className="text-[9px] text-status-danger font-medium uppercase tracking-[0.16em]">
+                  Yetki Doğrulama Hatası (RBAC Protocol)
+                </p>
+              </div>
+            )}
+          </div>
+
+          <Button
+            onClick={this.handleRetry}
+            className="w-full h-11 tracking-[0.16em]"
+          >
+            <RefreshCw className="w-4 h-4 mr-2 stroke-[1.5]" />
+            TEKRAR DENE
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  private renderFull() {
+    const { message, isFirebaseError } = this.getErrorMessage();
+    return (
+      <div className="min-h-screen bg-surface-base flex items-center justify-center p-8 font-sans">
+        <div className="max-w-lg w-full makam-card !p-12 flex flex-col items-center text-center gap-10 bg-makam-glass border-surface-border shadow-2xl backdrop-blur-[40px]">
+          <Logo size="lg" withText={false} />
+
+          <div className="w-20 h-20 bg-status-danger/10 text-status-danger rounded-2xl flex items-center justify-center border border-status-danger/20 shadow-inner">
+            <ShieldAlert className="w-10 h-10 stroke-[1.2]" />
+          </div>
+
+          <div className="flex flex-col gap-4">
+            <h2 className="text-3xl font-light text-text-heading tracking-tight font-serif uppercase">Dizge Kesintisi</h2>
+            <p className="text-text-muted text-[15px] font-light leading-relaxed">
+              {message}
+            </p>
+            {isFirebaseError && (
+              <div className="inline-flex mx-auto mt-4 px-6 py-2 bg-status-danger/10 border border-status-danger/20 rounded-full">
+                <p className="text-[10px] text-status-danger font-medium uppercase tracking-[0.16em]">
+                  Yetki Doğrulama Hatası (RBAC Protocol)
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-4 w-full pt-8 border-t border-makam-border/5">
+            <Button
+              onClick={this.handleReload}
+              className="w-full h-16 tracking-[0.16em]"
+            >
+              <RefreshCw className="w-5 h-5 mr-3 stroke-[1.5]" />
+              DİZGEYİ YENİLE
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => window.location.href = '/'}
+              className="w-full h-16 tracking-[0.16em]"
+            >
+              <Home className="w-5 h-5 mr-3 stroke-[1.5]" />
+              ANA SAYFAYA DÖN
+            </Button>
           </div>
         </div>
-      );
+      </div>
+    );
+  }
+
+  public render() {
+    if (this.state.hasError) {
+      return this.props.variant === 'inline' ? this.renderInline() : this.renderFull();
     }
 
     return this.props.children;

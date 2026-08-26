@@ -16,6 +16,7 @@ import { useUIStore } from '../store/uiStore';
 import { AUDIT_FIELD_LABELS, formatAuditValue } from '../lib/auditLabels';
 import { roleConfig, OrgNodeCard } from './teamList/subcomponents';
 import { Skeleton } from './ui/Skeleton';
+import { useIsAdmin } from '../hooks/useIsAdmin';
 
 interface TeamListProps {
   users: User[];
@@ -53,6 +54,7 @@ const TeamListSkeleton = () => (
 
 export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser, onAddUser, isLoading = false }: TeamListProps) => {
   const addToast = useUIStore(state => state.addToast);
+  const isAdmin = useIsAdmin(currentUser);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -81,7 +83,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
     // ilgili görevin başlık/açıklama/kanıt gibi alan-bazlı değişikliklerini
     // içerdiğinden, başka departmandaki bir görev için de sızdırılabiliyordu
     // (bkz. kod denetimi + firestore.rules'taki audit_logs departman kısıtı).
-    const canViewAuditTrail = !!selectedUser && (currentUser?.role === 'Admin' || selectedUser.uid === currentUser?.uid);
+    const canViewAuditTrail = !!selectedUser && (isAdmin || selectedUser.uid === currentUser?.uid);
     if (!selectedUser || !canViewAuditTrail) {
       setUserLogs([]);
       setModalTab('tasks');
@@ -168,8 +170,6 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
     setNewDept('');
     setAddUserError('');
   };
-
-  const isAdmin = currentUser?.role === 'Admin';
 
   // Kullanıcı başına aktif görev sayısını tek geçişte hesaplayıp Map'te tutar —
   // aksi halde her personel için tasks dizisi ayrı ayrı filtrelenir (O(kullanıcı × görev)

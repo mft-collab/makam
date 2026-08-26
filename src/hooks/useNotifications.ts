@@ -22,7 +22,15 @@ interface UseNotificationsReturn {
   notifications: Notification[];
 }
 
-export function useNotifications(userId: string | null): UseNotificationsReturn {
+export function useNotifications(
+  userId: string | null,
+  // App.tsx'teki handleFirestoreError — logout sırasındaki izin hatalarını
+  // zaten kendi başına süzüyor (bkz. kod denetimi: bu hook eskiden AYNI
+  // süzmeyi burada, logout durumundan habersiz, salt mesaj metnine bakarak
+  // ikinci kez ve daha kaba biçimde yapıyor, gerçek bir rules hatasını da
+  // sessizce yutuyordu). Verilmezse davranış eskisi gibi yalnızca console'a düşer.
+  onError?: (err: unknown, type: string, path: string) => void
+): UseNotificationsReturn {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
@@ -45,15 +53,16 @@ export function useNotifications(userId: string | null): UseNotificationsReturn 
         setNotifications(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification)));
       },
       (err) => {
-        // Logout sırasında oluşan permission hataları sessizce geçilir
-        if (!err.message?.toLowerCase().includes('permission')) {
+        if (onError) {
+          onError(err, 'list', 'notifications');
+        } else {
           logger.warn('[useNotifications] Snapshot error:', err);
         }
       }
     );
 
     return unsubscribe;
-  }, [userId]);
+  }, [userId, onError]);
 
   return { notifications };
 }

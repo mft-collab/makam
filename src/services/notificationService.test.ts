@@ -166,7 +166,10 @@ describe('notificationService', () => {
     });
 
     it('addDoc reddederse operationType=write, path=notifications içeren JSON hata fırlatılır', async () => {
-      vi.mocked(firebase.addDoc).mockRejectedValueOnce(new Error('permission-denied'));
+      // runWithRetry devreye girdiğinden (bkz. kod denetimi) kalıcı olarak
+      // reddedilmesi gerekir — Once kullanılırsa 2. deneme "başarılı" sayılıp
+      // test yanlışlıkla resolve eden bir sonuç bekler.
+      vi.mocked(firebase.addDoc).mockRejectedValue(new Error('permission-denied'));
 
       await expect(notificationService.createNotification({
         userId: 'u1', title: 'T', message: 'M', type: 'Info', timestamp: 1, isRead: false,
@@ -197,7 +200,11 @@ describe('notificationService', () => {
     });
 
     it('getDocs reddederse JSON hata fırlatılır', async () => {
-      vi.mocked(firebase.getDocs).mockRejectedValueOnce(new Error('network-error'));
+      // runWithRetry devreye girdiğinden kalıcı reddedilme kullanılır — Once ile
+      // 2. deneme mock'un varsayılan (undefined) dönüşüyle "başarılı" sayılıp
+      // testin niyet ettiği hata yolunu (gerçek network-error mesajını) değil,
+      // ilgisiz bir TypeError'ı test etmiş olurdu.
+      vi.mocked(firebase.getDocs).mockRejectedValue(new Error('network-error'));
 
       await expect(notificationService.getUnreadNotifications('u1')).rejects.toThrow(/"operationType":"get"/);
     });
@@ -211,7 +218,8 @@ describe('notificationService', () => {
     });
 
     it('updateDoc reddederse path=notifications/{id} içeren JSON hata fırlatılır', async () => {
-      vi.mocked(firebase.updateDoc).mockRejectedValueOnce(new Error('permission-denied'));
+      // runWithRetry devreye girdiğinden kalıcı reddedilme kullanılır (yukarıdaki not).
+      vi.mocked(firebase.updateDoc).mockRejectedValue(new Error('permission-denied'));
 
       await expect(notificationService.markAsRead('notif-1')).rejects.toThrow(/"path":"notifications\/notif-1"/);
     });
@@ -244,8 +252,10 @@ describe('notificationService', () => {
     });
 
     it('batch.commit reddederse JSON hata fırlatılır', async () => {
-      const batchCommit = vi.fn().mockRejectedValueOnce(new Error('network-error'));
-      vi.mocked(firebase.writeBatch).mockReturnValueOnce({ update: vi.fn(), commit: batchCommit } as any);
+      // runWithRetry devreye girdiğinden (bkz. kod denetimi) writeBatch her
+      // denemede yeniden çağrılır — kalıcı olarak reddedilmesi gerekir.
+      const batchCommit = vi.fn().mockRejectedValue(new Error('network-error'));
+      vi.mocked(firebase.writeBatch).mockReturnValue({ update: vi.fn(), commit: batchCommit } as any);
 
       await expect(notificationService.markManyAsRead(['n1'])).rejects.toThrow(/"operationType":"write"/);
     });

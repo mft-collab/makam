@@ -271,6 +271,91 @@ describe('OfflineQueue', () => {
     });
   });
 
+  // ─── sync — withAuditLog (kullanıcı yönetimi / risk düzenleme) ─────────────
+  // userService.addUser/updateUser/deleteUser ve blockerService.editBlocker'ın
+  // online yoldaki writeBatch (ana yazım + audit_logs) atomikliğini offline
+  // senkronda da korur — bkz. offlineQueue.ts withAuditLog/writeWithAuditLog.
+
+  describe('sync — withAuditLog', () => {
+    const makeBatch = () => ({ set: vi.fn(), update: vi.fn(), delete: vi.fn(), commit: vi.fn() });
+
+    it('set + withAuditLog: hem ana doküman hem audit_logs kaydı TEK writeBatch ile yazılır, merge kullanılmaz', async () => {
+      const batch = makeBatch();
+      vi.mocked(firebase.writeBatch).mockReturnValueOnce(batch as any);
+
+      offlineQueue.enqueue(
+        'users', 'set', { uid: 'a@b.com', fullName: 'X', role: 'Staff', email: 'a@b.com' }, 'a@b.com',
+        undefined, undefined, undefined, undefined, undefined,
+        { taskId: 'a@b.com', changedBy: 'admin-1', oldValue: 'Yok', newValue: 'Personel Eklendi: X (Staff)' }
+      );
+      const result = await offlineQueue.sync();
+
+      expect(result).toBe(true);
+      expect(offlineQueue.getQueue()).toHaveLength(0);
+      // Ana yazım: merge OLMADAN tam doküman (userService.addUser ile aynı)
+      expect(batch.set).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ uid: 'a@b.com', fullName: 'X' }));
+      const setCallArgs = batch.set.mock.calls[0]!;
+      expect(setCallArgs.length).toBe(2); // merge seçeneği YOK
+      // Audit kaydı: ayrı bir batch.set çağrısı
+      expect(batch.set).toHaveBeenCalledTimes(2);
+      const auditCallArgs = batch.set.mock.calls[1]!;
+      expect(auditCallArgs[1]).toMatchObject({ taskId: 'a@b.com', changedBy: 'admin-1', newValue: 'Personel Eklendi: X (Staff)' });
+      expect(batch.commit).toHaveBeenCalledOnce();
+    });
+
+    it('update + withAuditLog: hem alan güncellemesi hem audit_logs kaydı TEK writeBatch ile yazılır', async () => {
+      const batch = makeBatch();
+      vi.mocked(firebase.writeBatch).mockReturnValueOnce(batch as any);
+
+      offlineQueue.enqueue(
+        'blockers', 'update', { reason: 'Yeni sebep' }, 'blocker-1',
+        undefined, undefined, undefined, undefined, undefined,
+        { taskId: 'task-1', changedBy: 'user-1', oldValue: 'Risk Gerekçesi', newValue: 'Yeni sebep' }
+      );
+      const result = await offlineQueue.sync();
+
+      expect(result).toBe(true);
+      expect(offlineQueue.getQueue()).toHaveLength(0);
+      expect(batch.update).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ reason: 'Yeni sebep' }));
+      expect(batch.set).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ taskId: 'task-1', newValue: 'Yeni sebep' }));
+      expect(batch.commit).toHaveBeenCalledOnce();
+    });
+
+    it('delete + withAuditLog: hem doküman silme hem audit_logs kaydı TEK writeBatch ile yazılır', async () => {
+      const batch = makeBatch();
+      vi.mocked(firebase.writeBatch).mockReturnValueOnce(batch as any);
+
+      offlineQueue.enqueue(
+        'users', 'delete', undefined, 'target-uid',
+        undefined, undefined, undefined, undefined, undefined,
+        { taskId: 'target-uid', changedBy: 'admin-1', oldValue: 'Aktif', newValue: 'Personel Silindi' }
+      );
+      const result = await offlineQueue.sync();
+
+      expect(result).toBe(true);
+      expect(offlineQueue.getQueue()).toHaveLength(0);
+      expect(batch.delete).toHaveBeenCalledOnce();
+      expect(batch.set).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ taskId: 'target-uid', newValue: 'Personel Silindi' }));
+      expect(batch.commit).toHaveBeenCalledOnce();
+    });
+
+    it('writeBatch.commit reddederse mutasyon kuyrukta kalır (audit kaydı da uygulanmaz — atomiklik)', async () => {
+      const batch = makeBatch();
+      batch.commit.mockRejectedValueOnce(new Error('Network error'));
+      vi.mocked(firebase.writeBatch).mockReturnValueOnce(batch as any);
+
+      offlineQueue.enqueue(
+        'users', 'delete', undefined, 'target-uid',
+        undefined, undefined, undefined, undefined, undefined,
+        { taskId: 'target-uid', changedBy: 'admin-1', oldValue: 'Aktif', newValue: 'Personel Silindi' }
+      );
+      const result = await offlineQueue.sync();
+
+      expect(result).toBe(false);
+      expect(offlineQueue.getQueue()).toHaveLength(1);
+    });
+  });
+
   // ─── sync — task update ile optimistic locking ─────────────────────────────
   // Çevrimdışı görev güncellemeleri artık expectedVersion taşıyor ve senkronda
   // sunucudaki lockVersion ile karşılaştırılıyor (bkz. offlineQueue.ts sync()).

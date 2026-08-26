@@ -61,6 +61,7 @@ import { applyOfflineMutations } from './lib/offlineQueue';
 import { useSLASync } from './hooks/useSLASync';
 import { useIdleTimer } from './hooks/useIdleTimer';
 import { useSelfHealing } from './hooks/useSelfHealing';
+import { useIsAdmin } from './hooks/useIsAdmin';
 import { useUIStore, type ToastItem } from './store/uiStore';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -91,6 +92,7 @@ function getOperationalErrorToast(error: unknown): Omit<ToastItem, 'id'> {
 export default function App() {
   const resolvedTheme = useResolvedTheme();
   const [user, setUser] = useState<User | null>(null);
+  const isAdmin = useIsAdmin(user);
   const [loading, setLoading] = useState(true);
   const [fetchedTask, setFetchedTask] = useState<Task | null>(null);
   const [activeCertificateTask, setActiveCertificateTask] = useState<Task | null>(null);
@@ -114,7 +116,7 @@ export default function App() {
     parentTaskId, setParentTaskId,
     initialTitle, setInitialTitle,
     selectedTaskId, setSelectedTaskId,
-    showNotifications, setShowNotifications,
+    isNotificationsOpen, setIsNotificationsOpen,
     theme,
   } = useUIStore(useShallow(s => ({
     activeTab: s.activeTab, setActiveTab: s.setActiveTab,
@@ -124,7 +126,7 @@ export default function App() {
     parentTaskId: s.parentTaskId, setParentTaskId: s.setParentTaskId,
     initialTitle: s.initialTitle, setInitialTitle: s.setInitialTitle,
     selectedTaskId: s.selectedTaskId, setSelectedTaskId: s.setSelectedTaskId,
-    showNotifications: s.showNotifications, setShowNotifications: s.setShowNotifications,
+    isNotificationsOpen: s.isNotificationsOpen, setIsNotificationsOpen: s.setIsNotificationsOpen,
     theme: s.theme,
   })));
 
@@ -155,12 +157,12 @@ export default function App() {
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
-        setShowNotifications(false);
+        setIsNotificationsOpen(false);
       }
     };
-    if (showNotifications) document.addEventListener('mousedown', handler);
+    if (isNotificationsOpen) document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [showNotifications, setShowNotifications]);
+  }, [isNotificationsOpen, setIsNotificationsOpen]);
   
   // Tab yetki kontrolü (Güvenlik Duvarı)
   useEffect(() => {
@@ -210,7 +212,7 @@ export default function App() {
   } = useOfflineQueue();
 
   // SLA konfigürasyon senkronizasyonu (Firestore → localStorage)
-  useSLASync(user);
+  useSLASync(user, handleFirestoreError);
 
   const { tasks: firestoreTasks, users, blockers: firestoreBlockers, isLoading: isDataLoading } = useFirestoreData(user, handleFirestoreError);
 
@@ -310,7 +312,7 @@ export default function App() {
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || fetchedTask;
 
   // ─── Bildirimler ──────────────────────────────────────────────────────────
-  const { notifications } = useNotifications(user?.uid ?? null);
+  const { notifications } = useNotifications(user?.uid ?? null, handleFirestoreError);
 
   // ─── Toast yardımcıları ──────────────────────────────────────────────────
   const triggerToast = useCallback((title: string, body: string, type: 'info' | 'success' | 'warning' | 'danger' = 'success', taskId?: string) => {
@@ -499,19 +501,19 @@ export default function App() {
         ) : (
           <>
             <Sidebar user={user} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} />
-            <AppHeader 
-              user={user} 
-              activeTab={activeTab} 
-              notifications={notifications} 
-              showNotifications={showNotifications} 
-              setShowNotifications={setShowNotifications}
+            <AppHeader
+              user={user}
+              activeTab={activeTab}
+              notifications={notifications}
+              isNotificationsOpen={isNotificationsOpen}
+              setIsNotificationsOpen={setIsNotificationsOpen}
               globalFocusDept={globalFocusDept}
               onGlobalFocusDeptChange={setGlobalFocusDept}
               departments={departments}
               isOffline={isOffline}
               queueLength={offlineQueueLength}
             />
-            <NotificationPanel showNotifications={showNotifications} setShowNotifications={setShowNotifications} notifRef={notifRef} notifications={notifications} setSelectedTaskId={setSelectedTaskId} setActiveTab={setActiveTab} markNotificationRead={markNotificationRead} markAllNotificationsRead={markAllNotificationsRead} />
+            <NotificationPanel isNotificationsOpen={isNotificationsOpen} setIsNotificationsOpen={setIsNotificationsOpen} notifRef={notifRef} notifications={notifications} setSelectedTaskId={setSelectedTaskId} setActiveTab={setActiveTab} markNotificationRead={markNotificationRead} markAllNotificationsRead={markAllNotificationsRead} />
 
             <main id="main-content" className="lg:ml-64 min-h-screen relative z-10 scroll-smooth pb-24 lg:pb-0">
               <AnimatePresence mode="wait">
@@ -523,6 +525,7 @@ export default function App() {
                   transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
                   className="p-4 lg:p-6"
                 >
+                  <ErrorBoundary variant="inline" key={activeTab}>
                   <Suspense fallback={
                     <div className="flex items-center justify-center p-20 min-h-[400px]">
                       <div className="flex flex-col items-center gap-4">
@@ -551,8 +554,8 @@ export default function App() {
                     {activeTab === 'blockers' && (
                       <BlockerList
                         tasks={filteredTasksByFocus} blockers={filteredBlockersByFocus} users={filteredUsersByFocus}
-                        isAdmin={user?.role === 'Admin' || user?.role === 'Manager'}
-                        isSystemAdmin={user?.role === 'Admin'}
+                        isAdmin={isAdmin || user?.role === 'Manager'}
+                        isSystemAdmin={isAdmin}
                         onResolve={resolveBlocker}
                         onEditBlocker={updateBlocker}
                         onDeleteBlocker={deleteBlocker}
@@ -579,6 +582,7 @@ export default function App() {
                       <Settings tasks={tasks} users={users} blockers={blockers} triggerToast={triggerToast} currentUser={user} isLoading={isDataLoading} />
                     )}
                   </Suspense>
+                  </ErrorBoundary>
                 </motion.div>
               </AnimatePresence>
             </main>

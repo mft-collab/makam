@@ -93,6 +93,44 @@ export const ActionButton = ({ onClick, label, htmlFor, variant = 'primary', dis
   );
 };
 
+// ── SLA Priority Input ────────────────────────────────────────────────────────
+// Settings.tsx'te Rutin/Normal/Öncelikli/İvedi için 4 kez neredeyse birebir
+// kopyalanmış value+unit çiftini tek bileşene indirger (bkz. kod denetimi).
+export interface SlaPriorityInputProps {
+  label: string;
+  value: number;
+  unit: 'days' | 'hours';
+  onValueChange: (value: number) => void;
+  onUnitChange: (unit: 'days' | 'hours') => void;
+  disabled?: boolean;
+}
+
+export const SlaPriorityInput = ({ label, value, unit, onValueChange, onUnitChange, disabled }: SlaPriorityInputProps) => (
+  <div className="flex flex-col gap-1">
+    <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.15em]">{label}</label>
+    <div className="flex gap-1.5">
+      <input
+        type="number"
+        min="1"
+        max="365"
+        value={value}
+        onChange={(e) => onValueChange(Math.max(1, parseInt(e.target.value) || 0))}
+        disabled={disabled}
+        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
+      />
+      <select
+        value={unit}
+        onChange={(e) => onUnitChange(e.target.value as 'days' | 'hours')}
+        disabled={disabled}
+        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
+      >
+        <option value="days" className="bg-surface-base text-text-heading">İş Günü</option>
+        <option value="hours" className="bg-surface-base text-text-heading">İş Saati</option>
+      </select>
+    </div>
+  </div>
+);
+
 // ── Status Banner ─────────────────────────────────────────────────────────────
 export const StatusBanner = ({ status }: { status: { type: 'success' | 'error' | 'loading'; message: string } | null }) => {
   if (!status) return null;

@@ -4,8 +4,8 @@ import { cn } from '../lib/utils';
 import type { Notification } from '../types';
 
 interface Props {
-  showNotifications: boolean;
-  setShowNotifications: (show: boolean) => void;
+  isNotificationsOpen: boolean;
+  setIsNotificationsOpen: (show: boolean) => void;
   notifRef: React.RefObject<HTMLDivElement | null>;
   notifications: Notification[];
   setSelectedTaskId: (id: string) => void;
@@ -22,8 +22,8 @@ interface Props {
 }
 
 export function NotificationPanel({
-  showNotifications,
-  setShowNotifications,
+  isNotificationsOpen,
+  setIsNotificationsOpen,
   notifRef,
   notifications,
   setSelectedTaskId,
@@ -31,7 +31,7 @@ export function NotificationPanel({
   markNotificationRead,
   markAllNotificationsRead,
 }: Props) {
-  if (!showNotifications) return null;
+  if (!isNotificationsOpen) return null;
 
   return (
     <div
@@ -56,7 +56,7 @@ export function NotificationPanel({
           onClick={async (e) => {
             e.stopPropagation();
             await markAllNotificationsRead(notifications.map(n => n.id));
-            setShowNotifications(false);
+            setIsNotificationsOpen(false);
           }}
           className="text-[8px] text-text-tertiary hover:text-executive-blue uppercase tracking-[0.25em] font-medium transition-colors px-2 py-1 rounded-lg hover:bg-surface-glass"
         >
@@ -116,7 +116,7 @@ export function NotificationPanel({
                         setSelectedTaskId(n.taskId!);
                         setActiveTab('tasks');
                         await markNotificationRead(n.id);
-                        setShowNotifications(false);
+                        setIsNotificationsOpen(false);
                       }}
                       className="px-2.5 py-1 text-[8px] font-medium text-[color:var(--executive-blue-text)] bg-executive-blue rounded-lg uppercase tracking-[0.2em] hover:opacity-85 transition-opacity"
                     >
@@ -125,7 +125,7 @@ export function NotificationPanel({
                   )}
                   {isCrisis && !hasTask && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); setActiveTab('tasks'); setShowNotifications(false); }}
+                      onClick={(e) => { e.stopPropagation(); setActiveTab('tasks'); setIsNotificationsOpen(false); }}
                       className="px-2.5 py-1 text-[8px] font-medium text-[color:var(--status-danger-text)] bg-status-danger rounded-lg uppercase tracking-[0.2em] hover:opacity-85 transition-opacity"
                     >
                       Talimatlara Git

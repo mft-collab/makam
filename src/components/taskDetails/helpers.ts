@@ -1,6 +1,8 @@
 import type { Task, User as UserType, TaskStatus } from '../../types';
 import { getRemainingTime } from '../../lib/sla';
 
+export type TaskDetailsTabId = 'info' | 'checklist' | 'blockers' | 'subtasks' | 'history' | 'comments';
+
 /* ── Birincil Aksiyon ─────────────────────────────────────────────────────
    Mevcut duruma ve role göre tek bir birincil durum geçişi. Modal footer'ında
    tüm sekmelerde sabit gösterilir. */

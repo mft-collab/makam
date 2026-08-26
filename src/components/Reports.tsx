@@ -2,14 +2,17 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { motion } from 'motion/react';
 import { AlertTriangle, Target, Zap, TrendingUp, BarChart3, Users, CheckCircle2, Loader2, Download, FileText, Calendar, ArrowRight } from 'lucide-react';
 import { Task, User, TaskBlocker } from '../types';
-import { STATUS_LABELS_SHORT } from '../constants';
 import { cn } from '../lib/utils';
-import { isCompletedOnTime } from '../lib/sla';
 import { computeCompletionRatePercent } from './dashboard/helpers';
+import {
+  parseRangeStart, parseRangeEnd, computeDepartmentsList, filterTasksByDateAndDept, filterBlockersByTasks,
+  computeManagers, buildTasksByAssignee, computeManagerPerformance, computeAverageCompletionTime,
+  computeSlaComplianceTrend, computeStaffWorkload, computeStatusDistribution,
+} from './reports/helpers';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, CartesianGrid
 } from 'recharts';
-import { format, subDays, differenceInCalendarDays } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { useUIStore } from '../store/uiStore';
 import { DatePicker } from './ui/DatePicker';
@@ -96,44 +99,17 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
   const [isExporting, setIsExporting] = useState(false);
 
-  const departmentsList = useMemo(() => {
-    const depts = new Set<string>();
-    users.forEach(u => {
-      if (u.departmentId) depts.add(u.departmentId.trim());
-    });
-    tasks.forEach(t => {
-      if (t.departmentId) depts.add(t.departmentId.trim());
-    });
-    return Array.from(depts);
-  }, [users, tasks]);
+  const departmentsList = useMemo(() => computeDepartmentsList(users, tasks), [users, tasks]);
 
-  // dateFrom/dateTo salt tarih (yyyy-MM-dd) string'leri; saat eklenmeden
-  // parse edilirse ECMAScript bunu UTC gece yarısı sayar, saat eklenirse
-  // (ör. 'T23:59:59') YEREL saat sayar. İkisini karıştırmak (eskiden `to`
-  // saat ekliyor, `from` eklemiyordu) TR (UTC+3) için başlangıç gününün
-  // 00:00–02:59 aralığındaki kayıtların sessizce filtreden düşmesine yol
-  // açıyordu (bkz. kod denetimi). Her iki sınır da AÇIKÇA yerel saatle
-  // parse edilir ki gün sınırları tutarlı olsun.
-  const rangeStart = useMemo(() => new Date(dateFrom + 'T00:00:00'), [dateFrom]);
-  const rangeEnd = useMemo(() => new Date(dateTo + 'T23:59:59'), [dateTo]);
+  const rangeStart = useMemo(() => parseRangeStart(dateFrom), [dateFrom]);
+  const rangeEnd = useMemo(() => parseRangeEnd(dateTo), [dateTo]);
 
-  const filteredTasks = useMemo(() => {
-    const from = rangeStart.getTime();
-    const to = rangeEnd.getTime();
-    return tasks.filter(t => {
-      const matchDate = t.createdAt >= from && t.createdAt <= to;
-      const matchDept = selectedDept === 'ALL' || t.departmentId === selectedDept;
-      return matchDate && matchDept;
-    });
-  }, [tasks, rangeStart, rangeEnd, selectedDept]);
+  const filteredTasks = useMemo(
+    () => filterTasksByDateAndDept(tasks, rangeStart, rangeEnd, selectedDept),
+    [tasks, rangeStart, rangeEnd, selectedDept]
+  );
 
-  // Seçili tarih/birim filtresine giren görevlere bağlı engeller — KPI kartının
-  // diğer metriklerle aynı kapsamı yansıtması için (öncesinde tüm sistemi
-  // gösteriyordu, filtreyle tutarsızdı).
-  const filteredBlockers = useMemo(() => {
-    const filteredTaskIds = new Set(filteredTasks.map(t => t.id));
-    return blockers.filter(b => filteredTaskIds.has(b.taskId));
-  }, [blockers, filteredTasks]);
+  const filteredBlockers = useMemo(() => filterBlockersByTasks(blockers, filteredTasks), [blockers, filteredTasks]);
 
   // jsPDF (+html2canvas, ~140KB gzip) yalnızca Export butonuna basıldığında
   // yükleniyor — statik import Reports sekmesine her girişte bu paketi
@@ -162,61 +138,20 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
     });
   }, [filteredTasks, users, rangeStart, rangeEnd]);
 
-  const managers = useMemo(() => {
-    return users.filter(u => u.role === 'Manager' && (selectedDept === 'ALL' || u.departmentId === selectedDept));
-  }, [users, selectedDept]);
+  const managers = useMemo(() => computeManagers(users, selectedDept), [users, selectedDept]);
 
   // filteredTasks üzerinde her yönetici/personel için ayrı ayrı tam tarama
   // yapmak yerine (O(kişi × görev) — tarih/departman filtresi her
   // değiştiğinde tekrarlanıyordu) tek geçişte assigneeId'ye göre gruplanır
   // (O(görev) + kişi başına O(1) lookup).
-  const tasksByAssignee = useMemo(() => {
-    const map = new Map<string, Task[]>();
-    for (const t of filteredTasks) {
-      const list = map.get(t.assigneeId);
-      if (list) list.push(t); else map.set(t.assigneeId, [t]);
-    }
-    return map;
-  }, [filteredTasks]);
+  const tasksByAssignee = useMemo(() => buildTasksByAssignee(filteredTasks), [filteredTasks]);
 
-  const tasksForUser = (u: { uid: string; email: string }): Task[] => {
-    const byUid = tasksByAssignee.get(u.uid) ?? [];
-    if (u.email === u.uid) return byUid;
-    const byEmail = tasksByAssignee.get(u.email) ?? [];
-    return byEmail.length > 0 ? [...byUid, ...byEmail] : byUid;
-  };
+  const managerPerformance = useMemo(
+    () => computeManagerPerformance(managers, tasksByAssignee),
+    [managers, tasksByAssignee]
+  );
 
-  const managerPerformance = useMemo(() => managers.map(manager => {
-    const mt = tasksForUser(manager);
-    const completed = mt.filter(t => t.status === 'COMPLETED').length;
-    const blocked   = mt.filter(t => t.status === 'BLOCKED').length;
-    const total     = mt.length;
-    // dashboard/helpers.ts'teki MERKEZİ tanım kullanılır (CANCELLED görevler
-    // paydadan çıkarılır) — eskiden burada bağımsız bir formül vardı ve
-    // Dashboard ile Reports aynı kavram için farklı rakamlar gösteriyordu
-    // (bkz. kod denetimi).
-    const completionRate = computeCompletionRatePercent(mt);
-    const onTimeCompleted = mt.filter(isCompletedOnTime).length;
-    const slaRate = completed > 0 ? Math.round((onTimeCompleted / completed) * 100) : 100;
-    // total === 0 iken completionRate sabit %0 (kırmızı), slaRate sabit %100
-    // (yeşil) dönüyor — aynı satırda birbiriyle çelişen, yanıltıcı bir "kötü
-    // performans ama mükemmel SLA" görüntüsü oluşturuyordu (bkz. kod denetimi).
-    // hasData bayrağı, seçili tarih/birim filtresinde bu yöneticiye ait hiç
-    // görev olmadığını UI'da ayırt etmek için kullanılır.
-    const hasData = total > 0;
-    return { ...manager, total, completed, blocked, completionRate, slaRate, hasData };
-  }).sort((a, b) => b.completionRate - a.completionRate), [managers, tasksByAssignee]);
-
-  const averageCompletionTime = useMemo(() => {
-    const completed = filteredTasks.filter(t => t.status === 'COMPLETED');
-    if (completed.length === 0) return 0;
-    // Bekleme sürelerini (örn. BLOCKED durumu) hariç tutarak gerçek aktif çalışma süresini hesapla
-    return completed.reduce((acc, t) => {
-      const elapsed = (t.completedAt || t.updatedAt) - t.createdAt;
-      const paused = t.totalPausedTime ?? 0;
-      return acc + Math.max(0, elapsed - paused);
-    }, 0) / completed.length;
-  }, [filteredTasks]);
+  const averageCompletionTime = useMemo(() => computeAverageCompletionTime(filteredTasks), [filteredTasks]);
 
   const avgDays = Math.round(averageCompletionTime / (1000 * 60 * 60 * 24));
   // dashboard/helpers.ts'teki MERKEZİ tanım (bkz. yukarıdaki managerPerformance
@@ -224,66 +159,20 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
   const completionRate = computeCompletionRatePercent(filteredTasks);
 
   // #6 — Son 14 gün SLA uyum oranı (trend)
-  // Önceki hali her gün için filteredTasks'ı baştan tarıyordu (14 × O(görev)).
-  // Burada tek geçişte tarihe göre 14 kovaya (bucket) dağıtılır — DST geçişlerinde
-  // yanlış gün hesaplamaması için ham ms farkı yerine date-fns'in takvim-günü
-  // farkı alan `differenceInCalendarDays`ı kullanılır (aynı yerel gün sınırlarını
-  // temel alır, tıpkı eski startOfDay/endOfDay aralığı gibi).
-  const slaComplianceTrend = useMemo(() => {
-    const today = new Date();
-    const buckets: { completed: number; onTime: number }[] = Array.from({ length: 14 }, () => ({ completed: 0, onTime: 0 }));
-    for (const t of filteredTasks) {
-      if (t.status !== 'COMPLETED') continue;
-      const daysAgo = differenceInCalendarDays(today, new Date(t.updatedAt));
-      const dayIndex = 13 - daysAgo;
-      const bucket = dayIndex >= 0 && dayIndex <= 13 ? buckets[dayIndex] : undefined;
-      if (!bucket) continue;
-      bucket.completed++;
-      if (isCompletedOnTime(t)) bucket.onTime++;
-    }
-    return buckets.map((b, i) => {
-      const day = subDays(today, 13 - i);
-      return {
-        name: format(day, 'dd MMM', { locale: tr }),
-        oran: b.completed > 0 ? Math.round((b.onTime / b.completed) * 100) : null,
-        tamamlanan: b.completed,
-      };
-    });
-  }, [filteredTasks]);
+  const slaComplianceTrend = useMemo(() => computeSlaComplianceTrend(filteredTasks, new Date()), [filteredTasks]);
   // Seçili aralıkta hiç tamamlanan görev yoksa `oran` tüm noktalarda null olur
   // ve çizgi hiçbir şey çizmeden yalnızca eksenler kalırdı — boş durum ayrıca
   // belirtilir (bkz. tasarım denetimi: "grafik alanı tamamen boş").
   const hasSlaTrendData = slaComplianceTrend.some(d => d.oran !== null);
 
   // #6 — Personel yük dağılımı (Staff bazlı)
-  const staffWorkload = useMemo(() => {
-    const staff = users.filter(u => u.role === 'Staff' && (selectedDept === 'ALL' || u.departmentId === selectedDept));
-    return staff.map(u => {
-      const ut = tasksForUser(u);
-      const assigned = ut.filter(t => t.status !== 'COMPLETED' && t.status !== 'CANCELLED').length;
-      const completed = ut.filter(t => t.status === 'COMPLETED').length;
-      return { name: u.fullName.split(' ')[0], assigned, completed, total: assigned + completed };
-    }).filter(u => u.total > 0).sort((a, b) => b.total - a.total).slice(0, 6);
-  }, [users, tasksByAssignee, selectedDept]);
+  const staffWorkload = useMemo(
+    () => computeStaffWorkload(users, tasksByAssignee, selectedDept),
+    [users, tasksByAssignee, selectedDept]
+  );
 
   // #6 — Durum dağılımı (Pie chart verisi)
-  const statusDistribution = useMemo(() => {
-    const map: Record<string, { label: string; color: string; count: number }> = {
-      ASSIGNED:             { label: STATUS_LABELS_SHORT.ASSIGNED,           color: '#CBD5E1', count: 0 },
-      PENDING_DELEGATION:   { label: STATUS_LABELS_SHORT.PENDING_DELEGATION, color: '#A78BFA', count: 0 },
-      IN_PROGRESS:          { label: STATUS_LABELS_SHORT.IN_PROGRESS,        color: 'var(--color-status-info)', count: 0 },
-      AWAITING_APPROVAL:    { label: STATUS_LABELS_SHORT.AWAITING_APPROVAL,  color: '#B38F46', count: 0 },
-      BLOCKED:              { label: STATUS_LABELS_SHORT.BLOCKED,            color: '#A8201A', count: 0 },
-      COMPLETED:            { label: STATUS_LABELS_SHORT.COMPLETED,          color: 'var(--chart-completed)', count: 0 },
-    };
-    filteredTasks.forEach(t => {
-      const statusObj = map[t.status];
-      if (statusObj) {
-        statusObj.count++;
-      }
-    });
-    return Object.values(map).filter(v => v.count > 0);
-  }, [filteredTasks]);
+  const statusDistribution = useMemo(() => computeStatusDistribution(filteredTasks), [filteredTasks]);
 
   if (isLoading) return <ReportsSkeleton />;
 

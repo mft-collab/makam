@@ -6,8 +6,10 @@ import { taskService } from '../services/taskService';
 import { auditLogService } from '../services/auditLogService';
 import { settingsService } from '../services/settingsService';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import { useIsAdmin } from '../hooks/useIsAdmin';
 import { getSLAConfigForPriority } from '../lib/sla';
-import { SettingsCard, ActionButton, StatusBanner } from './settings/SharedUI';
+import { SLA_CONFIG_SYNCED_EVENT } from '../hooks/useSLASync';
+import { SettingsCard, ActionButton, StatusBanner, SlaPriorityInput } from './settings/SharedUI';
 import { Skeleton } from './ui/Skeleton';
 
 interface SettingsProps {
@@ -53,7 +55,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
   const [isArchiving, setIsArchiving] = useState(false);
   const { isInstallable, isInstalled, install } = usePWAInstall();
 
-  const isAdmin = currentUser?.role === 'Admin';
+  const isAdmin = useIsAdmin(currentUser);
 
   // Network status listener
   useEffect(() => {
@@ -97,8 +99,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
   
   const [isSavingSla, setIsSavingSla] = useState(false);
 
-  useEffect(() => {
-    // Read initial SLA values using getSLAConfigForPriority helper
+  const loadSlaFromLocalStorage = () => {
     const low = getSLAConfigForPriority('Low');
     setSlaLowVal(low.value);
     setSlaLowUnit(low.unit);
@@ -114,10 +115,27 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
     const urgent = getSLAConfigForPriority('Urgent');
     setSlaUrgentVal(urgent.value);
     setSlaUrgentUnit(urgent.unit);
+  };
+
+  useEffect(() => {
+    loadSlaFromLocalStorage();
   }, []);
 
+  // useSLASync (App.tsx kök seviyesinde) Firestore'dan gelen bir değişikliği
+  // localStorage'a yazdığında bu event'i fırlatır — panel açıkken BAŞKA bir
+  // admin SLA yapılandırmasını değiştirirse form artık canlı güncellenir
+  // (bkz. kod denetimi: eskiden yalnızca ilk mount'ta okunuyordu). Kendi
+  // kaydetme işlemimiz devam ederken gelen bir güncelleme formu ELİMİZDEKİ
+  // düzenlemenin üzerine yazmasın diye isSavingSla true iken yoksayılır.
+  useEffect(() => {
+    if (isSavingSla) return;
+    const handleSync = () => loadSlaFromLocalStorage();
+    window.addEventListener(SLA_CONFIG_SYNCED_EVENT, handleSync);
+    return () => window.removeEventListener(SLA_CONFIG_SYNCED_EVENT, handleSync);
+  }, [isSavingSla]);
+
   const handleSaveSla = async () => {
-    if (!currentUser || currentUser.role !== 'Admin') return;
+    if (!currentUser || !isAdmin) return;
     setIsSavingSla(true);
     setImportStatus({ type: 'loading', message: 'SLA Yapılandırması Kaydediliyor...' });
     try {
@@ -222,7 +240,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
 
   // ── Export ────────────────────────────────────────────────────────────────
   const handleExport = async () => {
-    if (!currentUser || currentUser.role !== 'Admin') {
+    if (!isAdmin) {
       if (triggerToast) {
         triggerToast('YETKİSİZ İŞLEM', 'Dizge yedeği indirme yetkisi yalnızca Admin makamına aittir.', 'danger');
       }
@@ -250,7 +268,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
 
   // ── Import ────────────────────────────────────────────────────────────────
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!currentUser || currentUser.role !== 'Admin') {
+    if (!currentUser || !isAdmin) {
       if (triggerToast) {
         triggerToast('YETKİSİZ İŞLEM', 'Dizge geri yükleme yetkisi yalnızca Admin makamına aittir.', 'danger');
       }
@@ -287,7 +305,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
   // (kanıt bütünlüğü). Bu işlem yalnızca dışa aktarır — veritabanından hiçbir
   // kayıt silinmez.
   const handleArchive = async () => {
-    if (!currentUser || currentUser.role !== 'Admin') {
+    if (!currentUser || !isAdmin) {
       if (triggerToast) {
         triggerToast('YETKİSİZ İŞLEM', 'Log dışa aktarma yetkisi yalnızca Admin makamına aittir.', 'danger');
       }
@@ -477,101 +495,30 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.15em]">Rutin</label>
-                    <div className="flex gap-1.5">
-                      <input
-                        type="number"
-                        min="1"
-                        max="365"
-                        value={slaLowVal}
-                        onChange={(e) => setSlaLowVal(Math.max(1, parseInt(e.target.value) || 0))}
-                        disabled={!isOnline || isSavingSla}
-                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
-                      />
-                      <select
-                        value={slaLowUnit}
-                        onChange={(e) => setSlaLowUnit(e.target.value as 'days' | 'hours')}
-                        disabled={!isOnline || isSavingSla}
-                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
-                      >
-                        <option value="days" className="bg-surface-base text-text-heading">İş Günü</option>
-                        <option value="hours" className="bg-surface-base text-text-heading">İş Saati</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.15em]">Normal</label>
-                    <div className="flex gap-1.5">
-                      <input
-                        type="number"
-                        min="1"
-                        max="365"
-                        value={slaMediumVal}
-                        onChange={(e) => setSlaMediumVal(Math.max(1, parseInt(e.target.value) || 0))}
-                        disabled={!isOnline || isSavingSla}
-                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
-                      />
-                      <select
-                        value={slaMediumUnit}
-                        onChange={(e) => setSlaMediumUnit(e.target.value as 'days' | 'hours')}
-                        disabled={!isOnline || isSavingSla}
-                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
-                      >
-                        <option value="days" className="bg-surface-base text-text-heading">İş Günü</option>
-                        <option value="hours" className="bg-surface-base text-text-heading">İş Saati</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.15em]">Öncelikli</label>
-                    <div className="flex gap-1.5">
-                      <input
-                        type="number"
-                        min="1"
-                        max="365"
-                        value={slaHighVal}
-                        onChange={(e) => setSlaHighVal(Math.max(1, parseInt(e.target.value) || 0))}
-                        disabled={!isOnline || isSavingSla}
-                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
-                      />
-                      <select
-                        value={slaHighUnit}
-                        onChange={(e) => setSlaHighUnit(e.target.value as 'days' | 'hours')}
-                        disabled={!isOnline || isSavingSla}
-                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
-                      >
-                        <option value="days" className="bg-surface-base text-text-heading">İş Günü</option>
-                        <option value="hours" className="bg-surface-base text-text-heading">İş Saati</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[9px] font-medium text-text-tertiary uppercase tracking-[0.15em]">İvedi</label>
-                    <div className="flex gap-1.5">
-                      <input
-                        type="number"
-                        min="1"
-                        max="365"
-                        value={slaUrgentVal}
-                        onChange={(e) => setSlaUrgentVal(Math.max(1, parseInt(e.target.value) || 0))}
-                        disabled={!isOnline || isSavingSla}
-                        className="w-2/3 h-9 px-3 text-[12px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed font-display transition-colors"
-                      />
-                      <select
-                        value={slaUrgentUnit}
-                        onChange={(e) => setSlaUrgentUnit(e.target.value as 'days' | 'hours')}
-                        disabled={!isOnline || isSavingSla}
-                        className="w-1/3 h-9 px-1.5 text-[10px] bg-makam-glass border border-executive-blue/10 rounded-xl focus-visible:outline-none focus-visible:border-executive-gold disabled:bg-text-muted/5 disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors"
-                      >
-                        <option value="days" className="bg-surface-base text-text-heading">İş Günü</option>
-                        <option value="hours" className="bg-surface-base text-text-heading">İş Saati</option>
-                      </select>
-                    </div>
-                  </div>
+                  <SlaPriorityInput
+                    label="Rutin"
+                    value={slaLowVal} unit={slaLowUnit}
+                    onValueChange={setSlaLowVal} onUnitChange={setSlaLowUnit}
+                    disabled={!isOnline || isSavingSla}
+                  />
+                  <SlaPriorityInput
+                    label="Normal"
+                    value={slaMediumVal} unit={slaMediumUnit}
+                    onValueChange={setSlaMediumVal} onUnitChange={setSlaMediumUnit}
+                    disabled={!isOnline || isSavingSla}
+                  />
+                  <SlaPriorityInput
+                    label="Öncelikli"
+                    value={slaHighVal} unit={slaHighUnit}
+                    onValueChange={setSlaHighVal} onUnitChange={setSlaHighUnit}
+                    disabled={!isOnline || isSavingSla}
+                  />
+                  <SlaPriorityInput
+                    label="İvedi"
+                    value={slaUrgentVal} unit={slaUrgentUnit}
+                    onValueChange={setSlaUrgentVal} onUnitChange={setSlaUrgentUnit}
+                    disabled={!isOnline || isSavingSla}
+                  />
                 </div>
 
                 {!isOnline ? (

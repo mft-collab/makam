@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { AlertCircle, Sun, Moon, Monitor, Building, BookOpen } from 'lucide-react';
 import { Logo } from './Logo';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
@@ -9,14 +9,15 @@ import { Tooltip } from './ui/Tooltip';
 import { GuideModal } from './GuideModal';
 import { ROLE_LABELS } from '../constants';
 import { useUIStore } from '../store/uiStore';
+import { cn } from '../lib/utils';
 import type { User, Notification } from '../types';
 
 interface Props {
   user: User;
   activeTab: string;
   notifications: Notification[];
-  showNotifications: boolean;
-  setShowNotifications: (show: boolean) => void;
+  isNotificationsOpen: boolean;
+  setIsNotificationsOpen: (open: boolean) => void;
   globalFocusDept: string;
   onGlobalFocusDeptChange: (dept: string) => void;
   departments: string[];
@@ -32,8 +33,8 @@ export function AppHeader({
   user,
   activeTab,
   notifications,
-  showNotifications,
-  setShowNotifications,
+  isNotificationsOpen,
+  setIsNotificationsOpen,
   globalFocusDept,
   onGlobalFocusDeptChange,
   departments,
@@ -50,6 +51,23 @@ export function AppHeader({
   const isOnline = !isOffline;
   const queueCount = queueLength;
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+
+  // Masaüstünde "Birim Odak Filtresi" sabit bir <select> olarak görünür
+  // (aşağıdaki desktop header) — mobilde bu filtre eskiden hiç yoktu (bkz.
+  // kod denetimi), sınırlı yatay alan nedeniyle burada aç/kapa bir açılır
+  // panel olarak sunulur.
+  const [isDeptFilterOpen, setIsDeptFilterOpen] = useState(false);
+  const deptFilterRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (deptFilterRef.current && !deptFilterRef.current.contains(e.target as Node)) {
+        setIsDeptFilterOpen(false);
+      }
+    };
+    if (isDeptFilterOpen) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [isDeptFilterOpen]);
 
   const handleToggleTheme = () => {
     if (theme === 'light') setTheme('dark');
@@ -82,9 +100,9 @@ export function AppHeader({
         <div className="flex items-center gap-6">
           {Boolean(notifications.length > 0) && (
             <button 
-              onClick={() => setShowNotifications(!showNotifications)}
-              aria-label={`${notifications.length} bekleyen bildirim. Bildirimleri ${showNotifications ? 'gizle' : 'göster'}.`}
-              aria-expanded={showNotifications}
+              onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+              aria-label={`${notifications.length} bekleyen bildirim. Bildirimleri ${isNotificationsOpen ? 'gizle' : 'göster'}.`}
+              aria-expanded={isNotificationsOpen}
               aria-haspopup="true"
               className="flex items-center gap-3 px-4 py-2 bg-status-danger/[0.06] border border-status-danger/20 rounded-full animate-makam-flash shadow-sm hover:bg-status-danger/10 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger"
             >
@@ -193,6 +211,51 @@ export function AppHeader({
             )}
           </div>
 
+          {/* Birim Odak Filtresi (mobil) — Staff panosu kişisel kapsamlıdır, birim odağı anlamsız */}
+          {user.role !== 'Staff' && (
+            <div className="relative" ref={deptFilterRef}>
+              <button
+                onClick={() => setIsDeptFilterOpen(o => !o)}
+                aria-label="Birim Odak Filtresi"
+                aria-expanded={isDeptFilterOpen}
+                aria-haspopup="true"
+                className={cn(
+                  'w-8 h-8 flex items-center justify-center rounded-full border transition-colors',
+                  globalFocusDept !== 'ALL'
+                    ? 'border-executive-blue/30 bg-executive-blue/10 text-executive-blue'
+                    : 'border-makam-border/10 bg-makam-glass text-text-muted hover:text-executive-blue'
+                )}
+              >
+                <Building className="w-3.5 h-3.5 stroke-[1.5]" />
+              </button>
+              {isDeptFilterOpen && (
+                <div className="absolute top-10 right-0 z-[210] min-w-[170px] max-h-[60vh] overflow-y-auto bg-surface-elevated backdrop-blur-2xl border border-surface-border rounded-xl shadow-[0_16px_48px_-12px_rgba(0,0,0,0.18)] overflow-hidden py-1">
+                  <button
+                    onClick={() => { onGlobalFocusDeptChange('ALL'); setIsDeptFilterOpen(false); }}
+                    className={cn(
+                      'w-full text-left px-3.5 py-2 text-[11px] uppercase tracking-widest font-medium transition-colors',
+                      globalFocusDept === 'ALL' ? 'text-executive-blue bg-executive-blue/5' : 'text-text-muted hover:bg-surface-glass'
+                    )}
+                  >
+                    Tüm Odaklar
+                  </button>
+                  {departments.map(dept => (
+                    <button
+                      key={dept}
+                      onClick={() => { onGlobalFocusDeptChange(dept); setIsDeptFilterOpen(false); }}
+                      className={cn(
+                        'w-full text-left px-3.5 py-2 text-[11px] uppercase tracking-widest font-medium transition-colors',
+                        globalFocusDept === dept ? 'text-executive-blue bg-executive-blue/5' : 'text-text-muted hover:bg-surface-glass'
+                      )}
+                    >
+                      {dept}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <button
             onClick={() => setIsGuideOpen(true)}
             aria-label="Kılavuzu aç"
@@ -213,7 +276,7 @@ export function AppHeader({
 
           {Boolean(notifications.length > 0) && (
             <button
-              onClick={() => setShowNotifications(!showNotifications)}
+              onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
               className="flex items-center gap-2 px-3 py-1.5 bg-status-danger/10 border border-status-danger/20 rounded-full animate-makam-flash text-[9px] font-medium text-status-danger uppercase tracking-[0.25em]"
             >
               <AlertCircle className="w-3.5 h-3.5 text-status-danger stroke-[1.5]" />

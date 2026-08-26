@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { db, doc, setDoc, addDoc, collection, getDoc, writeBatch, increment } from '../firebase';
+import { runWithRetry } from '../lib/retry';
 import { UserRoleSchema, TaskStatusSchema, TaskPrioritySchema } from '../types';
 import type { SLAConfigEntry } from '../lib/sla';
 
@@ -80,19 +81,19 @@ export const settingsService = {
    *  state'ini toplayıp bu fonksiyonu çağırır. */
   async saveSlaConfig(config: SlaConfigInput, userId: string, summaryLabel: string) {
     const newConfig = { ...config, updatedAt: Date.now(), updatedBy: userId };
-    await setDoc(doc(db, 'system', 'sla_config'), newConfig);
+    await runWithRetry(() => setDoc(doc(db, 'system', 'sla_config'), newConfig));
 
     localStorage.setItem('makam_sla_config', JSON.stringify({
       Low: config.Low, Medium: config.Medium, High: config.High, Urgent: config.Urgent
     }));
 
-    await addDoc(collection(db, 'audit_logs'), {
+    await runWithRetry(() => addDoc(collection(db, 'audit_logs'), {
       taskId: 'system_settings',
       changedBy: userId,
       oldValue: 'SLA Yapılandırması Değiştirildi',
       newValue: summaryLabel,
       timestamp: Date.now()
-    });
+    }));
   },
 
   /** Bir yedek JSON metnini doğrular ve dizgeye geri yükler; ilerleme
@@ -196,18 +197,18 @@ export const settingsService = {
           batch.set(doc(db, 'system', 'stats'), statsPayload, { merge: true });
         }
       }
-      await batch.commit();
+      await runWithRetry(() => batch.commit());
       onProgress?.(Math.round(((i + chunk.length) / items.length) * 100));
     }
 
     // Register restore audit log — hangi dosyadan, kaç kayıt geri yüklendiği kaydedilir
-    await addDoc(collection(db, 'audit_logs'), {
+    await runWithRetry(() => addDoc(collection(db, 'audit_logs'), {
       taskId: 'system_backup_restore',
       changedBy: userId,
       oldValue: `Yedek dosyası: ${fileName}`,
       newValue: `${data.users?.length ?? 0} kullanıcı, ${data.tasks?.length ?? 0} talimat, ${data.blockers?.length ?? 0} engel geri yüklendi`,
       timestamp: Date.now()
-    });
+    }));
 
     return { userCount: data.users?.length ?? 0, taskCount: data.tasks?.length ?? 0, blockerCount: data.blockers?.length ?? 0 };
   },
@@ -215,12 +216,12 @@ export const settingsService = {
   /** Denetim izi dışa aktarımının kendisini audit_logs'a kaydeder — kayıtların
    *  hiçbiri silinmez, yalnızca "yerel dosyaya aktarıldı" izi düşülür. */
   async archiveAuditLogs(logCount: number, userId: string) {
-    await addDoc(collection(db, 'audit_logs'), {
+    await runWithRetry(() => addDoc(collection(db, 'audit_logs'), {
       taskId: 'system_log_export',
       changedBy: userId,
       oldValue: logCount + ' kayıt (veritabanında)',
       newValue: 'Yerel dosyaya aktarıldı',
       timestamp: Date.now()
-    });
+    }));
   }
 };

@@ -8,7 +8,18 @@
 import { useEffect } from 'react';
 import { db, doc, onSnapshot } from '../firebase';
 import { logger } from '../lib/logger';
+import type { SLAConfigEntry } from '../lib/sla';
 import type { User } from '../types';
+
+// localStorage'a yazan bu hook TEK bir sekme/oturumda çalışır (App.tsx kök
+// seviyesinde) — 'storage' event'i yalnızca DİĞER sekmelerde tetiklenir, aynı
+// sekmede localStorage'ı okuyan Settings.tsx gibi bileşenler bu yazmadan
+// habersiz kalırdı (bkz. kod denetimi: başka bir admin SLA'yı değiştirdiğinde
+// panel açık olan admin canlı güncelleme görmüyordu). Bu özel DOM event'i
+// AYNI sekme içindeki dinleyicilere haber verir.
+export const SLA_CONFIG_SYNCED_EVENT = 'makam:sla-config-synced';
+
+export type SlaConfigMap = Record<'Low' | 'Medium' | 'High' | 'Urgent', SLAConfigEntry>;
 
 const DEFAULTS = {
   Low:    { value: 15, unit: 'days' as const },
@@ -23,7 +34,14 @@ function normalize(val: any, defaultVal: number, defaultUnit: 'days' | 'hours') 
   return { value: defaultVal, unit: defaultUnit };
 }
 
-export function useSLASync(user: User | null) {
+export function useSLASync(
+  user: User | null,
+  // Verilmezse davranış eskisi gibi yalnızca console'a düşer (bkz. kod
+  // denetimi: bu hook hatayı önceden merkezi toast kanalına hiç iletmiyordu —
+  // SLA config senkronizasyonu sessizce başarısız olursa kullanıcı hiçbir
+  // uyarı görmeden eski/varsayılan SLA süreleriyle çalışmaya devam ederdi).
+  onError?: (err: unknown, type: string, path: string) => void
+) {
   // Yalnızca uid'e (primitive) bağımlı — user nesnesi, kullanıcının Firestore
   // dokümanındaki SLA ile alakasız her değişiklikte (fotoğraf, fcmTokens vb.)
   // yeni bir referansla set ediliyor (bkz. App.tsx); tüm `user` nesnesini
@@ -49,11 +67,15 @@ export function useSLASync(user: User | null) {
             }
           : DEFAULTS;
         localStorage.setItem('makam_sla_config', JSON.stringify(config));
+        window.dispatchEvent(new CustomEvent<SlaConfigMap>(SLA_CONFIG_SYNCED_EVENT, { detail: config }));
         if (data) logger.debug('[SLA Sync] Synchronized from Firestore.');
       },
-      (err) => logger.warn('[SLA Sync] Failed:', err)
+      (err) => {
+        logger.warn('[SLA Sync] Failed:', err);
+        onError?.(err, 'list', 'system/sla_config');
+      }
     );
 
     return () => unsubscribe();
-  }, [uid]);
+  }, [uid, onError]);
 }
