@@ -67,7 +67,15 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
     };
   }, []);
 
-  // RBAC Tab Access control
+  // RBAC Tab Access control — bu, aşağıdaki render koşullarındaki `&& isAdmin`
+  // kontrolüyle KASITLI olarak aynı kuralı iki kez uyguluyor (bkz. kod
+  // denetimi). Görünüşte gereksiz ama değil: bu efekt render'dan SONRA
+  // çalışır — isAdmin, Settings açıkken bir rol değişikliği snapshot'ıyla
+  // (ör. başka bir Admin bu kullanıcının rolünü düşürürse) false olursa,
+  // activeSubTab hâlâ 'sla'/'data' iken en az BİR render gerçekleşir; render
+  // koşulundaki `&& isAdmin` olmasa, o tek render'da admin-özel içerik kısa
+  // süreliğine görünür kalırdı. Efekt yalnızca sekmeyi bir sonraki render için
+  // düzeltir, render koşulu ise İLK render'ı da korur.
   useEffect(() => {
     if (!isAdmin && (activeSubTab === 'sla' || activeSubTab === 'data')) {
       setActiveSubTab('general');

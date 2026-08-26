@@ -2,7 +2,7 @@ import { initializeApp, FirebaseError } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithCustomToken, signOut, onAuthStateChanged, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, where, or, orderBy, limit, startAfter, addDoc, getDocFromServer, runTransaction, writeBatch, increment, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { getMessaging, isSupported } from 'firebase/messaging';
+import { getMessaging, isSupported, type Messaging } from 'firebase/messaging';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import firebaseConfigJson from '../firebase-applet-config.json';
 import { logger } from './lib/logger';
@@ -64,7 +64,7 @@ if (isUsingFirebaseEmulator) {
   logger.debug('[Firebase] Emulator Suite\'e bağlanıldı (Auth :9099, Firestore :8080).');
 }
 
-export let messaging: any = null;
+export let messaging: Messaging | null = null;
 isSupported().then((supported) => {
   if (supported) {
     messaging = getMessaging(app);
@@ -106,6 +106,12 @@ async function testConnection() {
     }
   }
 }
-setTimeout(testConnection, 2000); // Wait a bit for initialization
+// Uygulama başlangıcından hemen sonra çalıştırılırsa Firebase SDK'sının henüz
+// tamamlanmamış iç kurulumuyla yarışıp yanlış negatif ("client is offline")
+// üretebilir — bu gecikme değeri deneysel/tahminidir (yavaş ağlarda hâlâ
+// yanlış negatif riski taşır), adlandırılmış bir sabite çıkarıldı ki en
+// azından niyeti (ve ayarlanabilir tek nokta olduğu) açık olsun.
+const CONNECTION_TEST_INITIAL_DELAY_MS = 2000;
+setTimeout(testConnection, CONNECTION_TEST_INITIAL_DELAY_MS);
 
 export { signInWithPopup, signInWithCustomToken, signOut, onAuthStateChanged, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, where, or, orderBy, limit, startAfter, addDoc, ref, uploadBytes, getDownloadURL, runTransaction, writeBatch, increment, FirebaseError };

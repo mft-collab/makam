@@ -480,6 +480,11 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
       <Modal isOpen={!!selectedUser} onClose={() => setSelectedUser(null)} title="Kadro Profili" size="lg">
         {selectedUser && (() => {
           const rc = roleConfig[selectedUser.role];
+          // Admin ya da kendi profiline bakan kullanıcı — hem "profili
+          // düzenle" butonu hem Denetim İzi sekmesinin görünürlüğü için AYNI
+          // yetki kuralı; tek yerde hesaplanır (bkz. kod denetimi: eskiden bu
+          // ifade üç kez bağımsız olarak tekrarlanıyordu).
+          const canEditOrViewOwnAudit = isAdmin || selectedUser.uid === currentUser?.uid;
           const userAllTasks = selectedUserAllTasks;
           const completedTasks = userAllTasks.filter(t => t.status === 'COMPLETED');
           // lib/sla.ts'teki isCompletedOnTime üzerinden — Dashboard/Reports ile
@@ -507,7 +512,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                     <h3 className="text-[18px] font-medium text-executive-blue font-serif tracking-tight truncate">
                       {selectedUser.fullName}
                     </h3>
-                    {(isAdmin || selectedUser.uid === currentUser?.uid) && (
+                    {canEditOrViewOwnAudit && (
                       <button
                         onClick={() => { setSelectedUser(null); handleEdit(selectedUser); }}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-elevated border border-executive-blue/[0.06] rounded-xl text-[9px] font-medium text-text-muted hover:text-executive-blue hover:bg-surface-glass transition-all shadow-sm flex-shrink-0"
@@ -568,7 +573,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                     >
                       Sorumluluk Alanı
                     </button>
-                    {(isAdmin || selectedUser.uid === currentUser?.uid) && (
+                    {canEditOrViewOwnAudit && (
                       <button
                         onClick={() => setModalTab('logs')}
                         className={cn(
@@ -584,7 +589,7 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
               </div>
 
               {/* Tasks / Logs Tab views */}
-              {modalTab === 'tasks' || !(isAdmin || selectedUser.uid === currentUser?.uid) ? (
+              {modalTab === 'tasks' || !canEditOrViewOwnAudit ? (
                 <div>
                   <div className="flex items-center gap-2 mb-3 mt-1">
                     <Target className="w-3.5 h-3.5 text-executive-gold" />

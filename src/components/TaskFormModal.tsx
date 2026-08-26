@@ -72,7 +72,20 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
     ? ['Staff']
     : getAssignableRoles(currentUser?.role);
 
-  const assignableUsers = users.filter(u => allowedRoles.includes(u.role));
+  const roleFilteredUsers = users.filter(u => allowedRoles.includes(u.role));
+  // Düzenleme modunda, görevin MEVCUT sorumlusunun rolü düzenleyenin izinli-rol
+  // listesinde olmayabilir (ör. bir Manager, bir Admin'e atanmış bir görevi
+  // düzenlerken — Manager'ın izinli listesi Admin içermiyor). Eskiden bu
+  // durumda mevcut sorumlu <select> seçeneklerinde hiç görünmüyordu; kullanıcı
+  // yalnızca açıklama gibi ilgisiz bir alanı değiştirmek isterken bile
+  // sorumluyu istemeden değiştirmiş oluyordu (bkz. kod denetimi). Mevcut
+  // sorumlu, izinli listede yoksa da seçeneklere eklenir ve altında bir uyarı
+  // gösterilir.
+  const currentAssignee = task ? users.find(u => u.uid === task.assigneeId) : undefined;
+  const currentAssigneeOutOfScope = Boolean(currentAssignee && !roleFilteredUsers.some(u => u.uid === currentAssignee.uid));
+  const assignableUsers = currentAssigneeOutOfScope && currentAssignee
+    ? [currentAssignee, ...roleFilteredUsers]
+    : roleFilteredUsers;
 
   const coordinatorUsers = users.filter(
     u => u.role !== 'Admin'
@@ -162,6 +175,12 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
                <p className="text-[9px] text-status-warning/80 px-1 tracking-wide flex items-center gap-1.5">
                  <AlertCircle className="w-3 h-3 flex-shrink-0" />
                  Alt talimatlar yalnızca memurlara atanabilir.
+               </p>
+             )}
+             {currentAssigneeOutOfScope && (
+               <p className="text-[9px] text-status-warning/80 px-1 tracking-wide flex items-center gap-1.5">
+                 <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                 Mevcut sorumlu ({currentAssignee?.fullName}) sizin atayabileceğiniz rol dışında — değiştirmezseniz aynı kalır.
                </p>
              )}
              <select

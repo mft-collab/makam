@@ -10,12 +10,16 @@ import { logger } from '../lib/logger';
 
 interface NotificationPromptProps {
   userId: string;
-  onComplete: () => void;
 }
 
-export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, onComplete }) => {
+export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId }) => {
   const [isVisible, setIsVisible] = useState(false);
-  const [step, setStep] = useState<'idle' | 'asking' | 'success' | 'error'>('idle');
+  // 'error' adımı BİLEREK yok — akış her zaman graceful-fallback ile
+  // 'success'e düşer (handleActivate'in catch bloğuna bkz.). Eskiden bir
+  // 'error' durumu ve onu besleyen (hiçbir zaman set edilmeyen) bir
+  // `errorReason` state'i vardı; ~40 satırlık erişilemeyen bir JSX dalı
+  // olarak duruyordu (bkz. kod denetimi) — kaldırıldı.
+  const [step, setStep] = useState<'idle' | 'asking' | 'success'>('idle');
 
   useEffect(() => {
     if (!('Notification' in window)) return;
@@ -37,10 +41,6 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
     }, 3000);
     return () => clearTimeout(t);
   }, [userId]);
-
-  // Not: 'error' adımı bilinçli olarak tetiklenmiyor (graceful fallback tasarımı);
-  // errorReason yalnızca erişilemeyen hata ekranının metin varyantını belirler.
-  const [errorReason] = useState<'denied' | 'technical' | null>(null);
 
   const handleActivate = async () => {
     try {
@@ -83,7 +83,6 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
 
       setTimeout(() => {
         setIsVisible(false);
-        onComplete();
       }, 2000);
 
     } catch (error) {
@@ -93,7 +92,6 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
       localStorage.setItem('in_app_notifications_only', 'true');
       setTimeout(() => {
         setIsVisible(false);
-        onComplete();
       }, 2000);
     }
   };
@@ -101,7 +99,6 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
   const handleDismiss = () => {
     localStorage.setItem('notif_prompt_dismissed_v2', 'true');
     setIsVisible(false);
-    onComplete();
   };
 
   return (
@@ -198,7 +195,7 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
                       </button>
                     </div>
                   </motion.div>
-                ) : step === 'success' ? (
+                ) : (
                   <motion.div
                     key="success"
                     initial={{ opacity: 0, scale: 0.9 }}
@@ -217,45 +214,6 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId, 
                       <h3 className="text-[16px] font-medium text-executive-blue font-serif">Etkinleştirildi!</h3>
                       <p className="text-[11px] text-text-muted">
                         Kurumsal bildirimler başarıyla etkinleştirildi.
-                      </p>
-                    </div>
-                  </motion.div>
-                ) : (
-                   <motion.div
-                    key="error"
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="flex flex-col items-center text-center gap-4 p-7"
-                  >
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-                      className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg ${
-                        errorReason === 'denied' ? 'bg-status-warning/10' : 'bg-status-danger/10'
-                      }`}
-                    >
-                      <X className={`w-8 h-8 stroke-[1.5] ${
-                        errorReason === 'denied' ? 'text-status-warning' : 'text-status-danger'
-                      }`} />
-                    </motion.div>
-                    <div className="flex flex-col gap-2">
-                      <h3 className={`text-[16px] font-medium font-serif ${
-                        errorReason === 'denied' ? 'text-status-warning' : 'text-status-danger'
-                      }`}>
-                        {errorReason === 'denied' ? 'Bildirimler Engellendi' : 'Aktifleştirilemedi'}
-                      </h3>
-                      <p className="text-[11px] text-text-muted leading-relaxed">
-                        {errorReason === 'denied' ? (
-                          <>
-                            Tarayıcı bildirim iznini reddetmiş. Düzeltmek için:<br />
-                            <span className="font-medium text-text-muted">URL çubuğundaki kilit ikonuna</span> tıklayın → <span className="font-medium text-text-muted">Bildirimler</span>'i <span className="font-medium text-status-success">İzin Ver</span> olarak değiştirip sayfayı yenileyin.
-                          </>
-                        ) : (
-                          <>
-                            Sunucu bağlantısı kurulamadı. Sayfayı yenileyip tekrar deneyin. Sorun devam ederse dizge yöneticinize bildirin.
-                          </>
-                        )}
                       </p>
                     </div>
                   </motion.div>

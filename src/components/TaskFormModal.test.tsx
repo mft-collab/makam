@@ -163,6 +163,23 @@ describe('TaskFormModal', () => {
       renderForm({ task: existingTask });
       expect(screen.getByRole('button', { name: 'GÜNCELLE' })).toBeInTheDocument();
     });
+
+    it('mevcut sorumlunun rolü düzenleyenin izinli listesinde değilse (ör. Manager, Admin\'e atanmış görevi düzenlerken) yine de seçenekte görünür ve uyarı gösterilir', () => {
+      // Manager'ın izinli rolleri ['Manager','Staff'] — 'Admin' yok. Eskiden bu
+      // durumda mevcut sorumlu <select> seçeneklerinden tamamen düşüyordu (bkz.
+      // kod denetimi).
+      const taskAssignedToAdmin: Task = { ...existingTask, assigneeId: 'admin-1' };
+      renderForm({ task: taskAssignedToAdmin, currentUser: manager });
+
+      expect(getAssigneeSelect()).toHaveValue('admin-1');
+      expect(within(getAssigneeSelect()).getByRole('option', { name: 'Müftü Bey' })).toBeInTheDocument();
+      expect(screen.getByText(/Mevcut sorumlu \(Müftü Bey\) sizin atayabileceğiniz rol dışında/)).toBeInTheDocument();
+    });
+
+    it('mevcut sorumlunun rolü düzenleyenin izinli listesindeyse uyarı gösterilmez', () => {
+      renderForm({ task: existingTask, currentUser: manager });
+      expect(screen.queryByText(/sizin atayabileceğiniz rol dışında/)).not.toBeInTheDocument();
+    });
   });
 
   it('İPTAL butonuna tıklanınca onClose çağrılır', async () => {

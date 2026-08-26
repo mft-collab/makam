@@ -28,9 +28,15 @@ service cloud.firestore {
       );
     }
 
+    // isAdmin() bir custom claim yolu da içerirken isManager() yalnızca
+    // Firestore dokümanına bakar — bu KASITLI bir asimetri, eksiklik değil:
+    // yalnızca Admin rolü için custom claim atanır (bkz. proje yönetim
+    // konsolu/Cloud Function tarafı); Manager'a hiçbir zaman claim
+    // atanmadığından burada bir claim kontrolü hiçbir işlem yapmaz, yalnızca
+    // ölü kod olurdu (bkz. kod denetimi — netlik için not düşüldü).
     function isManager() {
-      return isSignedIn() && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Manager';
     }
 

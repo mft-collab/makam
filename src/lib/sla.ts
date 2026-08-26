@@ -199,8 +199,12 @@ export function getRemainingTime(deadline: number, totalPausedTime: number = 0, 
   status: 'normal' | 'near-breach' | 'breached' | 'paused';
 } {
   const effectiveDeadline = deadline + totalPausedTime;
-  
-  if (pausedAt) {
+
+  // `pausedAt != null` — `if (pausedAt)` yanlış-değer kontrolü teorik olarak
+  // pausedAt === 0 (epoch 1970) durumunu "duraklatılmamış" sayardı; gerçekçi
+  // veri aralığında imkansıza yakın olsa da `pausedAt: number | null | undefined`
+  // tipiyle örtüşmeyen bir savunma programlama kusuruydu (bkz. kod denetimi).
+  if (pausedAt != null) {
     return { 
       timeLeftMs: effectiveDeadline - pausedAt, 
       status: 'paused' 

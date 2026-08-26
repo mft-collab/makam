@@ -117,6 +117,25 @@ export const useDataStore = create<DataState>()(
       name: 'makam-data-storage',
       storage: createJSONStorage(() => idbStorage),
       merge: mergeDataState,
+      // taskLimit BİLEREK bu listede yok: mergeDataState onu asla persisted
+      // state'ten geri yüklemiyor ("Daha Fazla Yükle" ile artırılan limit her
+      // sayfa yenilemesinde zaten 200'e sıfırlanıyor) — bu yüzden diske
+      // yazılması yalnızca hiç okunmayan, yanıltıcı bir alan biriktirmek
+      // anlamına geliyordu (bkz. kod denetimi). Davranışta değişiklik yok,
+      // yalnızca gereksiz disk kullanımı kaldırıldı. Fonksiyonlar (action'lar)
+      // zaten JSON.stringify tarafından otomatik elenir; burada yalnızca
+      // persist edilmesi ANLAMLI olan veri alanları AÇIKÇA listelenir.
+      partialize: (state) => ({
+        tasks: state.tasks,
+        users: state.users,
+        blockers: state.blockers,
+        stats: state.stats,
+        isHydrated: state.isHydrated,
+        hasLiveTasks: state.hasLiveTasks,
+        hasLiveUsers: state.hasLiveUsers,
+        hasLiveBlockers: state.hasLiveBlockers,
+        hasLiveStats: state.hasLiveStats,
+      }),
       onRehydrateStorage: () => (state) => {
         if (state) {
           state.setHydrated();

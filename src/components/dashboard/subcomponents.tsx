@@ -94,7 +94,9 @@ export const StatCard = ({ label, value, max, icon: Icon, color, onClick, index 
 // aynı kırmızı gibi algılanıyordu (bkz. kod denetimi). high artık ağır bir
 // amber tonunda (koyu/dolgun status-warning) — critical'in "dolu kırmızı"sı
 // tek başına kalıp gerçek bir eşik geçişi hissi verir.
-export const riskTone = {
+// Yalnızca bu dosya içinde (InterventionRow) kullanılıyor — dışa aktarılmasına
+// gerek yok (bkz. kod denetimi: gereksiz genişletilmiş public API yüzeyi).
+const riskTone = {
   low: 'bg-surface-glass text-text-muted border-surface-border',
   medium: 'bg-status-warning/10 text-status-warning border-status-warning/20',
   high: 'bg-status-warning/25 text-status-warning border-status-warning/50 font-semibold',
@@ -103,7 +105,7 @@ export const riskTone = {
   critical: 'bg-status-danger text-surface-base border-status-danger',
 };
 
-export const laneLabel: Record<InterventionItem['lane'], string> = {
+const laneLabel: Record<InterventionItem['lane'], string> = {
   crisis: 'Kriz',
   blocked: 'Engel',
   approval: 'Onay',

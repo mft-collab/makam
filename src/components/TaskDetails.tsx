@@ -3,7 +3,8 @@ import {
   Calendar, CheckCircle2, AlertTriangle, FileText,
   ChevronRight, Award, Zap, Activity, Info,
   Edit2, Trash2, ArrowRight, MessageSquare, History, ListChecks, Send, Plus,
-  GitCommit, Loader2, Hourglass, Clock, Building2, Tag, Flag, ExternalLink, Layers
+  GitCommit, Loader2, Hourglass, Clock, Building2, Tag, Flag, ExternalLink, Layers,
+  type LucideIcon
 } from 'lucide-react';
 import { Task, User as UserType, TaskBlocker, AuditLog, TaskStatus, TaskPriority } from '../types';
 import { STATUS_LABELS, STATUS_LABELS_SHORT, PRIORITY_LABELS, PRIORITY_BADGE_VARIANT, STATUS_BADGE_VARIANT } from '../constants';
@@ -23,6 +24,14 @@ import { AUDIT_FIELD_LABELS, formatAuditValue } from '../lib/auditLabels';
 export type { PrimaryAction } from './taskDetails/helpers';
 export { getPrimaryAction } from './taskDetails/helpers';
 export { TaskDetailsFooter } from './taskDetails/Footer';
+
+type TaskDetailsTabId = 'info' | 'checklist' | 'blockers' | 'subtasks' | 'history' | 'comments';
+interface TaskDetailsTab {
+  id: TaskDetailsTabId;
+  label: string;
+  icon: LucideIcon;
+  count: number;
+}
 
 export const TaskDetails = ({
   task, tasks, users, currentUser, blockers,
@@ -49,7 +58,7 @@ export const TaskDetails = ({
   onUpdateTask?: (data: Partial<Task>) => void;
   onDelegateTask?: (newAssigneeId: string) => void;
 }) => {
-  const [activeTab, setActiveTab] = useState<'info' | 'checklist' | 'blockers' | 'subtasks' | 'history' | 'comments'>('info');
+  const [activeTab, setActiveTab] = useState<TaskDetailsTabId>('info');
   const [newComment, setNewComment] = useState('');
   const [blockerReason, setBlockerReason] = useState('');
   const [blockerSeverity, setBlockerSeverity] = useState<TaskPriority>('Medium');
@@ -339,14 +348,14 @@ export const TaskDetails = ({
             // #10 - Denetim izi yalnızca Admin/Manager rollerine görünür
             ...(isAdmin || isManager ? [{ id: 'history', label: 'Denetim İzi', icon: History, count: 0 }] : []),
             { id: 'comments', label: 'Yorumlar', icon: MessageSquare, count: task.comments?.length ?? 0 },
-          ]).map((tab) => (
+          ] as TaskDetailsTab[]).map((tab) => (
             <button
               key={tab.id}
               id={`task-tab-${tab.id}`}
               role="tab"
               aria-selected={activeTab === tab.id}
               aria-controls={`task-tabpanel-${tab.id}`}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id)}
               className={cn(
                 'px-6 py-4 text-[10px] font-medium uppercase tracking-[0.2em] transition-all border-b-2 whitespace-nowrap relative flex items-center gap-2',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-inset',

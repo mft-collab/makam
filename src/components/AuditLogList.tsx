@@ -78,13 +78,17 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
   const tasksById = useMemo(() => new Map(tasks.map(t => [t.id, t])), [tasks]);
   const usersById = useMemo(() => new Map(users.map(u => [u.uid, u])), [users]);
 
-  const filteredLogs = logsState.filter(log => {
+  // tasksById/usersById ile AYNI memoizasyon disiplini — sayfa büyüdükçe
+  // (Daha Fazla Yükle) her render'da tüm listenin yeniden filtrelenmesini
+  // önler (bkz. kod denetimi: eskiden yalnızca Map kurulumları memoize
+  // ediliyordu, bu filtre değildi).
+  const filteredLogs = useMemo(() => logsState.filter(log => {
     const isStatusChange = !log.changes && log.newValue !== undefined;
     const matchType = selectedType === 'ALL' ||
       (selectedType === 'STATUS' && isStatusChange) ||
       (selectedType === 'FIELD' && (log.changes !== undefined || (log.newValue === undefined && log.oldValue === undefined)));
     return matchType;
-  });
+  }), [logsState, selectedType]);
 
   return (
     <div className="flex flex-col gap-5 py-4 max-w-[1440px] mx-auto font-sans">

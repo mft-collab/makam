@@ -474,7 +474,7 @@ export default function App() {
 
       <div className="min-h-screen bg-surface-base text-text-body selection:bg-executive-blue/10 font-sans">
         <OfflineBanner isOffline={isOffline} queueLength={offlineQueueLength} />
-        {user && <NotificationPrompt userId={user.uid} onComplete={() => {}} />}
+        {user && <NotificationPrompt userId={user.uid} />}
 
         {/* Toast Bölgesi */}
         <div
@@ -540,7 +540,7 @@ export default function App() {
                         isFiltered={globalFocusDept !== 'ALL'}
                       />
                     )}
-                    {Boolean(activeTab === 'tasks') && (
+                    {activeTab === 'tasks' && (
                       <TaskBoard
                         tasks={filteredTasksByFocus} users={filteredUsersByFocus} currentUser={user}
                         onAddTask={() => { setParentTaskId(undefined); setIsCreateModalOpen(true); }}
@@ -548,7 +548,7 @@ export default function App() {
                         isLoading={isDataLoading}
                       />
                     )}
-                    {Boolean(activeTab === 'blockers') && (
+                    {activeTab === 'blockers' && (
                       <BlockerList
                         tasks={filteredTasksByFocus} blockers={filteredBlockersByFocus} users={filteredUsersByFocus}
                         isAdmin={user?.role === 'Admin' || user?.role === 'Manager'}
@@ -560,7 +560,7 @@ export default function App() {
                         isLoading={isDataLoading}
                       />
                     )}
-                    {Boolean(activeTab === 'team') && (
+                    {activeTab === 'team' && (
                       <TeamList
                         users={filteredUsersByFocus} tasks={filteredTasksByFocus} currentUser={user}
                         onUpdateUser={updateUserRole}
@@ -569,13 +569,13 @@ export default function App() {
                         isLoading={isDataLoading}
                       />
                     )}
-                    {Boolean(activeTab === 'reports') && <Reports tasks={filteredTasksByFocus} users={filteredUsersByFocus} blockers={filteredBlockersByFocus} setActiveTab={setActiveTab} isLoading={isDataLoading} />}
-                    {Boolean(activeTab === 'audit') && (
+                    {activeTab === 'reports' && <Reports tasks={filteredTasksByFocus} users={filteredUsersByFocus} blockers={filteredBlockersByFocus} setActiveTab={setActiveTab} isLoading={isDataLoading} />}
+                    {activeTab === 'audit' && (
                       <AuditLogList
                         tasks={filteredTasksByFocus} users={filteredUsersByFocus}
                       />
                     )}
-                    {Boolean(activeTab === 'settings') && (
+                    {activeTab === 'settings' && (
                       <Settings tasks={tasks} users={users} blockers={blockers} triggerToast={triggerToast} currentUser={user} isLoading={isDataLoading} />
                     )}
                   </Suspense>
