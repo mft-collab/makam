@@ -112,13 +112,23 @@ export default defineConfig(({ mode }) => {
           // grafiğini etkilemediği için static-import regresyonunu geri getirmez.
           chunkFileNames: (chunkInfo) => {
             const ids = chunkInfo.moduleIds ?? [];
-            // Yalnızca SAF vendor chunk'ları yeniden adlandırılır (tüm modülleri
-            // node_modules altında olanlar) — Reports/Dashboard gibi rota
-            // chunk'ları recharts'tan doğrudan import ettiği için modül
-            // listesinde recharts geçebilir, ama bunlar kendi route chunk
-            // isimlerini korumalı, yanlışlıkla vendor-charts'a eşleşmemeli.
-            const isPureVendorChunk = ids.length > 0 && ids.every(id => id.includes('node_modules'));
-            if (isPureVendorChunk && ids.some(id => /[\\/]node_modules[\\/]recharts[\\/]/.test(id))) {
+            // Yalnızca Reports/Dashboard'un KENDİ route chunk'ları (lazy()'nin
+            // dynamic-import facade'i) hariç tutulur — bunlar recharts'ı doğrudan
+            // import ettiği için modül listesinde recharts geçebilir ama kendi
+            // route isimlerini korumalı, yanlışlıkla vendor-charts'a eşleşmemeli.
+            // Eskiden bunun proxy'si "tüm modüller node_modules altında mı"
+            // (saflık) kontrolüydü, ama Reports hem Dashboard'un hem kendisinin
+            // kullandığı bir helper (dashboard/helpers.ts, computeCompletionRatePercent
+            // için) import etmeye başlayınca, o helper recharts'la AYNI iki route'tan
+            // erişim kümesine sahip olduğundan Rollup ikisini tek bir paylaşımlı
+            // chunk'ta birleştirdi — chunk artık "saf" değildi ve vendor-charts
+            // yeniden adlandırması sessizce devre dışı kaldı (bkz. kod denetimi).
+            // Doğrudan yapısal ayrım daha sağlamdır: route facade'leri Rollup'ta
+            // isDynamicEntry=true olarak işaretlenir, paylaşımlı (otomatik
+            // bölünmüş) vendor chunk'lar değildir — hangi app modüllerinin
+            // yanına sürüklendiğinden bağımsız çalışır.
+            const isRouteFacadeChunk = chunkInfo.isDynamicEntry || chunkInfo.isEntry;
+            if (!isRouteFacadeChunk && ids.some(id => /[\\/]node_modules[\\/]recharts[\\/]/.test(id))) {
               return 'assets/vendor-charts-[hash].js';
             }
             // jspdf'in exportService.ts dışında statik importer'ı yok (yalnızca
