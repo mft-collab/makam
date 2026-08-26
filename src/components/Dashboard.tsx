@@ -429,8 +429,18 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
             filteredStatTasks.map(task => (
               <div
                 key={task.id}
+                role="button"
+                tabIndex={0}
+                aria-label={task.title}
                 className="flex items-center gap-3 p-3 bg-surface-elevated border border-surface-border rounded-xl group cursor-pointer hover:bg-makam-glass hover:border-executive-blue/10 transition-all duration-300 shadow-sm"
                 onClick={() => { setSelectedStatCategory(null); onViewTask?.(task); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedStatCategory(null);
+                    onViewTask?.(task);
+                  }
+                }}
               >
                 <div className={cn(
                   'w-8 h-8 rounded-xl flex items-center justify-center border flex-shrink-0',

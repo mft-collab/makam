@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Download, AlertCircle, CheckCircle2, Database, RotateCcw, ShieldCheck, Smartphone, Bell, Settings as SettingsIcon, Clock } from 'lucide-react';
 import { Task, User, TaskBlocker } from '../types';
 import { cn, downloadBlob } from '../lib/utils';
+import { createAudioContext } from '../lib/audio';
 import { taskService } from '../services/taskService';
 import { auditLogService } from '../services/auditLogService';
 import { settingsService } from '../services/settingsService';
@@ -162,8 +163,9 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
   const handleTestNotifications = async () => {
     // 1. Play the synthesis sound instantly
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      
+      const audioCtx = createAudioContext();
+      if (!audioCtx) throw new Error('AudioContext desteklenmiyor');
+
       // Auto-resume context on click if suspended by browser autoplay policy
       if (audioCtx.state === 'suspended') {
         const resumeAudio = () => {

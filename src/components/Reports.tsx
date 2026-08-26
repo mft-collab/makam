@@ -308,7 +308,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                     color: 'var(--color-text-heading)'
                   }}
                   itemStyle={{ color: 'var(--color-text-body)' }}
-                  formatter={(v: any) => v !== null ? [`%${v}`, 'SLA Uyum'] : ['Veri yok', '']}
+                  formatter={(v) => v !== null ? [`%${v}`, 'SLA Uyum'] : ['Veri yok', '']}
                 />
                 <Line dataKey="oran" stroke="#C5A059" strokeWidth={2} dot={{ r: 3, fill: '#C5A059' }}
                   activeDot={{ r: 5 }} connectNulls />
@@ -360,7 +360,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                       color: 'var(--color-text-heading)'
                     }}
                     itemStyle={{ color: 'var(--color-text-body)' }}
-                    formatter={(v: any, name: any) => [v, name]}
+                    formatter={(v, name) => [v, name]}
                   />
                   <Legend iconSize={8} iconType="circle"
                     formatter={(v) => <span style={{ fontSize: 9, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>{v}</span>}

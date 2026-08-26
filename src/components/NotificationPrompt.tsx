@@ -55,8 +55,8 @@ export const NotificationPrompt: React.FC<NotificationPromptProps> = ({ userId }
             const result = Notification.requestPermission((perm) => {
               resolve(perm);
             });
-            if (result && typeof (result as any).then === 'function') {
-              (result as any).then(resolve);
+            if (result && typeof result.then === 'function') {
+              result.then(resolve);
             }
           } catch {
             resolve(typeof Notification !== 'undefined' ? Notification.permission : 'default');

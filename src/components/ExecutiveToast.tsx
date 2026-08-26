@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { X, Info, CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { createAudioContext } from '../lib/audio';
 import { motion } from 'motion/react';
 
 export interface ToastData {
@@ -38,7 +39,8 @@ export const ExecutiveToast: React.FC<ExecutiveToastProps> = ({ toast, onClose, 
     // fırlatabilir, bu yüzden sessizce yutulur.
     let audioCtx: AudioContext | null = null;
     try {
-      audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioCtx = createAudioContext();
+      if (!audioCtx) throw new Error('AudioContext desteklenmiyor');
       const oscillator = audioCtx.createOscillator();
       const gainNode = audioCtx.createGain();
 
@@ -82,18 +84,30 @@ export const ExecutiveToast: React.FC<ExecutiveToastProps> = ({ toast, onClose, 
   };
 
   return (
-    <div 
+    <div
       role="alert"
       aria-live={toast.type === 'danger' ? 'assertive' : 'polite'}
       aria-atomic="true"
+      tabIndex={0}
       className={cn(
         "pointer-events-auto w-full max-w-md overflow-hidden rounded-2xl shadow-2xl",
         "bg-makam-glass backdrop-blur-[40px] border border-surface-border",
         "transform transition-all duration-700 ease-in-out",
         "animate-in slide-in-from-right-8 fade-in-0",
-        "hover:bg-makam-glass cursor-pointer group"
+        "hover:bg-makam-glass cursor-pointer group",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue"
       )}
       onClick={handleToastClick}
+      onKeyDown={(e) => {
+        // e.target === e.currentTarget: alttaki "kapat" butonuna Enter/Space
+        // basılınca native click sentezlenip yukarı köpüren keydown, buradan
+        // tekrar handleToastClick tetiklemesin (aynı anda hem kapatıp hem
+        // göreve gitmesin) — yalnızca doğrudan bu div odaktayken tetiklenir.
+        if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {
+          e.preventDefault();
+          handleToastClick();
+        }
+      }}
     >
       <div className="p-6">
         <div className="flex items-start gap-5">

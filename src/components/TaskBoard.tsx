@@ -41,7 +41,16 @@ function MobileTaskRow({ index, style, ariaAttributes, tasks, usersById, onViewT
   return (
     <div style={style} {...ariaAttributes}>
       <div
+        role="button"
+        tabIndex={0}
+        aria-label={task.title}
         onClick={() => onViewTask(task)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onViewTask(task);
+          }
+        }}
         className={cn(
           'flex items-start gap-3 p-3.5 h-full box-border cursor-pointer hover:bg-makam-glass transition-all group relative overflow-hidden border-b border-makam-border/30',
           isCrisis && 'bg-status-danger/[0.04]'
@@ -85,7 +94,14 @@ function DesktopTaskRow({ index, style, ariaAttributes, tasks, usersById, onView
     <div
       {...ariaAttributes}
       role="row"
+      tabIndex={0}
       onClick={() => onViewTask(task)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onViewTask(task);
+        }
+      }}
       style={{ ...style, gridTemplateColumns: DESKTOP_GRID_TEMPLATE }}
       className={cn(
         'grid items-center border-b border-l-2 border-transparent border-b-makam-border/30 cursor-pointer transition-colors duration-200 hover:bg-makam-glass group',
