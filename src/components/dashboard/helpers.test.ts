@@ -21,7 +21,9 @@ describe('computeStats — "Bekleyen" kartı, globalStats ve yerel hesap yollar�
   it('globalStats yolu (Admin/Müdür varsayılan pano): ASSIGNED + PENDING_DELEGATION toplamını sayar', () => {
     // Eskiden yalnızca status_ASSIGNED sayılıyordu, status_PENDING_DELEGATION
     // (izin/mazeret devri bekleyen görevler) bu kartta görünmüyordu.
-    const stats = computeStats([], now, { ...emptyGlobalStats, status_ASSIGNED: 3, status_PENDING_DELEGATION: 2 }, false, false);
+    // totalTasks alt kalemlerin toplamıyla tutarlı verildi (5) — aksi halde
+    // aşağıdaki drift-fallback korumasına takılıp yerel (boş) hesaba düşer.
+    const stats = computeStats([], now, { ...emptyGlobalStats, status_ASSIGNED: 3, status_PENDING_DELEGATION: 2, totalTasks: 5 }, false, false);
     expect(stats.waiting).toBe(5);
   });
 
@@ -57,6 +59,45 @@ describe('computeStats — "Bekleyen" kartı, globalStats ve yerel hesap yollar�
     // isFiltered=true olduğundan hiç okunmamalı.
     const stats = computeStats(tasks, now, { ...emptyGlobalStats, status_ASSIGNED: 999 }, true, false);
     expect(stats.waiting).toBe(1);
+  });
+});
+
+describe('computeStats — globalStats sayaç sapması (drift) korunumu', () => {
+  // Firestore'daki totalTasks/status_X sayaçları birbirinden bağımsız
+  // increment() çağrılarıyla güncellenir; eşzamanlılık/yeniden deneme
+  // senaryolarında birbirinden kopabilirler (bkz. taskService.ts,
+  // deleteTask'taki oku-sonra-yaz aralığı). Bu durumda panoda "7 tamamlanan /
+  // 6 toplam" gibi imkânsız bir görünüm oluşuyordu (bkz. kod denetimi).
+  it('status_COMPLETED, totalTasks\'ı aştığında (sayaç sapması) globalStats yok sayılır, yerel görev listesinden hesaplanır', () => {
+    const tasks: Task[] = [
+      { ...baseTask, id: 't1', status: 'COMPLETED' },
+      { ...baseTask, id: 't2', status: 'COMPLETED' },
+      { ...baseTask, id: 't3', status: 'IN_PROGRESS' },
+    ];
+    // Sapmış sayaç: status_COMPLETED (7) totalTasks'tan (6) büyük — gerçek
+    // dünyada asla tutarlı olamaz.
+    const driftedGlobalStats: GlobalStats = { ...emptyGlobalStats, totalTasks: 6, status_COMPLETED: 7 };
+    const stats = computeStats(tasks, now, driftedGlobalStats, false, false);
+
+    // Sapmış sayaç yerine yerel (canlı, doğru) görev listesinden hesaplanmalı.
+    expect(stats.total).toBe(tasks.length);
+    expect(stats.completed).toBe(2);
+    expect(stats.completed).toBeLessThanOrEqual(stats.total);
+  });
+
+  it('alt kalemlerin toplamı totalTasks\'ı aştığında da (tek başına hiçbir kalem total\'ı geçmese bile) yerel hesaba düşer', () => {
+    const tasks: Task[] = [
+      { ...baseTask, id: 't1', status: 'ASSIGNED' },
+      { ...baseTask, id: 't2', status: 'IN_PROGRESS' },
+    ];
+    const driftedGlobalStats: GlobalStats = {
+      ...emptyGlobalStats, totalTasks: 2, status_ASSIGNED: 2, status_IN_PROGRESS: 2,
+    };
+    const stats = computeStats(tasks, now, driftedGlobalStats, false, false);
+
+    expect(stats.total).toBe(tasks.length);
+    expect(stats.waiting).toBe(1);
+    expect(stats.inProgress).toBe(1);
   });
 });
 

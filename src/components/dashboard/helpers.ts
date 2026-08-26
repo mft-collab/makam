@@ -92,6 +92,16 @@ export const computeStats = (
   const isInReview  = (t: Task) => t.status === 'AWAITING_APPROVAL';
   const isInProgress= (t: Task) => t.status === 'IN_PROGRESS';
 
+  const localStats = (): DashboardStats => ({
+    total:      scopeTasks.length,
+    waiting:    scopeTasks.filter(isWaiting).length,
+    inProgress: scopeTasks.filter(isInProgress).length,
+    blocked:    scopeTasks.filter(isBlocked).length,
+    inReview:   scopeTasks.filter(isInReview).length,
+    completed:  scopeTasks.filter(isCompleted).length,
+    crisis:     crisisCount,
+  });
+
   // globalStats, tüm organizasyona ait Firestore ön-hesap değeridir.
   // Odak filtresi aktifse (isFiltered) ya da pano kişisel kapsamdaysa,
   // scopeTasks[] zaten bir alt küme olduğundan globalStats kullanmak
@@ -100,31 +110,35 @@ export const computeStats = (
     // Firestore increment() sayaçları teorik olarak (eşzamanlılık/veri
     // tutarsızlığı durumunda) negatife düşebilir — panoda negatif sayı
     // göstermemek için sıfırda kırp.
-    return {
-      total:      Math.max(0, globalStats.totalTasks || scopeTasks.length),
-      // "Bekleyen" hem ASSIGNED hem PENDING_DELEGATION'ı kapsar (aşağıdaki
-      // yerel `isWaiting` ile AYNI tanım) — eskiden yalnızca ASSIGNED
-      // sayılıyordu, izin/mazeret devri bekleyen görevler bu kartta
-      // (Admin/Müdür'ün varsayılan, filtresiz pano görünümünde) sessizce
-      // sayılmıyordu (bkz. kod denetimi).
-      waiting:    Math.max(0, (globalStats.status_ASSIGNED || 0) + (globalStats.status_PENDING_DELEGATION || 0)),
-      inProgress: Math.max(0, globalStats.status_IN_PROGRESS || 0),
-      blocked:    Math.max(0, globalStats.status_BLOCKED || 0),
-      inReview:   Math.max(0, globalStats.status_AWAITING_APPROVAL || 0),
-      completed:  Math.max(0, globalStats.status_COMPLETED || 0),
-      crisis:     crisisCount,
-    };
+    const total      = Math.max(0, globalStats.totalTasks || scopeTasks.length);
+    // "Bekleyen" hem ASSIGNED hem PENDING_DELEGATION'ı kapsar (aşağıdaki
+    // yerel `isWaiting` ile AYNI tanım) — eskiden yalnızca ASSIGNED
+    // sayılıyordu, izin/mazeret devri bekleyen görevler bu kartta
+    // (Admin/Müdür'ün varsayılan, filtresiz pano görünümünde) sessizce
+    // sayılmıyordu (bkz. kod denetimi).
+    const waiting    = Math.max(0, (globalStats.status_ASSIGNED || 0) + (globalStats.status_PENDING_DELEGATION || 0));
+    const inProgress = Math.max(0, globalStats.status_IN_PROGRESS || 0);
+    const blocked    = Math.max(0, globalStats.status_BLOCKED || 0);
+    const inReview   = Math.max(0, globalStats.status_AWAITING_APPROVAL || 0);
+    const completed  = Math.max(0, globalStats.status_COMPLETED || 0);
+
+    // `totalTasks` ve `status_X` alanları Firestore'da BİRBİRİNDEN BAĞIMSIZ
+    // increment() çağrılarıyla güncellenir (bkz. taskService.ts) — tek bir
+    // atomik yazıma bağlı değildirler. deleteTask'taki oku-sonra-yaz aralığı
+    // (görev durumu okunduktan sonra ayrı bir batch'te düşülüyor), eşzamanlı
+    // durum-geçişi yarışları ya da yeniden denenen offline mutasyonlar bu
+    // sayaçları birbirinden koparabilir — panoda "7 tamamlanan / 6 toplam"
+    // gibi matematiksel olarak imkânsız bir görünüme yol açar (bkz. kod
+    // denetimi). Alt kalemlerin toplamı total'ı aşıyorsa (ki bu, herhangi bir
+    // tek kalemin total'ı aşmasını da kapsar) sayaçlara güvenilmez; o anki
+    // gerçek durumu yansıtan yerel (canlı) görev listesinden hesaplanır.
+    const sumOfParts = waiting + inProgress + blocked + inReview + completed;
+    if (sumOfParts <= total) {
+      return { total, waiting, inProgress, blocked, inReview, completed, crisis: crisisCount };
+    }
   }
 
-  return {
-    total:      scopeTasks.length,
-    waiting:    scopeTasks.filter(isWaiting).length,
-    inProgress: scopeTasks.filter(isInProgress).length,
-    blocked:    scopeTasks.filter(isBlocked).length,
-    inReview:   scopeTasks.filter(isInReview).length,
-    completed:  scopeTasks.filter(isCompleted).length,
-    crisis:     crisisCount,
-  };
+  return localStats();
 };
 
 export interface DashboardChartDay {
