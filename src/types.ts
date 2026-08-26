@@ -102,9 +102,20 @@ export type TaskBlocker = z.infer<typeof TaskBlockerSchema>;
 // kod denetimi: eskiden bu doküman `as any` ile ham cast ediliyordu). Tüm
 // alanlar .default(0) ile eksik/bozuk bir sayaç alanının uygulamayı hiç
 // çökertmemesini, yalnızca 0'a düşmesini sağlar.
+// status_PENDING_DELEGATION burada EKSİKTİ (bkz. kod denetimi): taskService.ts
+// (ve scheduledAudit.ts) `status_${task.status}` ile TAMAMEN dinamik/jenerik
+// increment yaptığından Firestore'daki dokümanda bu alan zaten doğru
+// tutuluyordu, ama z.object() varsayılan olarak şemada tanımlı OLMAYAN
+// alanları sessizce STRİPLEDİĞİNDEN, bu sayaç validateOrPassthrough'tan hiç
+// geçemiyordu. Sonuç: computeStats'ın globalStats dalı (Admin/Müdür'ün
+// varsayılan, filtresiz pano görünümü) "Bekleyen" kartında yalnızca ASSIGNED'ı
+// sayıyor, PENDING_DELEGATION'daki (izin/mazeret devri bekleyen) görevleri
+// görünmez kılıyordu — aynı kartın yerel (Staff/filtreli) hesap yolu ikisini
+// de sayıyordu, iki yol arasında sessiz bir tutarsızlık vardı.
 export const GlobalStatsSchema = z.object({
   totalTasks: z.number().default(0),
   status_ASSIGNED: z.number().default(0),
+  status_PENDING_DELEGATION: z.number().default(0),
   status_IN_PROGRESS: z.number().default(0),
   status_AWAITING_APPROVAL: z.number().default(0),
   status_COMPLETED: z.number().default(0),

@@ -18,6 +18,7 @@ const idbStorage: StateStorage = {
 export interface GlobalStats {
   totalTasks: number;
   status_ASSIGNED: number;
+  status_PENDING_DELEGATION: number;
   status_IN_PROGRESS: number;
   status_AWAITING_APPROVAL: number;
   status_COMPLETED: number;

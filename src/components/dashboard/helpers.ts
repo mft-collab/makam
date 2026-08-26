@@ -102,7 +102,12 @@ export const computeStats = (
     // göstermemek için sıfırda kırp.
     return {
       total:      Math.max(0, globalStats.totalTasks || scopeTasks.length),
-      waiting:    Math.max(0, globalStats.status_ASSIGNED || 0),
+      // "Bekleyen" hem ASSIGNED hem PENDING_DELEGATION'ı kapsar (aşağıdaki
+      // yerel `isWaiting` ile AYNI tanım) — eskiden yalnızca ASSIGNED
+      // sayılıyordu, izin/mazeret devri bekleyen görevler bu kartta
+      // (Admin/Müdür'ün varsayılan, filtresiz pano görünümünde) sessizce
+      // sayılmıyordu (bkz. kod denetimi).
+      waiting:    Math.max(0, (globalStats.status_ASSIGNED || 0) + (globalStats.status_PENDING_DELEGATION || 0)),
       inProgress: Math.max(0, globalStats.status_IN_PROGRESS || 0),
       blocked:    Math.max(0, globalStats.status_BLOCKED || 0),
       inReview:   Math.max(0, globalStats.status_AWAITING_APPROVAL || 0),
