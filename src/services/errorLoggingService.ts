@@ -33,7 +33,7 @@ export interface ErrorLogEntry {
   userAgent: string;
 }
 
-const APP_VERSION = '2.2.0';
+const APP_VERSION = '2.3.0';
 
 /**
  * Firestore'a yapılandırılmış hata kaydı yazar.

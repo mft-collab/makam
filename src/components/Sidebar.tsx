@@ -107,7 +107,7 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
               (~1.14:1 kontrast, axe-core authenticated e2e testi bulgusu).
               Login/AboutModal/App.tsx'teki gibi çözümlenmiş temayı izliyor. */}
           <Logo variant={resolvedTheme} size="md" className="drop-shadow-[0_4px_12px_rgba(197,160,89,0.12)]" />
-          <div className="absolute -right-2 -top-2 bg-executive-gold text-brand-obsidian text-[8px] font-bold px-1.5 py-0.5 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300">v2.2.0</div>
+          <div className="absolute -right-2 -top-2 bg-executive-gold text-brand-obsidian text-[8px] font-bold px-1.5 py-0.5 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300">v2.3.0</div>
         </button>
       </div>
 
@@ -164,7 +164,7 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
           onClick={() => setIsAboutModalOpen(true)}
           className="mt-2 text-[10px] text-text-tertiary/60 hover:text-executive-gold transition-colors font-medium tracking-widest uppercase text-center"
         >
-          MAKAM v2.2.0
+          MAKAM v2.3.0
         </button>
       </div>
 
