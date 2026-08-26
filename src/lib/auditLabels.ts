@@ -1,6 +1,6 @@
-import { STATUS_LABELS, PRIORITY_LABELS } from '../constants';
+import { STATUS_LABELS, PRIORITY_LABELS, ROLE_LABELS } from '../constants';
 import { formatDate } from './utils';
-import type { TaskStatus, TaskPriority, User } from '../types';
+import type { TaskStatus, TaskPriority, User, UserRole } from '../types';
 
 // deadline/createdAt/updatedAt/completedAt gibi alanlar Firestore'da ham epoch
 // milisaniye olarak saklanır — denetim izinde biçimlendirilmeden gösterilirse
@@ -21,7 +21,16 @@ export const AUDIT_FIELD_LABELS: Record<string, string> = {
   assigneeId: 'Sorumlu', coordinatorId: 'İrtibatlı',
   priority: 'Öncelik', deadline: 'Son Tarih', evidence: 'Kanıt',
   deleted: 'Silindi', tags: 'Etiketler', estimatedHours: 'Tahmini Süre',
-  checklist: 'Kontrol Listesi'
+  checklist: 'Kontrol Listesi',
+  // userService.ts'in updateUser'ı role/departmentId/email/fullName için de
+  // `changes` nesnesi yazıyor (bkz. userService.ts), ama bu harita bu dört
+  // alanı hiç tanımlamıyordu — AuditLogList/TeamList/TaskDetails'teki diff
+  // görünümü `field in AUDIT_FIELD_LABELS` kontrolüyle filtrelendiğinden, bir
+  // rol/departman/e-posta değişikliği denetim izinde SESSİZCE hiç görünmüyordu
+  // (bkz. tasarım denetimi — yetki-kritik değişikliklerin görünürlüğü kontrol
+  // edilirken bulundu). Şimdi diğer görev alanlarıyla aynı diff mekanizmasından
+  // geçiyorlar.
+  role: 'Rol', departmentId: 'Departman', email: 'E-posta', fullName: 'Ad Soyad'
 };
 
 // Denetim izindeki eski/yeni değerleri okunabilir Türkçe metne çevirir.
@@ -42,6 +51,9 @@ export const formatAuditValue = (field: string, value: unknown, users?: User[]):
   }
   if (field === 'status' && typeof value === 'string' && value in STATUS_LABELS) {
     return STATUS_LABELS[value as TaskStatus];
+  }
+  if (field === 'role' && typeof value === 'string' && value in ROLE_LABELS) {
+    return ROLE_LABELS[value as UserRole];
   }
   if (field === 'deleted') {
     return (value === true || value === 'true') ? 'Evet' : 'Hayır';

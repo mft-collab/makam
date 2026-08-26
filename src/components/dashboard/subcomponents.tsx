@@ -168,7 +168,14 @@ export interface PerformanceRowProps {
 }
 
 export const PerformanceRow = ({ profile, index = 0 }: PerformanceRowProps) => {
-  const loadTone = profile.loadScore >= 75
+  // Pil rengi eskiden yalnızca iş hacmine (loadScore) bakıyordu — SLA %0 olan
+  // bir kişi bile düşük aktif görev sayısı yüzünden yeşil pil taşıyabiliyordu
+  // (bkz. tasarım denetimi, canlı ortamda doğrulandı). completedCount > 0
+  // şartı bilinçli: hiç tamamlanmış görevi olmayan biri için
+  // onTimeCompletionRate anlamsız bir varsayılan olan %100'e düşer (bkz.
+  // lib/executiveMetrics.ts) — bu, sahte bir "kritik" alarmı tetiklememeli.
+  const hasSlaAlarm = profile.completedCount > 0 && profile.onTimeCompletionRate < 50;
+  const loadTone = hasSlaAlarm || profile.loadScore >= 75
     ? 'text-status-danger bg-status-danger/10 border-status-danger/20'
     : profile.loadScore >= 45
       ? 'text-status-warning bg-status-warning/10 border-status-warning/20'
@@ -189,7 +196,7 @@ export const PerformanceRow = ({ profile, index = 0 }: PerformanceRowProps) => {
           <span>{profile.completedCount} icra</span>
           <span>{profile.overdueCount} gecikmiş</span>
           <span>{profile.blockedCount} engelli</span>
-          <span>SLA %{profile.onTimeCompletionRate}</span>
+          <span className={hasSlaAlarm ? 'text-status-danger font-bold' : undefined}>SLA %{profile.onTimeCompletionRate}</span>
         </div>
       </div>
       <div className={cn('w-12 h-10 rounded-xl border flex flex-col items-center justify-center', loadTone)}>

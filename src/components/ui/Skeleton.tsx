@@ -76,6 +76,56 @@ export const TableRowSkeleton = ({ cols = 5 }: { cols?: number }) => (
 );
 
 /**
+ * AuditLogRowSkeleton / AuditLogListSkeleton — Denetim İzleri yükleme iskeleti
+ *
+ * Diğer altı modülün (Dashboard/Reports/TeamList/BlockerList/Settings/
+ * TaskBoard) HER BİRİNDE o modülün gerçek satır/kart yapısını taklit eden
+ * özel bir iskelet varken, Denetim İzleri yalnızca genel bir Loader2 spinner'ı
+ * kullanıyordu — tasarım sisteminde bu tek istisnaydı (bkz. tasarım denetimi).
+ * AuditLogList.tsx'teki gerçek satırla AYNI üç sütunlu (Aktör / Talimat /
+ * Değişiklik) yapıyı taklit eder.
+ */
+export const AuditLogRowSkeleton = () => (
+  <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-xl">
+    <div className="flex items-center gap-6 flex-1">
+      <Skeleton className="h-8 w-8" rounded="full" />
+      <div className="flex flex-col gap-1.5">
+        <Skeleton className="h-3 w-32" />
+        <Skeleton className="h-2.5 w-24" />
+      </div>
+    </div>
+    <div className="flex flex-col gap-1 flex-[1.2] pt-2.5 sm:pt-0 sm:pl-4">
+      <Skeleton className="h-2.5 w-20" />
+      <Skeleton className="h-3 w-40" />
+    </div>
+    <div className="flex flex-col gap-2 flex-[1.6] pt-2.5 sm:pt-0 sm:pl-4">
+      <Skeleton className="h-2.5 w-28" />
+      <Skeleton className="h-3 w-full max-w-[220px]" />
+    </div>
+  </div>
+);
+
+export const AuditLogListSkeleton = () => (
+  <div className="flex flex-col gap-5 py-4 max-w-[1440px] mx-auto font-sans" aria-label="Denetim izleri yükleniyor..." role="status">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-executive-blue/[0.04]">
+      <div className="flex items-center gap-2.5">
+        <Skeleton className="h-8 w-8" rounded="lg" />
+        <div className="flex flex-col gap-1.5">
+          <Skeleton className="h-3 w-32" />
+          <Skeleton className="h-2.5 w-20" />
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-9 w-40" rounded="lg" />)}
+      </div>
+    </div>
+    <div className="flex flex-col gap-5">
+      {[...Array(5)].map((_, i) => <AuditLogRowSkeleton key={i} />)}
+    </div>
+  </div>
+);
+
+/**
  * DashboardSkeleton — Dashboard tam sayfa yükleme iskeleti
  */
 export const DashboardSkeleton = () => (

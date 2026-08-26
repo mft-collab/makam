@@ -182,13 +182,21 @@ export interface StatusDistributionRow {
   count: number;
 }
 
+// Işık modda ayarlanmış sabit hex renkler (#B38F46/#A8201A) karanlık modda
+// solgunlaşıyordu — yalnızca IN_PROGRESS/COMPLETED CSS değişkeni kullanıp
+// otomatik tonlanıyordu, diğer dördü tema değişikliğine hiç tepki vermiyordu
+// (bkz. tasarım denetimi, canlı ortamda ışık/karanlık karşılaştırmasıyla
+// doğrulandı). AWAITING_APPROVAL/BLOCKED artık MEVCUT semantik status
+// token'larını (warning/danger) yeniden kullanıyor — "onayda"/"engellendi"
+// kavramları zaten bu ikisiyle birebir örtüşüyor. ASSIGNED/PENDING_DELEGATION
+// için index.css'e --chart-neutral/--chart-delegated eklendi (bkz. orada).
 export const computeStatusDistribution = (filteredTasks: Task[]): StatusDistributionRow[] => {
   const map: Record<string, StatusDistributionRow> = {
-    ASSIGNED:             { label: STATUS_LABELS_SHORT.ASSIGNED,           color: '#CBD5E1', count: 0 },
-    PENDING_DELEGATION:   { label: STATUS_LABELS_SHORT.PENDING_DELEGATION, color: '#A78BFA', count: 0 },
+    ASSIGNED:             { label: STATUS_LABELS_SHORT.ASSIGNED,           color: 'var(--chart-neutral)', count: 0 },
+    PENDING_DELEGATION:   { label: STATUS_LABELS_SHORT.PENDING_DELEGATION, color: 'var(--chart-delegated)', count: 0 },
     IN_PROGRESS:          { label: STATUS_LABELS_SHORT.IN_PROGRESS,        color: 'var(--color-status-info)', count: 0 },
-    AWAITING_APPROVAL:    { label: STATUS_LABELS_SHORT.AWAITING_APPROVAL,  color: '#B38F46', count: 0 },
-    BLOCKED:              { label: STATUS_LABELS_SHORT.BLOCKED,            color: '#A8201A', count: 0 },
+    AWAITING_APPROVAL:    { label: STATUS_LABELS_SHORT.AWAITING_APPROVAL,  color: 'var(--color-status-warning)', count: 0 },
+    BLOCKED:              { label: STATUS_LABELS_SHORT.BLOCKED,            color: 'var(--color-status-danger)', count: 0 },
     COMPLETED:            { label: STATUS_LABELS_SHORT.COMPLETED,          color: 'var(--chart-completed)', count: 0 },
   };
   filteredTasks.forEach(t => {

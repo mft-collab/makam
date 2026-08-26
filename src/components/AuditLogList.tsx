@@ -5,11 +5,19 @@ import { AuditLog, Task, User, TaskStatus } from '../types';
 import { Button } from './ui/Button';
 import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
+import { AuditLogListSkeleton } from './ui/Skeleton';
 import { STATUS_LABELS, ROLE_LABELS, STATUS_BADGE_VARIANT } from '../constants';
 import { formatDateTime } from '../lib/utils';
 import { auditLogService } from '../services/auditLogService';
 import { useUIStore } from '../store/uiStore';
 import { AUDIT_FIELD_LABELS, formatAuditValue } from '../lib/auditLabels';
+import { cn } from '../lib/utils';
+
+// Yetki-kritik alanlar: bir değişiklik bunlardan birini içeriyorsa satırın
+// solunda Dashboard'un kriz şeridiyle AYNI görsel ağırlıkta bir uyarı şeridi
+// gösterilir — bir rol/departman değişikliği ile bir açıklama düzeltmesi
+// eskiden aynı görsel ağırlıktaydı (bkz. tasarım denetimi).
+const SENSITIVE_AUDIT_FIELDS = new Set(['role', 'departmentId', 'email']);
 
 interface AuditLogListProps {
   tasks: Task[];
@@ -90,6 +98,11 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
     return matchType;
   }), [logsState, selectedType]);
 
+  // Diğer altı modülle AYNI disiplin: ilk yükleme genel bir spinner yerine
+  // gerçek satır yapısını taklit eden bir iskelet gösterir (bkz. tasarım
+  // denetimi — bu, o desenin eksik olduğu tek modüldü).
+  if (loading && logsState.length === 0) return <AuditLogListSkeleton />;
+
   return (
     <div className="flex flex-col gap-5 py-4 max-w-[1440px] mx-auto font-sans">
 
@@ -102,7 +115,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
           <div>
             <span className="text-[10px] font-medium text-executive-blue uppercase tracking-[0.4em] block leading-none">DENETİM İZLERİ</span>
             <span className="text-[9px] text-text-tertiary uppercase tracking-[0.3em]">
-              {loading && logsState.length === 0 ? 'Yükleniyor...' : `${filteredLogs.length} / ${logsState.length} Kayıt`}
+              {filteredLogs.length} / {logsState.length} Kayıt
             </span>
           </div>
         </div>
@@ -182,10 +195,20 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
           filteredLogs.map((log) => {
             const task = tasksById.get(log.taskId);
             const user = usersById.get(log.changedBy);
+            // Rol/departman/e-posta gibi yetki-kritik bir alan değişmişse, satır
+            // Dashboard'un kriz şeridiyle AYNI görsel ağırlıkta işaretlenir — bir
+            // rol yükseltmesi ile bir açıklama düzeltmesi artık aynı ağırlıkta
+            // durmuyor (bkz. tasarım denetimi).
+            const hasSensitiveChange = log.changes
+              ? Object.keys(log.changes).some(field => SENSITIVE_AUDIT_FIELDS.has(field))
+              : false;
 
             return (
               <div key={log.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-xl group hover:bg-surface-elevated hover:shadow-sm transition-all relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-1 h-full bg-executive-blue/10 group-hover:bg-executive-blue transition-all rounded-l-xl" />
+                <div className={cn(
+                  'absolute top-0 left-0 h-full transition-all rounded-l-xl',
+                  hasSensitiveChange ? 'w-[3px] bg-status-danger' : 'w-1 bg-executive-blue/10 group-hover:bg-executive-blue'
+                )} />
 
                 <div className="flex items-center gap-6 flex-1">
                   {/* Avatar */}
@@ -198,8 +221,11 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
                     <div className="flex items-center gap-2">
                       <span className="text-[12px] font-medium text-executive-blue tracking-tight group-hover:text-executive-blue transition-colors">{user?.fullName || 'Dizge'}</span>
                       <span className="text-[8px] text-text-tertiary font-medium uppercase tracking-[0.15em] px-1.5 py-0.5 bg-surface-glass border border-surface-border rounded-md">{user ? ROLE_LABELS[user.role as keyof typeof ROLE_LABELS] : ''}</span>
+                      {hasSensitiveChange && (
+                        <span className="text-[8px] text-status-danger font-bold uppercase tracking-[0.15em] px-1.5 py-0.5 bg-status-danger/10 border border-status-danger/20 rounded-md">Yetki Değişikliği</span>
+                      )}
                     </div>
-                    <span className="text-[9px] text-text-tertiary uppercase tracking-[0.2em]">{formatDateTime(log.timestamp)}</span>
+                    <span className="text-[9px] text-text-tertiary uppercase tracking-[0.2em] font-mono tabular-nums">{formatDateTime(log.timestamp)}</span>
                   </div>
                 </div>
 
@@ -233,7 +259,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
                           return (
                             <div key={field} className="flex flex-col gap-0.5 text-[9px] bg-executive-blue/[0.02] border border-executive-blue/[0.04] p-1.5 rounded-lg">
                               <span className="font-bold text-[8px] text-text-tertiary uppercase tracking-wider">{fieldLabel}</span>
-                              <div className="flex items-center gap-1 text-[10px] text-text-muted">
+                              <div className="flex items-center gap-1 text-[10px] text-text-muted font-mono">
                                 <span className="line-through text-status-danger/70 truncate max-w-[120px]">{formatAuditValue(field, diff.old, users)}</span>
                                 <ArrowRight className="w-2.5 h-2.5 flex-shrink-0" />
                                 <span className="font-medium text-status-success truncate max-w-[120px]">{formatAuditValue(field, diff.new, users)}</span>
@@ -291,12 +317,6 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
             {loading && <Loader2 className="w-3 h-3 animate-spin" />}
             Daha Fazla Yükle
           </Button>
-        </div>
-      )}
-
-      {loading && logsState.length === 0 && (
-        <div className="py-16 flex justify-center items-center">
-          <Loader2 className="w-6 h-6 animate-spin text-executive-blue" />
         </div>
       )}
 

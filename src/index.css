@@ -92,6 +92,21 @@
      Aydınlık zemin: #FAF8F5. */
   --chart-created: #0284C7;   /* Yeni Talimat (Strategic Data Cyan ailesi) */
   --chart-completed: #047857; /* İcra Edilen */
+
+  /* Raporlar "Talimat Dağılımı" pastası — reports/helpers.ts computeStatusDistribution.
+     ASSIGNED/PENDING_DELEGATION için AŞAĞIDAKİ iki yeni token: mevcut semantik
+     status renklerinin (success/warning/danger/info) hiçbiri "nötr/bekliyor" ya
+     da "devir/mor" kavramını karşılamadığından yeni tanımlandı. AWAITING_APPROVAL
+     ve BLOCKED ise BURADA YENİ token TANIMLAMAZ — doğrudan aşağıdaki
+     --color-status-warning / --color-status-danger'ı (zaten light/dark uyarlamalı)
+     kullanır, çünkü "onayda" ve "engellendi" kavramları semantik olarak zaten
+     warning/danger ile birebir örtüşüyor (bkz. Reports.tsx/BlockerList.tsx'teki
+     aynı eşleme). Eskiden bu dört durumdan ikisi (ASSIGNED, PENDING_DELEGATION
+     hariç) sabit hex kullanıyordu ve karanlık modda solgunlaşıyordu (bkz.
+     tasarım denetimi — canlı ortamda ışık/karanlık mod karşılaştırmasıyla
+     doğrulandı). */
+  --chart-neutral: #CBD5E1;    /* ASSIGNED — ışık ve karanlık modda eşit derecede okunaklı olduğu canlı ortamda doğrulandı */
+  --chart-delegated: #A78BFA;  /* PENDING_DELEGATION — aynı şekilde */
 }
 
 .dark {
@@ -140,6 +155,13 @@
      karanlık mod lightness bandına (L 0.48–0.67) çekilmiş adımlar. */
   --chart-created: #0994D6;
   --chart-completed: #059669;
+
+  /* --chart-neutral/--chart-delegated ışık moddakiyle AYNI: her iki temada da
+     eşit derecede okunaklı olduğu canlı ortamda doğrulandı (bkz. yukarıdaki
+     :root tanımı) — yine de dosyanın geri kalanındaki "her token iki temada
+     da açıkça tanımlanır" kuralına uymak için burada yeniden belirtiliyor. */
+  --chart-neutral: #CBD5E1;
+  --chart-delegated: #A78BFA;
 }
 
 @theme {

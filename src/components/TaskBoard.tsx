@@ -1,5 +1,5 @@
-import React, { useCallback, useState, useMemo, type ReactElement } from 'react';
-import { Plus, Search, Layers, Clock, ArrowRight, CheckCircle2, AlertTriangle, AlertCircle, ShieldCheck, Zap, Info, Filter, X } from 'lucide-react';
+import React, { useCallback, useState, useMemo, useEffect, useRef, type ReactElement } from 'react';
+import { Plus, Search, Layers, Clock, ArrowRight, CheckCircle2, AlertTriangle, AlertCircle, ShieldCheck, Zap, Info, Filter, X, Loader2 } from 'lucide-react';
 import { List, type RowComponentProps } from 'react-window';
 import { Task, User } from '../types';
 import { cn, buildUsersById } from '../lib/utils';
@@ -109,7 +109,9 @@ function DesktopTaskRow({ index, style, ariaAttributes, tasks, usersById, onView
         // ayrışıyordu — sayfa taranırken fark edilmesi zordu. Sol kenarlıktaki
         // kırmızı şerit, Harekat Merkezi'ndeki kriz kartlarıyla aynı deseni
         // kullanarak ihlali satırı taramadan görünür kılar (bkz. kod denetimi).
-        isCrisis && 'bg-status-danger/[0.03] border-l-status-danger'
+        // %3→%6 zemin ve 2px→3px kenarlık: canlı ortamda karanlık modda
+        // karşılaştırıldığında %3 neredeyse görünmüyordu (bkz. tasarım denetimi).
+        isCrisis && 'bg-status-danger/[0.06] border-l-[3px] border-l-status-danger'
       )}
     >
       {/* Status */}
@@ -217,6 +219,26 @@ export const TaskBoard = ({
   // (bkz. AppHeader.tsx'teki aynı desen / kod denetimi).
   const loadMoreTasks = useDataStore(s => s.loadMoreTasks);
   const taskLimit = useDataStore(s => s.taskLimit);
+
+  // "Daha Fazla Talimat Yükle" bir promise DÖNDÜRMÜYOR — loadMoreTasks yalnızca
+  // taskLimit'i artıran senkron bir Zustand action'ı, gerçek veri Firestore'un
+  // reaktif onSnapshot dinleyicisi (useFirestoreData) yeni limitle yeniden
+  // abone olunca akar. Bu yüzden burada yerel bir "yükleniyor" bayrağı tutulup
+  // tasks prop'u büyüdüğünde (ya da mantıklı bir sürede büyümezse) kapatılır —
+  // aksi halde buton, Denetim İzleri'ndeki eşdeğerinin aksine, tıklandığında
+  // hiçbir görsel geri bildirim vermiyordu (bkz. tasarım denetimi).
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const taskCountAtClickRef = useRef(tasks.length);
+  useEffect(() => {
+    if (isLoadingMore && tasks.length !== taskCountAtClickRef.current) {
+      setIsLoadingMore(false);
+    }
+  }, [tasks.length, isLoadingMore]);
+  const handleLoadMore = () => {
+    taskCountAtClickRef.current = tasks.length;
+    setIsLoadingMore(true);
+    loadMoreTasks();
+  };
 
   // O(tasks × users) yerine tek geçişte kurulan O(1) lookup — hem uid hem
   // email ile eşleşme aranabildiği için (Firestore'da assigneeId bazen uid,
@@ -467,9 +489,11 @@ export const TaskBoard = ({
       {tasks.length >= taskLimit && (
         <div className="flex justify-center mt-4">
           <button
-            onClick={loadMoreTasks}
-            className="px-6 py-2 bg-makam-glass backdrop-blur-xl border border-executive-blue/10 rounded-full text-[10px] font-medium text-executive-blue uppercase tracking-widest hover:bg-executive-blue hover:text-[color:var(--executive-blue-text)] transition-all shadow-sm"
+            onClick={handleLoadMore}
+            disabled={isLoadingMore}
+            className="flex items-center gap-2 px-6 py-2 bg-makam-glass backdrop-blur-xl border border-executive-blue/10 rounded-full text-[10px] font-medium text-executive-blue uppercase tracking-widest hover:bg-executive-blue hover:text-[color:var(--executive-blue-text)] transition-all shadow-sm disabled:opacity-60 disabled:pointer-events-none"
           >
+            {isLoadingMore && <Loader2 className="w-3 h-3 animate-spin" />}
             Daha Fazla Talimat Yükle
           </button>
         </div>
