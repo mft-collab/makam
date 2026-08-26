@@ -26,11 +26,29 @@ export const computeDepartmentsList = (users: User[], tasks: Task[]): string[] =
   return Array.from(depts);
 };
 
+// Bir görev, seçili tarih aralığıyla ÖRTÜŞÜYORSA (aralığın bitiminden önce zaten
+// vardı VE ya hâlâ açık ya da bu aralık içinde sonuçlandı) kapsama girer.
+// Eskiden yalnızca t.createdAt aralığa DÜŞEN görevler sayılıyordu — bu, aralıktan
+// önce oluşturulmuş ama hâlâ AKTİF (ör. uzun süredir devam eden veya devredilmiş)
+// bir görevi, o an fiilen bir sorumlunun elinde olmasına rağmen raporun tamamen
+// dışında bırakıyordu. Sonuç: Yönetici Performans Endeksi'nde (ve aynı filtreyi
+// paylaşan Personel Yük Dağılımı/SLA trendi/durum dağılımında) eski ama aktif iş
+// yükü ağırlıklı bir yönetici "Veri yok" görünürken, yakın zamanda yeni görev
+// alan bir başkası normal görünüyordu — aynı ekipteki iki kişi arasındaki veri
+// var/yok tutarsızlığının kök nedeni buydu (bkz. kod denetimi). Tamamlanan/iptal
+// edilen görevler için sonuç tarihi (completedAt / updatedAt) aralıktan ÖNCEYSE
+// artık o dönemi ilgilendirmediğinden dışarıda bırakılır — yalnızca "hâlâ açık"
+// veya "bu aralıkta sonuçlanmış" görevler sayılır. PDF/CSV dışa aktarma bundan
+// etkilenmez: exportService kendi bağımsız (ve kasıtlı olarak salt createdAt'e
+// dayalı) filtresini bu fonksiyonun çıktısı üzerine ayrıca uygular.
 export const filterTasksByDateAndDept = (tasks: Task[], rangeStart: Date, rangeEnd: Date, selectedDept: string): Task[] => {
   const from = rangeStart.getTime();
   const to = rangeEnd.getTime();
   return tasks.filter(t => {
-    const matchDate = t.createdAt >= from && t.createdAt <= to;
+    const existedByRangeEnd = t.createdAt <= to;
+    const isOpen = t.status !== 'COMPLETED' && t.status !== 'CANCELLED';
+    const resolvedAt = t.status === 'COMPLETED' ? (t.completedAt ?? t.updatedAt) : t.updatedAt;
+    const matchDate = existedByRangeEnd && (isOpen || resolvedAt >= from);
     const matchDept = selectedDept === 'ALL' || t.departmentId === selectedDept;
     return matchDate && matchDept;
   });
