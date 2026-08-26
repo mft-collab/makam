@@ -26,6 +26,7 @@ const renderList = (overrides: Partial<React.ComponentProps<typeof BlockerList>>
     <BlockerList
       tasks={[]}
       blockers={[]}
+      resolvedBlockers={[]}
       users={[staff]}
       isAdmin={false}
       onResolve={onResolve}
@@ -40,11 +41,14 @@ const renderList = (overrides: Partial<React.ComponentProps<typeof BlockerList>>
 
 describe('BlockerList', () => {
   describe('aktif/çözülmüş ayrımı ve sıralama', () => {
-    it('çözülmemiş engeller "Aktif Kriz Engelleri" başlığı altında sayılır, çözülenler dışarıda tutulur', () => {
+    it('çözülmemiş engeller "Aktif Kriz Engelleri" başlığı altında sayılır, çözülenler ayrı listede kalır', () => {
+      // blockers ve resolvedBlockers ARTIK iki ayrı Firestore sorgusundan gelir
+      // (bkz. useFirestoreData.ts) — bir engel asla ikisinde birden olmaz.
       const task = makeTask();
       renderList({
         tasks: [task],
-        blockers: [makeBlocker({ id: 'b1', isResolved: false }), makeBlocker({ id: 'b2', isResolved: true })],
+        blockers: [makeBlocker({ id: 'b1', isResolved: false })],
+        resolvedBlockers: [makeBlocker({ id: 'b2', isResolved: true, resolvedAt: 2000 })],
       });
 
       expect(screen.getByText('1 Aktif Engel')).toBeInTheDocument();
@@ -146,7 +150,7 @@ describe('BlockerList', () => {
 
     it('çözülmüş bir engel için Çözüldü butonu (isAdmin=true olsa da) gösterilmez', () => {
       const task = makeTask();
-      renderList({ tasks: [task], blockers: [makeBlocker({ isResolved: true })], isAdmin: true });
+      renderList({ tasks: [task], resolvedBlockers: [makeBlocker({ isResolved: true, resolvedAt: 2000 })], isAdmin: true });
 
       expect(screen.queryByText('Çözüldü')).not.toBeInTheDocument();
     });

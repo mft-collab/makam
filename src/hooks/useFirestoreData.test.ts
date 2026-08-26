@@ -28,8 +28,8 @@ const makeUser = (overrides: Partial<User> = {}): User => ({
 
 describe('useFirestoreData', () => {
   // Effect'ler kod içinde sabit sırada tanımlı: 1. tasks listener, sonra
-  // sırasıyla users/blockers/stats — bu yüzden listeners[0..3] her zaman bu
-  // sırayla dolar (bkz. useFirestoreData.ts effect tanım sırası).
+  // sırasıyla users/blockers/resolvedBlockers/stats — bu yüzden listeners[0..4]
+  // her zaman bu sırayla dolar (bkz. useFirestoreData.ts effect tanım sırası).
   let listeners: CapturedListener[] = [];
   let unsubs: ReturnType<typeof vi.fn>[] = [];
   let dataStoreMock: Record<string, unknown>;
@@ -55,8 +55,8 @@ describe('useFirestoreData', () => {
     vi.mocked(firebase.doc).mockImplementation((...args: any[]) => ({ __doc: args }) as any);
 
     dataStoreMock = {
-      tasks: [], users: [], blockers: [], isHydrated: true, taskLimit: 200,
-      setTasks: vi.fn(), setUsers: vi.fn(), setBlockers: vi.fn(), setStats: vi.fn(), reset: vi.fn(),
+      tasks: [], users: [], blockers: [], resolvedBlockers: [], isHydrated: true, taskLimit: 200,
+      setTasks: vi.fn(), setUsers: vi.fn(), setBlockers: vi.fn(), setResolvedBlockers: vi.fn(), setStats: vi.fn(), reset: vi.fn(),
     };
     vi.mocked(useDataStore).mockReturnValue(dataStoreMock as any);
   });
@@ -235,11 +235,42 @@ describe('useFirestoreData', () => {
     });
   });
 
+  describe('resolvedBlockers listener', () => {
+    it('sorgu isResolved=true filtresi, resolvedAt desc orderBy ve limit(50) ile kurulur', () => {
+      renderHook(() => useFirestoreData(makeUser({ role: 'Admin' }), onError));
+
+      expect(firebase.where).toHaveBeenCalledWith('isResolved', '==', true);
+      expect(firebase.orderBy).toHaveBeenCalledWith('resolvedAt', 'desc');
+      expect(firebase.limit).toHaveBeenCalledWith(50);
+    });
+
+    it('gelen dokümanlar setResolvedBlockers\'a iletilir — setBlockers\'tan (aktif engeller) BAĞIMSIZ', () => {
+      renderHook(() => useFirestoreData(makeUser({ role: 'Admin' }), onError));
+
+      act(() => {
+        listeners[3]!.onNext(mockQuerySnap([mockDocSnap('b2', { taskId: 't1', reason: 'x', isResolved: true, createdAt: 1, resolvedAt: 2 })]));
+      });
+
+      const [list] = vi.mocked(dataStoreMock.setResolvedBlockers as any).mock.calls[0]!;
+      expect(list).toEqual([{ id: 'b2', taskId: 't1', reason: 'x', isResolved: true, createdAt: 1, resolvedAt: 2 }]);
+      expect(dataStoreMock.setBlockers).not.toHaveBeenCalled();
+    });
+
+    it('resolvedBlockers listener hata verirse onError(e, \'list\', \'blockers\') çağrılır', () => {
+      renderHook(() => useFirestoreData(makeUser({ role: 'Admin' }), onError));
+      const err = new Error('permission-denied');
+
+      act(() => { listeners[3]!.onErrorCb(err); });
+
+      expect(onError).toHaveBeenCalledWith(err, 'list', 'blockers');
+    });
+  });
+
   describe('stats listener', () => {
     it('doküman varsa setStats çağrılır', () => {
       renderHook(() => useFirestoreData(makeUser({ role: 'Admin' }), onError));
 
-      act(() => { listeners[3]!.onNext({ exists: () => true, data: () => ({ totalTasks: 5 }) }); });
+      act(() => { listeners[4]!.onNext({ exists: () => true, data: () => ({ totalTasks: 5 }) }); });
 
       expect(dataStoreMock.setStats).toHaveBeenCalledWith(expect.objectContaining({ totalTasks: 5 }));
     });
@@ -247,16 +278,16 @@ describe('useFirestoreData', () => {
     it('eksik sayaç alanları zod .default(0) ile doldurulur (ham cast yerine doğrulanmış veri)', () => {
       renderHook(() => useFirestoreData(makeUser({ role: 'Admin' }), onError));
 
-      act(() => { listeners[3]!.onNext({ exists: () => true, data: () => ({ totalTasks: 5 }) }); });
+      act(() => { listeners[4]!.onNext({ exists: () => true, data: () => ({ totalTasks: 5 }) }); });
 
       const [stats] = vi.mocked(dataStoreMock.setStats as any).mock.calls[0]!;
-      expect(stats).toMatchObject({ totalTasks: 5, status_ASSIGNED: 0, status_CRISIS: 0 });
+      expect(stats).toMatchObject({ totalTasks: 5, status_ASSIGNED: 0, status_PENDING_DELEGATION: 0, status_CRISIS: 0 });
     });
 
     it('doküman yoksa setStats çağrılmaz', () => {
       renderHook(() => useFirestoreData(makeUser({ role: 'Admin' }), onError));
 
-      act(() => { listeners[3]!.onNext({ exists: () => false, data: () => undefined }); });
+      act(() => { listeners[4]!.onNext({ exists: () => false, data: () => undefined }); });
 
       expect(dataStoreMock.setStats).not.toHaveBeenCalled();
     });
@@ -265,25 +296,25 @@ describe('useFirestoreData', () => {
       renderHook(() => useFirestoreData(makeUser({ role: 'Admin' }), onError));
       const err = new Error('permission-denied');
 
-      act(() => { listeners[3]!.onErrorCb(err); });
+      act(() => { listeners[4]!.onErrorCb(err); });
 
       expect(onError).toHaveBeenCalledWith(err, 'list', 'system/stats');
     });
   });
 
   describe('yaşam döngüsü', () => {
-    it('unmount olduğunda 4 listener\'ın tamamı unsubscribe edilir', () => {
+    it('unmount olduğunda 5 listener\'ın tamamı unsubscribe edilir', () => {
       const { unmount } = renderHook(() => useFirestoreData(makeUser({ role: 'Admin' }), onError));
-      expect(unsubs).toHaveLength(4);
+      expect(unsubs).toHaveLength(5);
 
       unmount();
 
       unsubs.forEach(u => expect(u).toHaveBeenCalledOnce());
     });
 
-    it('taskLimit değiştiğinde yalnızca tasks listener\'ı yeniden kurulur (users/blockers/stats etkilenmez)', () => {
+    it('taskLimit değiştiğinde yalnızca tasks listener\'ı yeniden kurulur (users/blockers/resolvedBlockers/stats etkilenmez)', () => {
       const { rerender } = renderHook(() => useFirestoreData(makeUser({ role: 'Admin' }), onError));
-      expect(unsubs).toHaveLength(4);
+      expect(unsubs).toHaveLength(5);
 
       vi.mocked(useDataStore).mockReturnValue({ ...dataStoreMock, taskLimit: 400 } as any);
       rerender();
@@ -292,7 +323,8 @@ describe('useFirestoreData', () => {
       expect(unsubs[1]).not.toHaveBeenCalled();
       expect(unsubs[2]).not.toHaveBeenCalled();
       expect(unsubs[3]).not.toHaveBeenCalled();
-      expect(firebase.onSnapshot).toHaveBeenCalledTimes(5);
+      expect(unsubs[4]).not.toHaveBeenCalled();
+      expect(firebase.onSnapshot).toHaveBeenCalledTimes(6);
     });
 
     it('isHydrated=false ile başlarsa isLoading true\'dur, tasks verisi geldiğinde false olur', () => {

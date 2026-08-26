@@ -53,10 +53,23 @@ const BlockerCard = ({ blocker, index, tasksById, usersById, isAdmin, isSystemAd
 
   return (
     <motion.div
+      role="button"
+      tabIndex={0}
+      aria-label={task?.title ?? blocker.reason}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 260, damping: 28, delay: index * 0.05 }}
       onClick={() => task && onViewTask(task)}
+      onKeyDown={(e) => {
+        // e.target === e.currentTarget: içteki Düzenle/Sil/Çözüldü butonlarına
+        // Enter/Space basılınca sentezlenen click zaten kendi stopPropagation'ını
+        // taşıyor, ama köpüren keydown burada tekrar tetiklenip görevi açmasın
+        // diye yalnızca doğrudan bu kart odaktayken tetiklenir (bkz. ExecutiveToast'taki aynı desen).
+        if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {
+          e.preventDefault();
+          if (task) onViewTask(task);
+        }
+      }}
       className={cn(
         'flex flex-col gap-3 p-3.5 rounded-2xl border cursor-pointer group transition-all duration-300',
         !blocker.isResolved
@@ -162,6 +175,11 @@ const BlockerCard = ({ blocker, index, tasksById, usersById, isAdmin, isSystemAd
 interface BlockerListProps {
   tasks: Task[];
   blockers: TaskBlocker[];
+  /** Son çözülen engeller — ayrı bir Firestore sorgusundan gelir (bkz.
+   *  useFirestoreData.ts). `blockers` yalnızca AKTİF engelleri taşır, bu
+   *  yüzden "Çözüme Ulaşanlar" paneli eskiden olduğu gibi `blockers`'tan
+   *  türetilemez (bkz. kod denetimi: eskiden bu panel bu yüzden hep boştu). */
+  resolvedBlockers: TaskBlocker[];
   users: User[];
   isAdmin: boolean;
   isSystemAdmin?: boolean;
@@ -197,7 +215,7 @@ const BlockerListSkeleton = () => (
   </div>
 );
 
-export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = false, isLoading = false, onResolve, onEditBlocker, onDeleteBlocker, onViewTask }: BlockerListProps) => {
+export const BlockerList = ({ tasks, blockers, resolvedBlockers, users, isAdmin, isSystemAdmin = false, isLoading = false, onResolve, onEditBlocker, onDeleteBlocker, onViewTask }: BlockerListProps) => {
   const tasksById = useMemo(() => new Map(tasks.map(t => [t.id, t])), [tasks]);
   const usersById = useMemo(() => buildUsersById(users), [users]);
 
@@ -222,12 +240,10 @@ export const BlockerList = ({ tasks, blockers, users, isAdmin, isSystemAdmin = f
       });
   }, [blockers, tasks]);
 
-  const resolvedBlockers = blockers.filter(b => b.isResolved);
-
   const resolvedLast30Days = useMemo(() => {
     const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    return blockers.filter(b => b.isResolved && b.resolvedAt && b.resolvedAt >= cutoff).length;
-  }, [blockers]);
+    return resolvedBlockers.filter(b => b.resolvedAt && b.resolvedAt >= cutoff).length;
+  }, [resolvedBlockers]);
 
   const trackedTaskCount = useMemo(
     () => tasks.filter(t => t.status !== 'COMPLETED' && t.status !== 'CANCELLED').length,

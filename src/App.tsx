@@ -214,7 +214,7 @@ export default function App() {
   // SLA konfigürasyon senkronizasyonu (Firestore → localStorage)
   useSLASync(user, handleFirestoreError);
 
-  const { tasks: firestoreTasks, users, blockers: firestoreBlockers, isLoading: isDataLoading } = useFirestoreData(user, handleFirestoreError);
+  const { tasks: firestoreTasks, users, blockers: firestoreBlockers, resolvedBlockers, isLoading: isDataLoading } = useFirestoreData(user, handleFirestoreError);
 
   // Derived tasks/blockers state — offline kuyruktaki bekleyen mutasyonlar
   // Firestore verisinin üzerine bindirilir (bkz. lib/offlineQueue.ts
@@ -283,6 +283,18 @@ export default function App() {
     const focusTaskIds = new Set(filteredTasksByFocus.map(t => t.id));
     return blockers.filter(b => focusTaskIds.has(b.taskId));
   }, [blockers, globalFocusDept, filteredTasksByFocus]);
+
+  // resolvedBlockers offline kuyruktan BİLİNÇLİ olarak geçmiyor: bir engel
+  // henüz senkronize olmadan bu listede zaten yok (applyOfflineMutations'ın
+  // 'update' dalı yalnızca base dizisinde ZATEN var olan bir öğeyi günceller,
+  // yeni eklemez) — yani offline-merge burada hiçbir görünür fayda sağlamadan
+  // yalnızca karmaşıklık ekler. Odak filtresi diğer listelerle AYNI mantıkla
+  // (görevin departmanına göre) uygulanır.
+  const filteredResolvedBlockersByFocus = useMemo(() => {
+    if (globalFocusDept === 'ALL') return resolvedBlockers;
+    const focusTaskIds = new Set(filteredTasksByFocus.map(t => t.id));
+    return resolvedBlockers.filter(b => focusTaskIds.has(b.taskId));
+  }, [resolvedBlockers, globalFocusDept, filteredTasksByFocus]);
 
   // On-demand task fetch (CQRS — lokal listede yoksa). fetchTaskById,
   // useFirestoreData'daki diğer tüm task okumalarıyla AYNI zod doğrulamasından
@@ -553,7 +565,7 @@ export default function App() {
                     )}
                     {activeTab === 'blockers' && (
                       <BlockerList
-                        tasks={filteredTasksByFocus} blockers={filteredBlockersByFocus} users={filteredUsersByFocus}
+                        tasks={filteredTasksByFocus} blockers={filteredBlockersByFocus} resolvedBlockers={filteredResolvedBlockersByFocus} users={filteredUsersByFocus}
                         isAdmin={isAdmin || user?.role === 'Manager'}
                         isSystemAdmin={isAdmin}
                         onResolve={resolveBlocker}
@@ -636,7 +648,7 @@ export default function App() {
                     tasks={tasks}
                     users={users}
                     currentUser={user!}
-                    blockers={blockers.filter(b => b.taskId === selectedTask!.id)}
+                    blockers={[...blockers, ...resolvedBlockers].filter(b => b.taskId === selectedTask!.id)}
                     onAddBlocker={(reason, severity) => selectedTask && addBlocker(selectedTask.id, reason, severity)}
                     onResolveBlocker={resolveBlocker}
                     onAddSubTask={(parentId, title) => { setParentTaskId(parentId); setInitialTitle(title); setIsCreateModalOpen(true); }}

@@ -45,7 +45,7 @@ export async function fetchTaskById(taskId: string): Promise<Task | null> {
 }
 
 export function useFirestoreData(user: User | null, onError: (err: any, type: string, path: string) => void) {
-  const { tasks, users, blockers, isHydrated, taskLimit, setTasks, setUsers, setBlockers, setStats, reset } = useDataStore();
+  const { tasks, users, blockers, resolvedBlockers, isHydrated, taskLimit, setTasks, setUsers, setBlockers, setResolvedBlockers, setStats, reset } = useDataStore();
   
   // Skeleton is shown if IDB is not yet hydrated and no data exists.
   // Once hydrated, it will use cached data immediately.
@@ -192,6 +192,34 @@ export function useFirestoreData(user: User | null, onError: (err: any, type: st
       (e) => onError(e, 'list', 'blockers')
     );
 
+    // Yukarıdaki blockersQuery YALNIZCA aktif engelleri döndürür (bkz. yukarıdaki
+    // yorum) — BlockerList'in "Çözüme Ulaşanlar" paneli bu yüzden hiçbir zaman
+    // veri göremiyordu (bkz. kod denetimi). Ayrı, bağımsız bir sorgu: en son
+    // ÇÖZÜLEN 50 engel, resolvedAt'e göre en yeniden eskiye. blockerService.ts
+    // ve useAppHandlers.ts bir engeli çözerken isResolved/resolvedAt'i HER ZAMAN
+    // birlikte yazdığından (bkz. ilgili servisler), bu alana göre sıralamak
+    // güvenli. Aktif engel tüketicileri (useSelfHealing, Reports'un "Aktif
+    // Darboğaz" KPI'sı) yukarıdaki blockersQuery/blockers alanını kullanmaya
+    // devam eder — bu yeni alan yalnızca EKLENİYOR, mevcut davranışı değiştirmiyor.
+    const resolvedBlockersQuery = query(
+      collection(db, 'blockers'),
+      where('isResolved', '==', true),
+      orderBy('resolvedAt', 'desc'),
+      limit(50)
+    );
+
+    const unsubResolvedBlockers = onSnapshot(
+      resolvedBlockersQuery,
+      (s) => {
+        const all = s.docs.map(d => {
+          const raw = { id: d.id, ...d.data() } as TaskBlocker;
+          return validateOrPassthrough(TaskBlockerSchema, raw, d.id, 'blockers');
+        });
+        setResolvedBlockers(all);
+      },
+      (e) => onError(e, 'list', 'blockers')
+    );
+
     const unsubStats = onSnapshot(
       doc(db, 'system', 'stats'),
       (docSnap) => {
@@ -206,9 +234,10 @@ export function useFirestoreData(user: User | null, onError: (err: any, type: st
     return () => {
       unsubUsers();
       unsubBlockers();
+      unsubResolvedBlockers();
       unsubStats();
     };
-  }, [uid, setUsers, setBlockers, setStats, onError]);
+  }, [uid, setUsers, setBlockers, setResolvedBlockers, setStats, onError]);
 
-  return { tasks, users, blockers, isLoading, auditLogs: [] as AuditLog[] };
+  return { tasks, users, blockers, resolvedBlockers, isLoading, auditLogs: [] as AuditLog[] };
 }

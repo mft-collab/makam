@@ -6,16 +6,19 @@ const baseState = {
   tasks: [] as Task[],
   users: [],
   blockers: [],
+  resolvedBlockers: [],
   stats: null,
   isHydrated: false,
   hasLiveTasks: false,
   hasLiveUsers: false,
   hasLiveBlockers: false,
+  hasLiveResolvedBlockers: false,
   hasLiveStats: false,
   taskLimit: 200,
   setTasks: () => {},
   setUsers: () => {},
   setBlockers: () => {},
+  setResolvedBlockers: () => {},
   setStats: () => {},
   setHydrated: () => {},
   loadMoreTasks: () => {},
@@ -39,6 +42,16 @@ describe('mergeDataState — IDB rehydration yarışı koruması', () => {
     // Bayat IDB verisi değil, o oturumda zaten gelmiş canlı veri korunur
     expect(result.tasks).toEqual(liveTasks);
     expect(result.tasks).not.toEqual(stalePersisted.tasks);
+  });
+
+  it('resolvedBlockers, blockers ile AYNI ama BAĞIMSIZ hasLive* bayrağını kullanır (bkz. kod denetimi: eskiden bu alan hiç yoktu)', () => {
+    const liveResolved = [{ id: 'live-resolved' }] as Task[];
+    const currentState = { ...baseState, resolvedBlockers: liveResolved, hasLiveResolvedBlockers: true };
+    const stalePersisted = { resolvedBlockers: [{ id: 'stale-resolved' }] as Task[] };
+
+    const result = mergeDataState(stalePersisted, currentState);
+
+    expect(result.resolvedBlockers).toEqual(liveResolved);
   });
 
   it('bir alanın (stats) canlı verisi erken gelse bile, henüz canlı verisi gelmemiş DİĞER bir alan (tasks) IDB önbelleğinden geri yüklenmeye devam eder', () => {

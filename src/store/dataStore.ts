@@ -31,6 +31,16 @@ interface DataState {
   tasks: Task[];
   users: User[];
   blockers: TaskBlocker[];
+  /** Son çözülen engeller (isResolved==true, resolvedAt'e göre en yeniden
+   *  eskiye, limit 50) — `blockers` alanından BİLİNÇLİ olarak ayrı: o alan
+   *  yalnızca AKTİF (çözülmemiş) engelleri taşır (useSelfHealing, Reports'un
+   *  "Aktif Darboğaz" KPI'sı gibi tüketiciler bunu bekler) ve sorgusu
+   *  `where('isResolved','==',false)` olduğundan çözülmüş kayıtları HİÇBİR
+   *  ZAMAN içermez. BlockerList'in "Çözüme Ulaşanlar" paneli eskiden bu alanı
+   *  `.filter(isResolved)` ile türetmeye çalışıyordu — sorgu gereği bu küme
+   *  her zaman boştu (bkz. kod denetimi). Ayrı bir dinleyici/alan, aktif engel
+   *  tüketicilerinin davranışını değiştirmeden bu paneli gerçek veriyle besler. */
+  resolvedBlockers: TaskBlocker[];
   stats: GlobalStats | null;
   isHydrated: boolean;
   /** Bu oturumda Firestore'dan en az bir kez canlı veri geldi mi? IDB'den
@@ -47,11 +57,13 @@ interface DataState {
   hasLiveTasks: boolean;
   hasLiveUsers: boolean;
   hasLiveBlockers: boolean;
+  hasLiveResolvedBlockers: boolean;
   hasLiveStats: boolean;
   taskLimit: number;
   setTasks: (tasks: Task[]) => void;
   setUsers: (users: User[]) => void;
   setBlockers: (blockers: TaskBlocker[]) => void;
+  setResolvedBlockers: (blockers: TaskBlocker[]) => void;
   setStats: (stats: GlobalStats) => void;
   setHydrated: () => void;
   loadMoreTasks: () => void;
@@ -79,6 +91,7 @@ export function mergeDataState(persistedState: unknown, currentState: DataState)
     tasks: currentState.hasLiveTasks ? currentState.tasks : (persisted.tasks ?? currentState.tasks),
     users: currentState.hasLiveUsers ? currentState.users : (persisted.users ?? currentState.users),
     blockers: currentState.hasLiveBlockers ? currentState.blockers : (persisted.blockers ?? currentState.blockers),
+    resolvedBlockers: currentState.hasLiveResolvedBlockers ? currentState.resolvedBlockers : (persisted.resolvedBlockers ?? currentState.resolvedBlockers),
     stats: currentState.hasLiveStats ? currentState.stats : (persisted.stats ?? currentState.stats),
   };
 }
@@ -89,16 +102,19 @@ export const useDataStore = create<DataState>()(
       tasks: [],
       users: [],
       blockers: [],
+      resolvedBlockers: [],
       stats: null,
       isHydrated: false,
       hasLiveTasks: false,
       hasLiveUsers: false,
       hasLiveBlockers: false,
+      hasLiveResolvedBlockers: false,
       hasLiveStats: false,
       taskLimit: 200,
       setTasks: (tasks) => set({ tasks, hasLiveTasks: true }),
       setUsers: (users) => set({ users, hasLiveUsers: true }),
       setBlockers: (blockers) => set({ blockers, hasLiveBlockers: true }),
+      setResolvedBlockers: (resolvedBlockers) => set({ resolvedBlockers, hasLiveResolvedBlockers: true }),
       setStats: (stats) => set({ stats, hasLiveStats: true }),
       setHydrated: () => set({ isHydrated: true }),
       loadMoreTasks: () => set((state) => ({ taskLimit: state.taskLimit + 200 })),
@@ -106,10 +122,12 @@ export const useDataStore = create<DataState>()(
         tasks: [],
         users: [],
         blockers: [],
+        resolvedBlockers: [],
         stats: null,
         hasLiveTasks: false,
         hasLiveUsers: false,
         hasLiveBlockers: false,
+        hasLiveResolvedBlockers: false,
         hasLiveStats: false,
         taskLimit: 200,
       }),
@@ -130,11 +148,13 @@ export const useDataStore = create<DataState>()(
         tasks: state.tasks,
         users: state.users,
         blockers: state.blockers,
+        resolvedBlockers: state.resolvedBlockers,
         stats: state.stats,
         isHydrated: state.isHydrated,
         hasLiveTasks: state.hasLiveTasks,
         hasLiveUsers: state.hasLiveUsers,
         hasLiveBlockers: state.hasLiveBlockers,
+        hasLiveResolvedBlockers: state.hasLiveResolvedBlockers,
         hasLiveStats: state.hasLiveStats,
       }),
       onRehydrateStorage: () => (state) => {
