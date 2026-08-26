@@ -175,6 +175,18 @@ jobs:
       - name: Firebase CLI Kur
         run: npm install -g firebase-tools
 
+      # NOT: firestore.rules/firestore.indexes.json eskiden hiç deploy
+      # edilmiyordu — yalnızca hosting deploy ediliyordu (bkz. kod denetimi:
+      # repo'ya eklenen bir rules/index değişikliği production'a hiç
+      # ulaşmıyor, yalnızca manuel `firebase deploy` veya konsol üzerinden
+      # taşınabiliyordu). Hosting'den ÖNCE çalışır ki yeni bir rules/index'e
+      # bağımlı bir client değişikliği hosting'e çıktığında ilgili rules/index
+      # zaten yerinde olsun.
+      - name: Firestore Rules & Indexes Deploy Et
+        run: firebase deploy --only firestore:rules,firestore:indexes --token "$FIREBASE_TOKEN" --non-interactive
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
       # NOT: FirebaseExtended/action-hosting-deploy@v0 (servis hesabı JSON
       # anahtarı) yerine `firebase login:ci` ile üretilen kişisel bir CI
       # token'ı kullanılıyor — servis hesabı anahtarı üretimi GCP proje kotasına
