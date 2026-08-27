@@ -10,7 +10,7 @@ import {
 } from './firebase';
 import { User, Task, UserSchema } from './types';
 import { TAB_ROLES, type AppTabId } from './constants';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, MotionConfig } from 'motion/react';
 
 // UI Components
 import { Sidebar } from './components/Sidebar';
@@ -483,6 +483,13 @@ export default function App() {
   }
 
   return (
+    // reducedMotion="user" — OS/tarayıcı seviyesinde "Reduce Motion" açık
+    // kullanıcılar için motion/react'in tüm spring/layout animasyonlarını
+    // (dock aktif göstergesi, modal geçişleri, sayfa geçişi) otomatik olarak
+    // sadeleştirir; CSS tabanlı animate-pulse/ping/flash için ayrıca
+    // index.css'teki prefers-reduced-motion bloğuna bakın (bkz. mobil tasarım
+    // denetimi — bu ayar öncesinde reduced-motion tercihi hiç ele alınmıyordu).
+    <MotionConfig reducedMotion="user">
     <ErrorBoundary>
       <a href="#main-content" className="skip-to-content">Ana içeriğe geç</a>
 
@@ -683,11 +690,12 @@ export default function App() {
               />
             )}
 
-            <MobileDock user={user} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} />
+            <MobileDock user={user} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} notificationCount={notifications.length} />
           </>
         )}
       </div>
       <ReloadPrompt />
     </ErrorBoundary>
+    </MotionConfig>
   );
 }

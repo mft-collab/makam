@@ -201,7 +201,7 @@ export function AppHeader({
             hatanın burada tekrarı). */}
         <Logo size="sm" variant={resolvedTheme} />
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {/* Mobile Network Indicator */}
           <div className="flex items-center">
             {isOnline ? (
@@ -220,16 +220,16 @@ export function AppHeader({
                 aria-expanded={isDeptFilterOpen}
                 aria-haspopup="true"
                 className={cn(
-                  'w-8 h-8 flex items-center justify-center rounded-full border transition-colors',
+                  'w-11 h-11 flex items-center justify-center rounded-full border transition-colors',
                   globalFocusDept !== 'ALL'
                     ? 'border-executive-blue/30 bg-executive-blue/10 text-executive-blue'
                     : 'border-makam-border/10 bg-makam-glass text-text-muted hover:text-executive-blue'
                 )}
               >
-                <Building className="w-3.5 h-3.5 stroke-[1.5]" />
+                <Building className="w-4 h-4 stroke-[1.5]" />
               </button>
               {isDeptFilterOpen && (
-                <div className="absolute top-10 right-0 z-[210] min-w-[170px] max-h-[60vh] overflow-y-auto bg-surface-elevated backdrop-blur-2xl border border-surface-border rounded-xl shadow-[0_16px_48px_-12px_rgba(0,0,0,0.18)] overflow-hidden py-1">
+                <div className="absolute top-[3.25rem] right-0 z-[210] min-w-[170px] max-h-[60vh] overflow-y-auto bg-surface-elevated backdrop-blur-2xl border border-surface-border rounded-xl shadow-[0_16px_48px_-12px_rgba(0,0,0,0.18)] overflow-hidden py-1">
                   <button
                     onClick={() => { onGlobalFocusDeptChange('ALL'); setIsDeptFilterOpen(false); }}
                     className={cn(
@@ -259,19 +259,19 @@ export function AppHeader({
           <button
             onClick={() => setIsGuideOpen(true)}
             aria-label="Kılavuzu aç"
-            className="w-8 h-8 flex items-center justify-center rounded-full border border-makam-border/10 bg-makam-glass text-text-muted hover:text-executive-blue"
+            className="w-11 h-11 flex items-center justify-center rounded-full border border-makam-border/10 bg-makam-glass text-text-muted hover:text-executive-blue"
           >
-            <BookOpen className="w-3.5 h-3.5 stroke-[1.5]" />
+            <BookOpen className="w-4 h-4 stroke-[1.5]" />
           </button>
 
           <button
             onClick={handleToggleTheme}
             aria-label="Temayı değiştir"
-            className="w-8 h-8 flex items-center justify-center rounded-full border border-makam-border/10 bg-makam-glass text-text-muted hover:text-executive-blue"
+            className="w-11 h-11 flex items-center justify-center rounded-full border border-makam-border/10 bg-makam-glass text-text-muted hover:text-executive-blue"
           >
-            {theme === 'light' && <Sun className="w-3.5 h-3.5 stroke-[1.5]" />}
-            {theme === 'dark' && <Moon className="w-3.5 h-3.5 stroke-[1.5]" />}
-            {theme === 'system' && <Monitor className="w-3.5 h-3.5 stroke-[1.5]" />}
+            {theme === 'light' && <Sun className="w-4 h-4 stroke-[1.5]" />}
+            {theme === 'dark' && <Moon className="w-4 h-4 stroke-[1.5]" />}
+            {theme === 'system' && <Monitor className="w-4 h-4 stroke-[1.5]" />}
           </button>
 
           {Boolean(notifications.length > 0) && (
