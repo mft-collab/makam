@@ -58,6 +58,14 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout, notificati
   const overflow = filtered.slice(MAX_VISIBLE);
   const hasMore  = overflow.length > 0;
   const badges: Partial<Record<string, number>> = notificationCount > 0 ? { tasks: notificationCount } : {};
+  // Staff gibi düşük modül sayılı roller (bugün 2 sekme: Harekat, Talimatlar)
+  // barı eskiden uçtan uca (left-4 right-4) flex-1 ile eşit paylaştırıyordu —
+  // 2 öğe her biri barın yaklaşık yarısını kaplayıp aralarında büyük, dengesiz
+  // bir boşluk bırakıyordu (bkz. mobil tasarım denetimi). Az öğe sayısında
+  // (≤3) bar artık içeriğe göre daralıp ortalanıyor — segmented-control
+  // görünümüne yakın, premium mobil nav'larda alışılan davranış.
+  const itemCount = primary.length + (hasMore ? 1 : 0);
+  const isCompact = itemCount <= 3;
 
   // Overflow paneli görsel olarak bir backdrop + kart taşıyan tam teşekküllü
   // bir modal — ui/Modal'ın "ortak modal davranışı"nı (Escape ile kapatma,
@@ -182,11 +190,14 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout, notificati
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom) - 12px, 0px)' }}
       >
         <div
-          className="flex items-stretch gap-1 px-2.5 sm:px-3 py-1.5
-                     bg-makam-glass backdrop-blur-[30px] backdrop-saturate-[180%]
-                     border border-surface-border
-                     rounded-[28px]
-                     shadow-[0_12px_40px_-10px_rgba(22,21,19,0.08),0_0_0_0.5px_rgba(22,21,19,0.04)]"
+          className={cn(
+            'flex items-stretch gap-1 px-2.5 sm:px-3 py-1.5',
+            'bg-makam-glass backdrop-blur-[30px] backdrop-saturate-[180%]',
+            'border border-surface-border',
+            'rounded-[28px]',
+            'shadow-[0_12px_40px_-10px_rgba(22,21,19,0.08),0_0_0_0.5px_rgba(22,21,19,0.04)]',
+            isCompact && 'mx-auto w-fit'
+          )}
         >
           {primary.map((item) => {
             const Icon = item.icon;
@@ -198,9 +209,12 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout, notificati
                 onClick={() => handleSelect(item.id)}
                 aria-current={isActive ? 'page' : undefined}
                 aria-label={badgeCount ? `${item.label}, ${badgeCount} bekleyen bildirim` : item.label}
-                className="flex-1 flex flex-col items-center justify-center
-                           gap-1 py-2.5 px-0.5 sm:px-1 rounded-xl transition-all duration-300
-                           relative min-w-0 group active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-1"
+                className={cn(
+                  'flex flex-col items-center justify-center',
+                  'gap-1 py-2.5 rounded-xl transition-all duration-300',
+                  'relative min-w-0 group active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-1',
+                  isCompact ? 'w-20 sm:w-24 shrink-0' : 'flex-1 px-0.5 sm:px-1'
+                )}
               >
                 {/* Aktif zemin */}
                 {isActive && (
@@ -281,9 +295,12 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout, notificati
               aria-label={showMore ? 'Ek modülleri gizle' : 'Ek modülleri göster'}
               aria-expanded={showMore}
               aria-haspopup="true"
-              className="flex-1 flex flex-col items-center justify-center
-                         gap-1 py-2.5 px-0.5 sm:px-1 rounded-xl transition-all duration-300
-                         relative min-w-0 group active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-1"
+              className={cn(
+                'flex flex-col items-center justify-center',
+                'gap-1 py-2.5 rounded-xl transition-all duration-300',
+                'relative min-w-0 group active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-1',
+                isCompact ? 'w-20 sm:w-24 shrink-0' : 'flex-1 px-0.5 sm:px-1'
+              )}
             >
               {showMore && (
                 <motion.div

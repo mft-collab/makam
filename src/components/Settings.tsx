@@ -380,12 +380,19 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
       {/* ── Tabbed Layout ─────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row gap-6 mt-2">
         
-        {/* Left Sidebar Tabs Selector */}
+        {/* Left Sidebar Tabs Selector — mobilde bu yatay kaydırılan bir
+            şerit, masaüstünde dikey bir sütun (bkz. md:flex-col). Sekme
+            butonları eskiden koşulsuz `w-full` idi: masaüstündeki dikey
+            sütunda (w-56) bu doğruydu ama mobil yatay şeritte her buton
+            konteynerin TAM genişliğini kaplayıp tek seferde yalnızca bir
+            sekme gösteriyor, kullanıcıyı sonrakini görmek için tam bir
+            kaydırma yapmaya zorluyordu (bkz. mobil tasarım denetimi) —
+            mobilde artık içeriğe göre daralıyor, md:'de yine tam genişlik. */}
         <div className="flex flex-row md:flex-col gap-1.5 overflow-x-auto md:overflow-x-visible pb-3 md:pb-0 shrink-0 md:w-56 border-b md:border-b-0 md:border-r border-surface-border">
           <button
             onClick={() => setActiveSubTab('general')}
             className={cn(
-              "px-4 py-3 rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] text-left transition-all shrink-0 w-full",
+              "px-4 py-3 rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] text-left transition-all shrink-0 w-auto whitespace-nowrap md:w-full md:whitespace-normal",
               activeSubTab === 'general' 
                 ? "bg-executive-blue text-[color:var(--executive-blue-text)] shadow-[0_4px_12px_rgba(30,41,59,0.15)]"
                 : "text-text-muted hover:text-text-heading hover:bg-executive-blue/[0.03]"
@@ -399,7 +406,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
               <button
                 onClick={() => setActiveSubTab('sla')}
                 className={cn(
-                  "px-4 py-3 rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] text-left transition-all shrink-0 w-full",
+                  "px-4 py-3 rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] text-left transition-all shrink-0 w-auto whitespace-nowrap md:w-full md:whitespace-normal",
                   activeSubTab === 'sla' 
                     ? "bg-executive-blue text-[color:var(--executive-blue-text)] shadow-[0_4px_12px_rgba(30,41,59,0.15)]"
                     : "text-text-muted hover:text-text-heading hover:bg-executive-blue/[0.03]"
@@ -410,7 +417,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
               <button
                 onClick={() => setActiveSubTab('data')}
                 className={cn(
-                  "px-4 py-3 rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] text-left transition-all shrink-0 w-full",
+                  "px-4 py-3 rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] text-left transition-all shrink-0 w-auto whitespace-nowrap md:w-full md:whitespace-normal",
                   activeSubTab === 'data' 
                     ? "bg-executive-blue text-[color:var(--executive-blue-text)] shadow-[0_4px_12px_rgba(30,41,59,0.15)]"
                     : "text-text-muted hover:text-text-heading hover:bg-executive-blue/[0.03]"

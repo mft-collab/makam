@@ -275,12 +275,25 @@ export function AppHeader({
           </button>
 
           {Boolean(notifications.length > 0) && (
+            // Masaüstündeki "X Bekleyen Talimat" metin rozeti mobilde dar
+            // başlık satırına (logo + 4 ikon buton) sığmayıp sayfa genelinde
+            // yatay taşmaya yol açıyordu (bkz. mobil tasarım denetimi) —
+            // diğer başlık ikonlarıyla aynı 44px dairesel dokunma hedefine
+            // ve dock'takiyle aynı sayısal rozet desenine indirgendi.
             <button
               onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-status-danger/10 border border-status-danger/20 rounded-full animate-makam-flash text-[9px] font-medium text-status-danger uppercase tracking-[0.25em]"
+              aria-label={`${notifications.length} bekleyen talimat. Bildirimleri ${isNotificationsOpen ? 'gizle' : 'göster'}.`}
+              aria-expanded={isNotificationsOpen}
+              aria-haspopup="true"
+              className="relative w-11 h-11 flex items-center justify-center rounded-full border border-status-danger/20 bg-status-danger/[0.06] text-status-danger animate-makam-flash shrink-0"
             >
-              <AlertCircle className="w-3.5 h-3.5 text-status-danger stroke-[1.5]" />
-              <span>{notifications.length} Talimat</span>
+              <AlertCircle className="w-4 h-4 stroke-[1.5]" aria-hidden="true" />
+              <span
+                aria-hidden="true"
+                className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 flex items-center justify-center rounded-full bg-status-danger text-white text-[9px] font-bold leading-none"
+              >
+                {notifications.length > 9 ? '9+' : notifications.length}
+              </span>
             </button>
           )}
         </div>

@@ -495,7 +495,14 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                     {staffInDept.length > 0 && (
                       <>
                         <div className="w-[1px] h-4 bg-executive-blue/10" />
-                        <div className="flex flex-wrap justify-center gap-2.5 max-w-[400px]">
+                        {/* max-w sabit 400px'ti — dış konteynerin overflow-x-auto
+                            (bkz. mobil tasarım denetimi) tam da bunun gibi bir
+                            kadro grubunun mobil ekrandan (~360-400px) geniş
+                            olduğu durumlar için bir kaçış yoluydu, ama no-scrollbar
+                            ile kaydırma ipucu görünmez olduğundan içerik sessizce
+                            "kesilmiş" görünüyordu. Sınır artık viewport'u da
+                            hesaba katıyor, gerçek taşmayı büyük ölçüde önler. */}
+                        <div className="flex flex-wrap justify-center gap-2.5 max-w-[min(400px,calc(100vw-8rem))]">
                           {staffInDept.map(staff => (
                             <OrgNodeCard key={staff.uid} user={staff} tasks={tasks} onSelect={setSelectedUser} isMini />
                           ))}

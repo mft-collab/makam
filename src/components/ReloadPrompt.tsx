@@ -49,7 +49,12 @@ export function ReloadPrompt() {
           initial={{ opacity: 0, y: 50, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 50, scale: 0.95 }}
-          className="fixed bottom-6 right-6 z-[100] max-w-[400px]"
+          // Mobilde MobileDock `fixed bottom-4 left-4 right-4` alanını
+          // kaplıyor (bkz. MobileDock.tsx) — bu toast eskiden aynı
+          // bottom-6/right-6 konumunu masaüstüyle paylaşıyordu ve dock'un
+          // üzerine biniyordu (bkz. mobil tasarım denetimi). Mobilde dock'un
+          // üstüne, tam genişlikte oturur; lg:'de eski sağ-alt konumuna döner.
+          className="fixed inset-x-4 bottom-24 lg:inset-x-auto lg:right-6 lg:bottom-6 z-[100] lg:max-w-[400px]"
         >
           <div className="bg-surface-elevated rounded-2xl p-6 shadow-[0_20px_50px_rgba(0,0,0,0.12)] border border-surface-border flex flex-col gap-4">
              <div className="flex items-start justify-between">
