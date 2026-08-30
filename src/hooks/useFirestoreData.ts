@@ -13,22 +13,9 @@ import {
 } from '../firebase';
 import { Task, User, TaskBlocker, AuditLog, TaskSchema, UserSchema, TaskBlockerSchema, GlobalStatsSchema } from '../types';
 import { useDataStore, type GlobalStats } from '../store/dataStore';
-import { logger } from '../lib/logger';
+import { validateOrPassthrough } from '../lib/validateOrPassthrough';
 
-/**
- * Firestore'dan gelen ham veriyi zod şemasıyla doğrular. Şema uyumsuzluğu
- * (ör. bozuk/eksik alan) veriyi listeden düşürmez — yalnızca konsola uyarı
- * yazar — aksi halde tek bir hatalı doküman tüm listeyi görünmez yapardı.
- * Doğrulama başarılıysa şemanın .default(...) doldurduğu alanlarla döner.
- */
-export function validateOrPassthrough<T>(schema: { safeParse: (data: unknown) => { success: boolean; data?: T; error?: unknown } }, raw: T, docId: string, collectionName: string): T {
-  const result = schema.safeParse(raw);
-  if (!result.success) {
-    logger.warn(`[useFirestoreData] Şema doğrulama uyarısı (${collectionName}/${docId}):`, result.error);
-    return raw;
-  }
-  return result.data as T;
-}
+export { validateOrPassthrough };
 
 /**
  * Yerel `tasks` listesinde (taskLimit sınırı, rol bazlı sorgu vb. yüzünden)
