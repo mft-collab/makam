@@ -147,7 +147,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
             placeholder="Talimat Başlığı"
             {...register('title')}
             className={cn(
-              "text-[28px] font-light text-text-heading font-serif tracking-tight outline-none bg-transparent placeholder:text-text-muted/30 w-full border-b border-text-muted/20 pb-3 transition-colors focus:border-executive-blue/50",
+              "text-[28px] font-light text-text-heading font-serif tracking-tight outline-none bg-field-surface placeholder:text-text-muted/30 w-full border-b border-text-muted/20 pb-3 transition-colors focus:border-executive-blue/50",
               errors.title && "border-status-danger/50 focus:border-status-danger/50"
             )}
           />
