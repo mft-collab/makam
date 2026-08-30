@@ -10,7 +10,7 @@
     "start": "node server.js",
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
     "lint": "tsc --noEmit",
-    "eslint": "eslint .",
+    "eslint": "eslint . --max-warnings=213",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

@@ -346,6 +346,25 @@ export const offlineQueue = {
     }));
     const remaining: OfflineMutation[] = [];
 
+    // Her mutasyon işlendikçe kuyruğu HEMEN localStorage'a yazar (yalnızca
+    // döngü sonunda değil). Önceden yalnızca döngü bittiğinde tek bir
+    // `saveQueue` çağrısı vardı — sekme kapanırsa/cihaz uykuya geçerse/JS
+    // çökerse, sunucuda zaten başarıyla uygulanmış `create` mutasyonları
+    // localStorage'dan hiç silinmemiş olurdu ve bir sonraki açılışta TÜM
+    // kuyruk yeniden oynatılırdı; `create` yolu her çağrıda yeni bir doküman
+    // ID'si ürettiğinden bu, sunucuda ÇİFT görev/doküman oluşturuyordu (bkz.
+    // kod denetimi). `workingQueue.slice(i + 1)`, henüz denenmemiş öğeleri
+    // (varsa ID remapping ile güncellenmiş halleriyle) korur.
+    const persistProgress = (processedThroughIndex: number) => {
+      const currentQueue = this.getQueue();
+      const merged = [
+        ...remaining,
+        ...workingQueue.slice(processedThroughIndex + 1),
+        ...currentQueue.filter(item => !idsToSync.includes(item.id))
+      ];
+      this.saveQueue(merged);
+    };
+
     try {
       for (let i = 0; i < workingQueue.length; i++) {
         const mutation = workingQueue[i]!;
@@ -573,15 +592,8 @@ export const offlineQueue = {
             remaining.push(mutation);
           }
         }
+        persistProgress(i);
       }
-
-      // Safe merge to prevent overwriting new offline mutations added during sync
-      const currentQueue = this.getQueue();
-      const merged = [
-        ...remaining,
-        ...currentQueue.filter(item => !idsToSync.includes(item.id))
-      ];
-      this.saveQueue(merged);
     } finally {
       isSyncing = false;
     }

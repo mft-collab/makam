@@ -15,6 +15,9 @@ import { SettingsCard } from './ui/SettingsCard';
 import { ActionButton } from './ui/ActionButton';
 import { StatusBanner } from './ui/StatusBanner';
 import { Skeleton } from './ui/Skeleton';
+import { Modal } from './ui/Modal';
+import { Button } from './ui/Button';
+import { logger } from '../lib/logger';
 
 interface SettingsProps {
   tasks: Task[];
@@ -57,6 +60,13 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
   const [isOnline, setIsOnline] = useState(typeof window !== 'undefined' ? window.navigator.onLine : true);
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error' | 'loading'; message: string } | null>(null);
   const [isArchiving, setIsArchiving] = useState(false);
+  // Yedekten geri yükleme, mevcut TÜM veriyi geri dönüşsüz ezen bir işlemdir —
+  // dosya seçilir seçilmez doğrudan tetiklenmek yerine (uygulamanın geri
+  // kalanındaki görev/personel/engel silme akışlarıyla TUTARLI olarak) önce
+  // bir onay modalı gösterilir; dosya içeriği yalnızca kullanıcı onaylarsa
+  // işlenir (bkz. kod denetimi).
+  const [pendingRestore, setPendingRestore] = useState<{ content: string; fileName: string } | null>(null);
+  const restoreFileInputRef = React.useRef<HTMLInputElement>(null);
   const { isInstallable, isInstalled, install } = usePWAInstall();
 
   const isAdmin = useIsAdmin(currentUser);
@@ -203,7 +213,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
       osc1.stop(audioCtx.currentTime + 0.8);
       osc2.stop(audioCtx.currentTime + 0.6);
     } catch {
-      console.warn('Audio feedback blocked by browser autoplay policy');
+      logger.warn('Audio feedback blocked by browser autoplay policy');
     }
 
     // 2. Trigger the In-App Toast visual notification
@@ -223,7 +233,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
           icon: '/favicon.ico'
         });
       } catch (err) {
-        console.warn('Native notification failed:', err);
+        logger.warn('Native notification failed:', err);
       }
     } else {
       setImportStatus({
@@ -265,13 +275,16 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
       downloadBlob(blob, `MAKAM-Backup-${new Date().toISOString().split('T')[0]}.json`);
       setImportStatus({ type: 'success', message: 'Dizge yedeği başarıyla indirildi.' });
     } catch (err) {
-      console.error('Export failed:', err);
+      logger.error('Export failed:', err);
       const msg = err instanceof Error ? err.message : String(err);
       setImportStatus({ type: 'error', message: `Yedekleme Hatası: ${msg}` });
     }
   };
 
   // ── Import ────────────────────────────────────────────────────────────────
+  // Dosya seçilir seçilmez restore ETMEZ — içeriği okuyup onay modalını açar.
+  // Gerçek geri yükleme yalnızca kullanıcı modalda onayladığında (aşağıdaki
+  // confirmRestore) çalışır (bkz. kod denetimi).
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!currentUser || !isAdmin) {
       if (triggerToast) {
@@ -284,25 +297,39 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
     setImportStatus({ type: 'loading', message: 'Veri Bütünlüğü Doğrulanıyor...' });
 
     const reader = new FileReader();
-    reader.onload = async (ev) => {
-      try {
-        const content = ev.target?.result as string;
-        if (!content) throw new Error('Dosya içeriği okunamadı.');
-
-        setImportStatus({ type: 'loading', message: 'Dizge Geri Yükleniyor...' });
-
-        await settingsService.restoreBackup(content, currentUser.uid, file.name, (percent) => {
-          setImportStatus({ type: 'loading', message: `Veri Yazılıyor... %${percent}` });
-        });
-
-        setImportStatus({ type: 'success', message: 'Dizge başarıyla önceki sürüme döndürüldü.' });
-        e.target.value = '';
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        setImportStatus({ type: 'error', message: `Hata: ${msg}` });
+    reader.onload = (ev) => {
+      const content = ev.target?.result as string;
+      if (!content) {
+        setImportStatus({ type: 'error', message: 'Hata: Dosya içeriği okunamadı.' });
+        return;
       }
+      setImportStatus(null);
+      setPendingRestore({ content, fileName: file.name });
     };
     reader.readAsText(file);
+  };
+
+  const cancelRestore = () => {
+    setPendingRestore(null);
+    if (restoreFileInputRef.current) restoreFileInputRef.current.value = '';
+  };
+
+  const confirmRestore = async () => {
+    if (!currentUser || !pendingRestore) return;
+    const { content, fileName } = pendingRestore;
+    setPendingRestore(null);
+    setImportStatus({ type: 'loading', message: 'Dizge Geri Yükleniyor...' });
+    try {
+      await settingsService.restoreBackup(content, currentUser.uid, fileName, (percent) => {
+        setImportStatus({ type: 'loading', message: `Veri Yazılıyor... %${percent}` });
+      });
+      setImportStatus({ type: 'success', message: 'Dizge başarıyla önceki sürüme döndürüldü.' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setImportStatus({ type: 'error', message: `Hata: ${msg}` });
+    } finally {
+      if (restoreFileInputRef.current) restoreFileInputRef.current.value = '';
+    }
   };
 
   // ── Archive (export-only) ───────────────────────────────────────────────────
@@ -577,7 +604,7 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
                     Daha önce alınan bir yedek dosyasından dizgeyi geri yükler (Çalışma zamanı Zod doğrulaması içerir).
                   </p>
 
-                  <input type="file" accept=".json" onChange={handleImport} className="hidden" id="restore-upload" disabled={!isOnline} />
+                  <input ref={restoreFileInputRef} type="file" accept=".json" onChange={handleImport} className="hidden" id="restore-upload" disabled={!isOnline} />
                   
                   {!isOnline ? (
                     <div className="flex items-start gap-2 p-2.5 bg-status-danger/10 border border-status-danger/20 rounded-xl">
@@ -650,6 +677,19 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
 
         </div>
       </div>
+
+      {/* ── Yedekten Geri Yükleme Onayı ──────────────────────────────── */}
+      <Modal isOpen={!!pendingRestore} onClose={cancelRestore} title="Yedekten Geri Yükle">
+        <div className="flex flex-col gap-4">
+          <p className="text-[13px] text-text-muted font-light leading-relaxed">
+            <strong className="text-status-danger font-medium">{pendingRestore?.fileName}</strong> dosyasından dizgeyi geri yüklemek üzeresiniz. Bu işlem mevcut TÜM personel, talimat ve engel verilerinin üzerine yazacaktır ve <strong className="text-status-danger font-medium">geri alınamaz</strong>. Emin misiniz?
+          </p>
+          <div className="flex justify-end gap-2.5 pt-4 border-t border-executive-blue/[0.04]">
+            <Button variant="secondary" onClick={cancelRestore}>İptal</Button>
+            <Button variant="danger" onClick={confirmRestore}>Geri Yüklemeyi Onayla</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

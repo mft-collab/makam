@@ -620,8 +620,12 @@ export default function App() {
                 parentId={parentTaskId}
                 initialTitle={initialTitle}
                 onSubmit={(data) => {
-                  if (isEditModalOpen && selectedTask) updateTask(selectedTask.id, data);
-                  else createTask(data);
+                  // createTask/updateTask'in promise'i geri döndürülür ki
+                  // TaskFormModal bunu await edip isSubmitting'i gerçek
+                  // network round-trip süresince true tutabilsin (bkz. kod
+                  // denetimi — aksi halde çifte gönderim/çift görev riski).
+                  if (isEditModalOpen && selectedTask) return updateTask(selectedTask.id, data);
+                  return createTask(data);
                 }}
                 onClose={() => { setIsCreateModalOpen(false); setIsEditModalOpen(false); setParentTaskId(undefined); }}
               />

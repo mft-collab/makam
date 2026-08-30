@@ -19,6 +19,12 @@ const db = admin.firestore();
 
 const NOTIFICATION_TTL_DAYS = 30;
 const SYSTEM_LOG_TTL_DAYS = 90;
+// taskTriggers.ts'teki idempotency ledger'ı (processed_events) yalnızca
+// Cloud Functions'ın "en az bir kez" teslimat penceresindeki yakın zamanlı
+// yeniden-teslimleri yakalamak için var — bu pencere dakikalar/saatler
+// mertebesindedir, bu yüzden 7 gün bol bol güvenli bir tampon.
+const PROCESSED_EVENT_TTL_DAYS = 7;
+const ERROR_LOG_TTL_DAYS = 30;
 
 const BATCH_SIZE = 500;
 // Spark/1st-gen fonksiyon varsayılan zaman aşımı (60sn) riskine karşı üst
@@ -88,6 +94,25 @@ export const cleanupOldNotifications = functions
       ['timestamp', '<', logCutoff],
     ]);
     console.log(`[Cleanup] ${deletedLogs} sistem logu silindi.`);
+
+    console.log(`[Cleanup] ${PROCESSED_EVENT_TTL_DAYS} günden eski idempotency kayıtları siliniyor...`);
+    const processedEventCutoff = Date.now() - PROCESSED_EVENT_TTL_DAYS * 24 * 60 * 60 * 1000;
+    const deletedProcessedEvents = await deleteOldDocs('processed_events', [
+      ['processedAt', '<', processedEventCutoff],
+    ]);
+    console.log(`[Cleanup] ${deletedProcessedEvents} idempotency kaydı silindi.`);
+
+    // error_logs (isValidErrorLog, firestore.rules) önceden hiç temizlenmiyordu
+    // — client tarafından yazılabilen (isSignedIn() ile açık create) tek
+    // koleksiyonlardan biri olduğundan, notifications/system_logs gibi bir
+    // TTL'e sahip olmaması sınırsız birikime açık bırakıyordu (bkz. kod
+    // denetimi).
+    console.log(`[Cleanup] ${ERROR_LOG_TTL_DAYS} günden eski hata logları siliniyor...`);
+    const errorLogCutoff = Date.now() - ERROR_LOG_TTL_DAYS * 24 * 60 * 60 * 1000;
+    const deletedErrorLogs = await deleteOldDocs('error_logs', [
+      ['timestamp', '<', errorLogCutoff],
+    ]);
+    console.log(`[Cleanup] ${deletedErrorLogs} hata logu silindi.`);
 
     return null;
   });

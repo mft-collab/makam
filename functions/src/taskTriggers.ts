@@ -49,7 +49,21 @@ export const onTaskCreated = functions
     const taskId = context.params.taskId;
     const now = Date.now();
 
+    // Firestore v1 arka plan tetikleyicileri "en az bir kez" (at-least-once)
+    // teslimat garantisi verir; aynı olay yeniden teslim edildiğinde
+    // context.eventId AYNI kalır. Bu kontrol olmadan bir yeniden-teslim,
+    // sorumlu/irtibatlıya AYNI "yeni görev" bildirimini ikinci kez gönderirdi
+    // (bkz. kod denetimi). processed_events, yalnızca yakın zamandaki
+    // yeniden-teslimleri yakalamak için var — cleanup.ts tarafından birkaç
+    // gün sonra temizlenir (bkz. cleanup.ts).
+    const processedRef = db.collection('processed_events').doc(context.eventId);
+    if ((await processedRef.get()).exists) {
+      console.log(`[onTaskCreated] Event ${context.eventId} zaten işlenmiş, yeniden-teslim atlanıyor.`);
+      return null;
+    }
+
     const batch = db.batch();
+    batch.set(processedRef, { taskId, type: 'onTaskCreated', processedAt: now });
 
     const assigneeUid = await resolveUid(task.assigneeId);
     const coordinatorUid = await resolveUid(task.coordinatorId);
@@ -101,8 +115,18 @@ export const onTaskStatusChanged = functions
     // Sadece durum değişikliklerini işle
     if (before.status === after.status) return null;
 
+    // bkz. onTaskCreated'daki AYNI idempotency gerekçesi — bu tetikleyici
+    // ayrıca completedTaskCount'u da artırıp azalttığından, yeniden-teslim
+    // koruması olmadan bir COMPLETED geçişi sayaç ÇİFT sayılabilirdi.
+    const processedRef = db.collection('processed_events').doc(context.eventId);
+    if ((await processedRef.get()).exists) {
+      console.log(`[onTaskStatusChanged] Event ${context.eventId} zaten işlenmiş, yeniden-teslim atlanıyor.`);
+      return null;
+    }
+
     const now = Date.now();
     const batch = db.batch();
+    batch.set(processedRef, { taskId, type: 'onTaskStatusChanged', processedAt: now });
 
     // Durum bazlı bildirim mesajları
     const STATUS_MESSAGES: Record<string, string> = {

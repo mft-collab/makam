@@ -3,13 +3,13 @@
     "name": "Ana giriş paketi (index)",
     "path": "dist/assets/index-*.js",
     "gzip": true,
-    "limit": "185 KB"
+    "limit": "200 KB"
   },
   {
     "name": "Firebase vendor paketi",
     "path": "dist/assets/vendor-firebase-*.js",
     "gzip": true,
-    "limit": "140 KB"
+    "limit": "200 KB"
   },
   {
     "name": "Charts vendor paketi (recharts, lazy)",

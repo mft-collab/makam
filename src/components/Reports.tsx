@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { AlertTriangle, Target, Zap, TrendingUp, BarChart3, Users, CheckCircle2, Loader2, Download, FileText, Calendar, ArrowRight } from 'lucide-react';
 import { Task, User, TaskBlocker } from '../types';
 import { cn } from '../lib/utils';
+import { logger } from '../lib/logger';
 import { computeCompletionRatePercent } from './dashboard/helpers';
 import {
   parseRangeStart, parseRangeEnd, computeDepartmentsList, filterTasksByDateAndDept, filterBlockersByTasks,
@@ -123,7 +124,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
         to: rangeEnd,
       });
     } catch (err) {
-      console.error('PDF export hatası:', err);
+      logger.error('PDF export hatası:', err);
       addToast({ title: '⚠️ Dışa Aktarma Başarısız', body: 'PDF raporu oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.', type: 'danger' });
     } finally {
       setIsExporting(false);

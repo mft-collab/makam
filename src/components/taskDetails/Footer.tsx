@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Info, Upload } from 'lucide-react';
 import { Task, User as UserType, TaskStatus } from '../../types';
 import { cn } from '../../lib/utils';
+import { logger } from '../../lib/logger';
 import { Button } from '../ui/Button';
 import { Tooltip } from '../ui/Tooltip';
 import { storage, ref, uploadBytes, getDownloadURL } from '../../firebase';
@@ -94,7 +95,7 @@ export const TaskDetailsFooter = ({ task, currentUser, onStatusChange }: {
       }
       await Promise.resolve(onStatusChange(action.next, evidence, type));
     } catch (err) {
-      console.error('Evidence upload failed:', err);
+      logger.error('Evidence upload failed:', err);
       setEvidenceError('Kanıt yüklenemedi. Bağlantınızı kontrol edip tekrar deneyin.');
     } finally {
       setIsSubmitting(false);

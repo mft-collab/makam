@@ -8,6 +8,7 @@ import { Badge } from './ui/Badge';
 import { AuditLogListSkeleton } from './ui/Skeleton';
 import { STATUS_LABELS, ROLE_LABELS, STATUS_BADGE_VARIANT } from '../constants';
 import { formatDateTime } from '../lib/utils';
+import { logger } from '../lib/logger';
 import { auditLogService } from '../services/auditLogService';
 import { useUIStore } from '../store/uiStore';
 import { AUDIT_FIELD_LABELS, formatAuditValue } from '../lib/auditLabels';
@@ -66,7 +67,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
       setHasMore(more);
       if (more) setLastVisibleDoc(lastDoc);
     } catch (error) {
-      console.error('Error fetching audit logs:', error);
+      logger.error('Error fetching audit logs:', error);
       addToast({ title: '⚠️ Denetim İzi Yüklenemedi', body: 'Kayıtlar getirilirken bir hata oluştu. Lütfen tekrar deneyin.', type: 'danger' });
     } finally {
       setLoading(false);
