@@ -15,7 +15,7 @@ import { logger } from './logger';
 import { conflictDetectionService } from '../services/conflictDetectionService';
 import { useUIStore } from '../store/uiStore';
 import { transitionTaskInTransaction, updateTaskInTransaction, taskService } from '../services/taskService';
-import type { Task, TaskStatus, User } from '../types';
+import type { Task, TaskBlocker, TaskStatus, User } from '../types';
 
 // Sunucu bu hata kodlarıyla reddettiğinde yeniden deneme sonucu asla değişmez
 // (ör. firestore.rules'taki bir iş kuralı ihlali veya bozuk veri) — kuyrukta
@@ -58,7 +58,7 @@ export interface OfflineMutation {
   collectionName: string;
   docId?: string;
   action: 'create' | 'update' | 'delete' | 'set';
-  data?: any;
+  data?: Record<string, unknown>;
   timestamp: number;
   /** 'tasks' 'update' mutasyonları için: kuyruğa alındığı andaki lockVersion.
    *  Senkronizasyonda sunucudaki güncel versiyonla karşılaştırılır — eşleşmezse
@@ -140,10 +140,10 @@ export function applyOfflineMutations<T extends { id: string }>(
   mutations.forEach(mutation => {
     if (mutation.collectionName !== collectionName) return;
     if (mutation.action === 'create') {
-      if (!result.some(item => item.id === mutation.data?.id)) result.push(mutation.data);
+      if (!result.some(item => item.id === mutation.data?.id)) result.push(mutation.data as T);
     } else if (mutation.action === 'update' || mutation.action === 'set') {
       const idx = result.findIndex(item => item.id === mutation.docId);
-      if (idx !== -1) result[idx] = { ...result[idx], ...mutation.data };
+      if (idx !== -1) result[idx] = { ...result[idx], ...(mutation.data as Partial<T>) } as T;
     } else if (mutation.action === 'delete') {
       result = result.filter(item => item.id !== mutation.docId);
     }
@@ -255,7 +255,7 @@ export const offlineQueue = {
   enqueue(
     collectionName: string,
     action: OfflineMutation['action'],
-    data?: any,
+    data?: Record<string, unknown>,
     docId?: string,
     expectedVersion?: number,
     linkedTaskTransition?: OfflineMutation['linkedTaskTransition'],
@@ -378,7 +378,7 @@ export const offlineQueue = {
                 // ID'yi (mutation.data.id) doğrudan kalıcı doküman ID'si olarak kullan —
                 // aksi halde bu engeli hemen ardından referans alan sonraki mutasyonlar
                 // (ör. aynı oturumda çözme) sunucuda var olmayan bir ID'ye yazmaya çalışır.
-                const blockerRef = doc(db, 'blockers', mutation.data.id);
+                const blockerRef = doc(db, 'blockers', mutation.data!.id as string);
                 try {
                   const prevTask = await runTransaction(db, async (transaction) => {
                     const t = await transitionTaskInTransaction(transaction, taskId, newStatus, userId, { expectedVersion, timestampOverride: mutation.timestamp });
@@ -400,13 +400,13 @@ export const offlineQueue = {
                 // yoldan: Admin-koordinatör/irtibatlı ve alt-talimat-yalnızca-Staff
                 // kısıtları, audit_logs kaydı ve system/stats artırımı offline
                 // oluşturmada da uygulanır (bkz. taskService.ts).
-                const newTaskId = await taskService.createTask(mutation.data, mutation.actorId, { timestampOverride: mutation.timestamp });
-                remapTempId(workingQueue, i, mutation.data?.id, newTaskId);
+                const newTaskId = await taskService.createTask(mutation.data as Partial<Task>, mutation.actorId, { timestampOverride: mutation.timestamp });
+                remapTempId(workingQueue, i, mutation.data?.id as string | undefined, newTaskId);
                 break;
               }
               const docRef = await addDoc(collection(db, mutation.collectionName), {
                 ...mutation.data,
-                createdAt: mutation.data.createdAt || mutation.timestamp,
+                createdAt: mutation.data?.createdAt || mutation.timestamp,
                 updatedAt: Date.now()
               });
               await updateDoc(docRef, { id: docRef.id });
@@ -415,7 +415,7 @@ export const offlineQueue = {
               // Belirli alan adlarını (id/taskId/parentId/...) sabit kodlamak yerine data
               // nesnesindeki HER alanı tarar — yeni bir referans alanı (ör. relatedTaskId)
               // eklendiğinde bu mantığın ayrıca güncellenmesi gerekmez.
-              remapTempId(workingQueue, i, mutation.data?.id, docRef.id);
+              remapTempId(workingQueue, i, mutation.data?.id as string | undefined, docRef.id);
               break;
             }
             case 'set':
@@ -442,7 +442,7 @@ export const offlineQueue = {
                   try {
                     const prevTask = await runTransaction(db, async (transaction) => {
                       const t = await transitionTaskInTransaction(transaction, taskId, newStatus, userId, { expectedVersion, timestampOverride: mutation.timestamp });
-                      transaction.update(blockerRef, { ...mutation.data });
+                      transaction.update(blockerRef, { ...mutation.data } as Partial<TaskBlocker>);
                       return t;
                     });
                     propagateVersionBump(workingQueue, i, taskId, (prevTask.lockVersion || 0) + 1);
@@ -475,7 +475,7 @@ export const offlineQueue = {
                   // Admin-koordinatör kısıtı, audit_logs kaydı ve (durum alanı
                   // varsa) stats deltası offline'da da uygulanır.
                   if (mutation.data?.coordinatorId) {
-                    const coordSnap = await getDoc(doc(db, 'users', mutation.data.coordinatorId));
+                    const coordSnap = await getDoc(doc(db, 'users', mutation.data.coordinatorId as string));
                     if (coordSnap.exists() && (coordSnap.data() as User).role === 'Admin') {
                       throw new Error('Admin rolündeki kullanıcı irtibatlı olarak atanamaz.');
                     }
@@ -483,7 +483,7 @@ export const offlineQueue = {
                   const oldTaskForDiff = mutation.oldTaskSnapshot ?? ({ lockVersion: mutation.expectedVersion } as Task);
                   try {
                     const prevTask = await runTransaction(db, (transaction) =>
-                      updateTaskInTransaction(transaction, mutation.docId!, mutation.data, oldTaskForDiff, mutation.actorId!, { timestampOverride: mutation.timestamp })
+                      updateTaskInTransaction(transaction, mutation.docId!, mutation.data as Partial<Task>, oldTaskForDiff, mutation.actorId!, { timestampOverride: mutation.timestamp })
                     );
                     propagateVersionBump(workingQueue, i, mutation.docId!, (prevTask.lockVersion || 0) + 1);
                   } catch (transitionErr) {

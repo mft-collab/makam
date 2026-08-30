@@ -1,8 +1,15 @@
 import { z } from 'zod';
+import type { DocumentReference } from 'firebase/firestore';
 import { db, doc, setDoc, addDoc, collection, getDoc, writeBatch, increment } from '../firebase';
 import { runWithRetry } from '../lib/retry';
 import { UserRoleSchema, TaskStatusSchema, TaskPrioritySchema } from '../types';
 import type { SLAConfigEntry } from '../lib/sla';
+
+// Yedek dosyasından gelen ham kayıtlar (kullanıcı/görev/engel) — dış bir JSON
+// dosyasından okunduğu için alan kümesi zod şemalarının ötesine geçebilir
+// (ör. departmentId/photoURL/fcmTokens), bu yüzden tek tip bir arayüz yerine
+// açık bir kayıt tipi kullanılır.
+type BackupRecord = Record<string, unknown>;
 
 // ── Yedek Doğrulama Şemaları (Restore) ──────────────────────────────────────
 // role/status/priority değerleri types.ts'teki KANONİK enum'lardan alınır —
@@ -40,24 +47,25 @@ export const restoreBackupSchema = z.object({
 });
 
 // ── Saf veri dönüştürme yardımcıları (restore akışı) ─────────────────────────
-const cleanDataObj = (obj: any): any => {
+const cleanDataObj = (obj: unknown): unknown => {
   if (obj === null || typeof obj !== 'object') return obj;
   if (Array.isArray(obj)) return obj.map(item => cleanDataObj(item));
-  const n: any = {};
-  Object.keys(obj).forEach(k => { if (obj[k] !== undefined) n[k] = cleanDataObj(obj[k]); });
+  const source = obj as BackupRecord;
+  const n: BackupRecord = {};
+  Object.keys(source).forEach(k => { if (source[k] !== undefined) n[k] = cleanDataObj(source[k]); });
   return n;
 };
 
-const toTs = (val: any, fb?: number): number => {
+const toTs = (val: unknown, fb?: number): number => {
   if (val == null) return fb ?? Date.now();
   if (typeof val === 'number') return val;
   if (typeof val === 'string') return new Date(val).getTime() || (fb ?? Date.now());
-  if (typeof val === 'object' && 'seconds' in val) return val.seconds * 1000;
+  if (typeof val === 'object' && 'seconds' in val) return (val as { seconds: number }).seconds * 1000;
   return fb ?? Date.now();
 };
 
-const pick = (obj: any, keys: string[]) => {
-  const r: any = {};
+const pick = (obj: BackupRecord, keys: string[]) => {
+  const r: BackupRecord = {};
   keys.forEach(k => { if (k in obj && obj[k] !== undefined) r[k] = obj[k]; });
   return r;
 };
@@ -108,49 +116,49 @@ export const settingsService = {
     }
 
     if (Array.isArray(data.users)) {
-      data.users.forEach((u: any) => {
+      data.users.forEach((u: BackupRecord) => {
         const parsed = userBackupSchema.safeParse(u);
         if (!parsed.success) {
-          throw new Error(`Personel verisi doğrulanamadı (${u.fullName || 'Bilinmeyen'}). Hata: ${parsed.error.issues[0]?.message || parsed.error.message}`);
+          throw new Error(`Personel verisi doğrulanamadı (${(u.fullName as string) || 'Bilinmeyen'}). Hata: ${parsed.error.issues[0]?.message || parsed.error.message}`);
         }
       });
     }
 
     if (Array.isArray(data.tasks)) {
-      data.tasks.forEach((t: any) => {
+      data.tasks.forEach((t: BackupRecord) => {
         const parsed = taskBackupSchema.safeParse(t);
         if (!parsed.success) {
-          throw new Error(`Talimat verisi doğrulanamadı (${t.title || 'Bilinmeyen'}). Hata: ${parsed.error.issues[0]?.message || parsed.error.message}`);
+          throw new Error(`Talimat verisi doğrulanamadı (${(t.title as string) || 'Bilinmeyen'}). Hata: ${parsed.error.issues[0]?.message || parsed.error.message}`);
         }
       });
     }
 
-    const userItems: { ref: any; data: any }[] = [];
+    const userItems: { ref: DocumentReference; data: BackupRecord }[] = [];
     if (Array.isArray(data.users)) {
-      data.users.forEach((u: any) => {
-        if (u.uid) userItems.push({ ref: doc(db, 'users', u.uid), data: pick(cleanDataObj(u), ['uid', 'fullName', 'email', 'role', 'departmentId', 'photoURL', 'fcmTokens']) });
+      data.users.forEach((u: BackupRecord) => {
+        if (u.uid) userItems.push({ ref: doc(db, 'users', u.uid as string), data: pick(cleanDataObj(u) as BackupRecord, ['uid', 'fullName', 'email', 'role', 'departmentId', 'photoURL', 'fcmTokens']) });
       });
     }
-    const taskItems: { id: string; ref: any; data: any }[] = [];
+    const taskItems: { id: string; ref: DocumentReference; data: BackupRecord }[] = [];
     if (Array.isArray(data.tasks)) {
-      data.tasks.forEach((t: any) => {
+      data.tasks.forEach((t: BackupRecord) => {
         if (t.id) {
-          const s = cleanDataObj(t);
+          const s = cleanDataObj(t) as BackupRecord;
           s.deadline  = toTs(s.deadline);
           s.createdAt = toTs(s.createdAt);
           s.updatedAt = toTs(s.updatedAt);
-          taskItems.push({ id: t.id, ref: doc(db, 'tasks', t.id), data: s });
+          taskItems.push({ id: t.id as string, ref: doc(db, 'tasks', t.id as string), data: s });
         }
       });
     }
-    const blockerItems: { ref: any; data: any }[] = [];
+    const blockerItems: { ref: DocumentReference; data: BackupRecord }[] = [];
     if (Array.isArray(data.blockers)) {
-      data.blockers.forEach((b: any) => {
+      data.blockers.forEach((b: BackupRecord) => {
         if (b.id) {
-          const { id, ...rest } = cleanDataObj(b);
+          const { id, ...rest } = cleanDataObj(b) as BackupRecord;
           rest.createdAt = toTs(rest.createdAt);
           if (rest.resolvedAt) rest.resolvedAt = toTs(rest.resolvedAt);
-          blockerItems.push({ ref: doc(db, 'blockers', id), data: rest });
+          blockerItems.push({ ref: doc(db, 'blockers', id as string), data: rest });
         }
       });
     }

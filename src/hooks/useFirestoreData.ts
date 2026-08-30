@@ -12,7 +12,7 @@ import {
   db
 } from '../firebase';
 import { Task, User, TaskBlocker, AuditLog, TaskSchema, UserSchema, TaskBlockerSchema, GlobalStatsSchema } from '../types';
-import { useDataStore } from '../store/dataStore';
+import { useDataStore, type GlobalStats } from '../store/dataStore';
 import { logger } from '../lib/logger';
 
 /**
@@ -44,7 +44,7 @@ export async function fetchTaskById(taskId: string): Promise<Task | null> {
   return validateOrPassthrough(TaskSchema, raw, snap.id, 'tasks');
 }
 
-export function useFirestoreData(user: User | null, onError: (err: any, type: string, path: string) => void) {
+export function useFirestoreData(user: User | null, onError: (err: unknown, type: string, path: string) => void) {
   const { tasks, users, blockers, resolvedBlockers, isHydrated, taskLimit, setTasks, setUsers, setBlockers, setResolvedBlockers, setStats, reset } = useDataStore();
   
   // Skeleton is shown if IDB is not yet hydrated and no data exists.
@@ -225,7 +225,7 @@ export function useFirestoreData(user: User | null, onError: (err: any, type: st
       (docSnap) => {
         if (docSnap.exists()) {
           const raw = docSnap.data();
-          setStats(validateOrPassthrough(GlobalStatsSchema, raw, docSnap.id, 'system/stats') as any);
+          setStats(validateOrPassthrough<GlobalStats>(GlobalStatsSchema, raw as GlobalStats, docSnap.id, 'system/stats'));
         }
       },
       (e) => onError(e, 'list', 'system/stats')
