@@ -29,7 +29,7 @@ const firebaseConfig = {
   measurementId: (!isSuspiciousEnv && import.meta.env.VITE_FIREBASE_MEASUREMENT_ID) || firebaseConfigJson.measurementId
 };
 
-const rawDatabaseId = (!isSuspiciousEnv && import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID) || (firebaseConfigJson as any).firestoreDatabaseId || '(default)';
+const rawDatabaseId = (!isSuspiciousEnv && import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID) || (firebaseConfigJson as Record<string, unknown>).firestoreDatabaseId as string | undefined || '(default)';
 const rawProjectId = firebaseConfig.projectId;
 
 export const databaseId = rawDatabaseId;

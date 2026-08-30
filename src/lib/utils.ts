@@ -85,13 +85,13 @@ export function buildUsersById(users: User[]): Map<string, User> {
 }
 
 export function cleanData<T extends object>(obj: T): T {
-  const result: any = { ...obj };
+  const result = { ...obj } as Record<string, unknown>;
   Object.keys(result).forEach(key => {
     if (result[key] === undefined) {
       delete result[key];
     }
   });
-  return result;
+  return result as T;
 }
 
 /**

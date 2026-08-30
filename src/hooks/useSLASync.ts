@@ -28,8 +28,11 @@ const DEFAULTS = {
   Urgent: { value: 4,  unit: 'hours' as const },
 };
 
-function normalize(val: any, defaultVal: number, defaultUnit: 'days' | 'hours') {
-  if (val && typeof val.value === 'number') return { value: val.value, unit: val.unit || defaultUnit };
+function normalize(val: unknown, defaultVal: number, defaultUnit: 'days' | 'hours') {
+  if (val && typeof val === 'object' && typeof (val as { value?: unknown }).value === 'number') {
+    const entry = val as { value: number; unit?: 'days' | 'hours' };
+    return { value: entry.value, unit: entry.unit || defaultUnit };
+  }
   if (typeof val === 'number') return { value: val, unit: defaultUnit };
   return { value: defaultVal, unit: defaultUnit };
 }

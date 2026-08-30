@@ -12,23 +12,10 @@ import {
   db
 } from '../firebase';
 import { Task, User, TaskBlocker, AuditLog, TaskSchema, UserSchema, TaskBlockerSchema, GlobalStatsSchema } from '../types';
-import { useDataStore } from '../store/dataStore';
-import { logger } from '../lib/logger';
+import { useDataStore, type GlobalStats } from '../store/dataStore';
+import { validateOrPassthrough } from '../lib/validateOrPassthrough';
 
-/**
- * Firestore'dan gelen ham veriyi zod şemasıyla doğrular. Şema uyumsuzluğu
- * (ör. bozuk/eksik alan) veriyi listeden düşürmez — yalnızca konsola uyarı
- * yazar — aksi halde tek bir hatalı doküman tüm listeyi görünmez yapardı.
- * Doğrulama başarılıysa şemanın .default(...) doldurduğu alanlarla döner.
- */
-export function validateOrPassthrough<T>(schema: { safeParse: (data: unknown) => { success: boolean; data?: T; error?: unknown } }, raw: T, docId: string, collectionName: string): T {
-  const result = schema.safeParse(raw);
-  if (!result.success) {
-    logger.warn(`[useFirestoreData] Şema doğrulama uyarısı (${collectionName}/${docId}):`, result.error);
-    return raw;
-  }
-  return result.data as T;
-}
+export { validateOrPassthrough };
 
 /**
  * Yerel `tasks` listesinde (taskLimit sınırı, rol bazlı sorgu vb. yüzünden)
@@ -44,7 +31,7 @@ export async function fetchTaskById(taskId: string): Promise<Task | null> {
   return validateOrPassthrough(TaskSchema, raw, snap.id, 'tasks');
 }
 
-export function useFirestoreData(user: User | null, onError: (err: any, type: string, path: string) => void) {
+export function useFirestoreData(user: User | null, onError: (err: unknown, type: string, path: string) => void) {
   const { tasks, users, blockers, resolvedBlockers, isHydrated, taskLimit, setTasks, setUsers, setBlockers, setResolvedBlockers, setStats, reset } = useDataStore();
   
   // Skeleton is shown if IDB is not yet hydrated and no data exists.
@@ -225,7 +212,7 @@ export function useFirestoreData(user: User | null, onError: (err: any, type: st
       (docSnap) => {
         if (docSnap.exists()) {
           const raw = docSnap.data();
-          setStats(validateOrPassthrough(GlobalStatsSchema, raw, docSnap.id, 'system/stats') as any);
+          setStats(validateOrPassthrough<GlobalStats>(GlobalStatsSchema, raw as GlobalStats, docSnap.id, 'system/stats'));
         }
       },
       (e) => onError(e, 'list', 'system/stats')
