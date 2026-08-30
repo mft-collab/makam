@@ -163,7 +163,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
           <textarea
             id="task-description-textarea"
             className={cn(
-              "w-full min-h-[140px] resize-none bg-field-surface border border-makam-border/20 text-text-heading placeholder:text-text-muted/30 rounded-xl px-5 py-4 text-[14px] font-light leading-relaxed transition-all outline-none focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
+              "w-full min-h-[140px] resize-none bg-field-surface border border-executive-blue/[0.05] text-text-heading placeholder:text-text-muted/30 rounded-xl px-5 py-4 text-[14px] font-light leading-relaxed transition-all outline-none focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
               errors.description && "border-status-danger/50"
             )}
             placeholder="İşin detaylarını ve başarı kriterlerini tanımlayın..."
@@ -195,7 +195,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
               id="task-assignee-select"
               {...register('assigneeId')}
               className={cn(
-                "w-full bg-field-surface border border-makam-border/20 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
+                "w-full bg-field-surface border border-executive-blue/[0.05] rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
                 errors.assigneeId && "border-status-danger/50"
               )}
             >
@@ -216,7 +216,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
               id="task-coordinator-select"
               {...register('coordinatorId')}
               className={cn(
-                "w-full bg-field-surface border border-makam-border/20 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
+                "w-full bg-field-surface border border-executive-blue/[0.05] rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
                 errors.coordinatorId && "border-status-danger/50"
               )}
             >
@@ -242,7 +242,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
              <select
               id="task-priority-select"
               {...register('priority')}
-              className="w-full bg-field-surface border border-makam-border/20 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5"
+              className="w-full bg-field-surface border border-executive-blue/[0.05] rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5"
             >
               {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
                 <option key={value} value={value} className="bg-surface-base text-text-heading">{label}</option>
@@ -263,7 +263,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
               ariaLabel="SLA mühleti"
               icon={<Calendar className="w-3.5 h-3.5 text-executive-blue/60 stroke-[1.2] flex-shrink-0" aria-hidden="true" />}
               triggerClassName={cn(
-                "w-full flex items-center gap-3 bg-field-surface border border-makam-border/20 rounded-xl px-4 py-3 text-[13px] transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
+                "w-full flex items-center gap-3 bg-field-surface border border-executive-blue/[0.05] rounded-xl px-4 py-3 text-[13px] transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
                 errors.deadline && "border-status-danger/50"
               )}
             />
