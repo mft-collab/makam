@@ -9,6 +9,7 @@ import { cn } from '../lib/utils';
 import { User } from '../types';
 import { triggerHaptic } from '../lib/haptics';
 import { TAB_ROLES } from '../constants';
+import { useModalBehavior } from './ui/Modal';
 
 interface DockItem {
   id: string;
@@ -17,6 +18,13 @@ interface DockItem {
   roles: string[];
 }
 
+// Sıra = örtük öncelik: MAX_VISIBLE'ı aşan roller (bugün yalnızca Admin, 7
+// modül) burada önce gelen öğeleri birincil barda tutar, geri kalanı "Daha
+// Fazla"ya düşer. Yeni bir modül eklerken veya bir role yeni bir sekme
+// verirken bu sırayı gözden geçirin — örn. TAB_ROLES.manager'a 5. bir sekme
+// eklenirse (bugün Manager tam MAX_VISIBLE=4'te, overflow'suz), en sık
+// kullanılan sekmenin burada hâlâ ilk 4 içinde kaldığından emin olun (bkz.
+// mobil tasarım denetimi).
 const ALL_ITEMS: DockItem[] = [
   { id: 'dashboard', label: 'Harekat',   icon: ShieldCheck,   roles: TAB_ROLES.dashboard },
   { id: 'tasks',     label: 'Talimatlar', icon: CheckSquare,  roles: TAB_ROLES.tasks },
@@ -34,15 +42,41 @@ interface MobileDockProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onLogout: () => void;
+  /** Bekleyen bildirim sayısı — bugün tamamı görev kaynaklı olduğundan
+   *  (bkz. NotificationPanel'in setActiveTab('tasks') yönlendirmesi)
+   *  rozet yalnızca 'tasks' öğesinde gösterilir. */
+  notificationCount?: number;
 }
 
-export const MobileDock = ({ user, activeTab, setActiveTab, onLogout }: MobileDockProps) => {
+export const MobileDock = ({ user, activeTab, setActiveTab, onLogout, notificationCount = 0 }: MobileDockProps) => {
   const [showMore, setShowMore] = React.useState(false);
+  const overflowPanelRef = React.useRef<HTMLDivElement>(null);
+  const firstOverflowItemRef = React.useRef<HTMLButtonElement>(null);
 
   const filtered = ALL_ITEMS.filter(item => user && item.roles.includes(user.role));
   const primary  = filtered.slice(0, MAX_VISIBLE);
   const overflow = filtered.slice(MAX_VISIBLE);
   const hasMore  = overflow.length > 0;
+  const badges: Partial<Record<string, number>> = notificationCount > 0 ? { tasks: notificationCount } : {};
+  // Staff gibi düşük modül sayılı roller (bugün 2 sekme: Harekat, Talimatlar)
+  // barı eskiden uçtan uca (left-4 right-4) flex-1 ile eşit paylaştırıyordu —
+  // 2 öğe her biri barın yaklaşık yarısını kaplayıp aralarında büyük, dengesiz
+  // bir boşluk bırakıyordu (bkz. mobil tasarım denetimi). Az öğe sayısında
+  // (≤3) bar artık içeriğe göre daralıp ortalanıyor — segmented-control
+  // görünümüne yakın, premium mobil nav'larda alışılan davranış.
+  const itemCount = primary.length + (hasMore ? 1 : 0);
+  const isCompact = itemCount <= 3;
+
+  // Overflow paneli görsel olarak bir backdrop + kart taşıyan tam teşekküllü
+  // bir modal — ui/Modal'ın "ortak modal davranışı"nı (Escape ile kapatma,
+  // Tab focus-trap, açılışta odaklama) paylaşır; eskiden bu panelde hiçbiri
+  // yoktu (bkz. mobil tasarım denetimi, Tutarlılık bulgusu).
+  useModalBehavior({
+    isOpen: showMore,
+    onClose: () => setShowMore(false),
+    containerRef: overflowPanelRef,
+    initialFocusRef: firstOverflowItemRef,
+  });
 
   const handleSelect = (id: string) => {
     triggerHaptic('light');
@@ -68,6 +102,10 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout }: MobileDo
 
             {/* Overflow panel — sağ alt köşeden yukarı fırlar */}
             <motion.div
+              ref={overflowPanelRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Ek Modüller"
               initial={{ opacity: 0, y: 16, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 16, scale: 0.96 }}
@@ -80,20 +118,22 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout }: MobileDo
             >
               {/* Panel başlık */}
               <div className="px-4 py-2.5 border-b border-executive-blue/[0.04]">
-                <span className="text-[8px] text-text-muted/50 uppercase tracking-[0.18em] font-medium truncate block">
+                <span className="text-[9.5px] text-text-muted/70 uppercase tracking-[0.16em] font-medium truncate block">
                   Ek Modüller
                 </span>
               </div>
 
-              {overflow.map((item) => {
+              {overflow.map((item, index) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
+                const badgeCount = badges[item.id];
                 return (
                   <button
                     key={item.id}
+                    ref={index === 0 ? firstOverflowItemRef : undefined}
                     onClick={() => handleSelect(item.id)}
                     aria-current={isActive ? 'page' : undefined}
-                    aria-label={item.label}
+                    aria-label={badgeCount ? `${item.label}, ${badgeCount} bekleyen bildirim` : item.label}
                     className={cn(
                       'flex items-center gap-3 w-full px-4 py-3.5 transition-all duration-200 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-inset',
                       isActive
@@ -104,7 +144,7 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout }: MobileDo
                     <Icon
                       className={cn(
                         'w-4 h-4 flex-shrink-0',
-                        isActive ? 'text-executive-blue' : 'text-text-muted/60'
+                        isActive ? 'text-executive-blue' : 'text-text-muted/75'
                       )}
                       strokeWidth={isActive ? 2 : 1.5}
                       aria-hidden={true}
@@ -112,6 +152,14 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout }: MobileDo
                     <span className="text-[12px] font-medium tracking-wide flex-1 min-w-0 truncate">
                       {item.label}
                     </span>
+                    {Boolean(badgeCount) && (
+                      <span
+                        aria-hidden="true"
+                        className="flex-shrink-0 min-w-[16px] h-[16px] px-1 flex items-center justify-center rounded-full bg-status-danger text-white text-[9px] font-bold leading-none"
+                      >
+                        {badgeCount! > 9 ? '9+' : badgeCount}
+                      </span>
+                    )}
                     {isActive && (
                       <span className="w-1.5 h-1.5 rounded-full bg-executive-gold flex-shrink-0" aria-hidden="true" />
                     )}
@@ -142,24 +190,31 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout }: MobileDo
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom) - 12px, 0px)' }}
       >
         <div
-          className="flex items-stretch gap-1 px-2.5 sm:px-3 py-1.5
-                     bg-makam-glass backdrop-blur-[30px] backdrop-saturate-[180%]
-                     border border-surface-border
-                     rounded-[28px]
-                     shadow-[0_12px_40px_-10px_rgba(22,21,19,0.08),0_0_0_0.5px_rgba(22,21,19,0.04)]"
+          className={cn(
+            'flex items-stretch gap-1 px-2.5 sm:px-3 py-1.5',
+            'bg-makam-glass backdrop-blur-[30px] backdrop-saturate-[180%]',
+            'border border-surface-border',
+            'rounded-[28px]',
+            'shadow-[0_12px_40px_-10px_rgba(22,21,19,0.08),0_0_0_0.5px_rgba(22,21,19,0.04)]',
+            isCompact && 'mx-auto w-fit'
+          )}
         >
           {primary.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
+            const badgeCount = badges[item.id];
             return (
               <button
                 key={item.id}
                 onClick={() => handleSelect(item.id)}
                 aria-current={isActive ? 'page' : undefined}
-                aria-label={item.label}
-                className="flex-1 flex flex-col items-center justify-center
-                           gap-1 py-2.5 px-0.5 sm:px-1 rounded-xl transition-all duration-300
-                           relative min-w-0 group active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-1"
+                aria-label={badgeCount ? `${item.label}, ${badgeCount} bekleyen bildirim` : item.label}
+                className={cn(
+                  'flex flex-col items-center justify-center',
+                  'gap-1 py-2.5 rounded-xl transition-all duration-300',
+                  'relative min-w-0 group active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-1',
+                  isCompact ? 'w-20 sm:w-24 shrink-0' : 'flex-1 px-0.5 sm:px-1'
+                )}
               >
                 {/* Aktif zemin */}
                 {isActive && (
@@ -180,7 +235,7 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout }: MobileDo
                     <Icon
                       className={cn(
                         'w-5 h-5 transition-colors duration-300',
-                        isActive ? 'text-executive-blue' : 'text-text-muted/50 group-hover:text-text-muted'
+                        isActive ? 'text-executive-blue' : 'text-text-muted/70 group-hover:text-text-muted'
                       )}
                       strokeWidth={isActive ? 2 : 1.5}
                     />
@@ -201,13 +256,26 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout }: MobileDo
                       />
                     )}
                   </AnimatePresence>
+
+                  {/* Bekleyen bildirim rozeti — aktif noktayla çakışmaması için
+                      karşı köşede (bkz. mobil tasarım denetimi). */}
+                  {Boolean(badgeCount) && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute -top-1 -left-1.5 min-w-[15px] h-[15px] px-[3px]
+                                 flex items-center justify-center rounded-full
+                                 bg-status-danger text-white text-[8.5px] font-bold leading-none"
+                    >
+                      {badgeCount! > 9 ? '9+' : badgeCount}
+                    </span>
+                  )}
                 </div>
 
                 {/* Etiket */}
                 <span
                   className={cn(
-                    'text-[8.5px] sm:text-[9px] font-medium tracking-normal sm:tracking-wide truncate leading-none transition-colors duration-300 max-w-full',
-                    isActive ? 'text-executive-blue' : 'text-text-muted/45 group-hover:text-text-muted/70'
+                    'text-[10px] sm:text-[10.5px] font-medium tracking-normal sm:tracking-wide truncate leading-none transition-colors duration-300 max-w-full',
+                    isActive ? 'text-executive-blue' : 'text-text-muted/70 group-hover:text-text-muted'
                   )}
                   aria-hidden="true"
                 >
@@ -227,9 +295,12 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout }: MobileDo
               aria-label={showMore ? 'Ek modülleri gizle' : 'Ek modülleri göster'}
               aria-expanded={showMore}
               aria-haspopup="true"
-              className="flex-1 flex flex-col items-center justify-center
-                         gap-1 py-2.5 px-0.5 sm:px-1 rounded-xl transition-all duration-300
-                         relative min-w-0 group active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-1"
+              className={cn(
+                'flex flex-col items-center justify-center',
+                'gap-1 py-2.5 rounded-xl transition-all duration-300',
+                'relative min-w-0 group active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-1',
+                isCompact ? 'w-20 sm:w-24 shrink-0' : 'flex-1 px-0.5 sm:px-1'
+              )}
             >
               {showMore && (
                 <motion.div
@@ -244,7 +315,7 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout }: MobileDo
                 <MoreHorizontal
                   className={cn(
                     'w-5 h-5 transition-colors duration-300',
-                    showMore ? 'text-executive-blue' : 'text-text-muted/50 group-hover:text-text-muted'
+                    showMore ? 'text-executive-blue' : 'text-text-muted/70 group-hover:text-text-muted'
                   )}
                   strokeWidth={1.5}
                 />
@@ -253,8 +324,8 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout }: MobileDo
               <span
                 aria-hidden="true"
                 className={cn(
-                  'text-[8.5px] sm:text-[9px] font-medium tracking-normal sm:tracking-wide leading-none transition-colors duration-300',
-                  showMore ? 'text-executive-blue' : 'text-text-muted/45 group-hover:text-text-muted/70'
+                  'text-[10px] sm:text-[10.5px] font-medium tracking-normal sm:tracking-wide leading-none transition-colors duration-300',
+                  showMore ? 'text-executive-blue' : 'text-text-muted/70 group-hover:text-text-muted'
                 )}
               >
                 Diğer

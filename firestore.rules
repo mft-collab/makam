@@ -133,6 +133,7 @@ service cloud.firestore {
              data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 100 &&
              data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
              data.role in ['Admin', 'Manager', 'Staff'] &&
+             (!('departmentId' in data) || data.departmentId == null || (data.departmentId is string && data.departmentId.size() <= 100)) &&
              (!('fcmTokens' in data) || (data.fcmTokens is list && data.fcmTokens.size() <= 10));
     }
 
@@ -287,21 +288,30 @@ service cloud.firestore {
              (!('source' in data) || (data.source is string && data.source.size() <= 50));
     }
 
-    // blockers/{id} read/create kurallarındaki AYNI "bağlı görev üzerinden
-    // erişim" deseni eskiden 6 kez tekrarlanıyordu (bkz. kod denetimi) —
-    // taskId parametreli tek bir yardımcıya çıkarıldı. Firestore rules aynı
-    // dokümana yapılan tekrarlı get() çağrılarını tek bir evaluation içinde
-    // önbelleğe alır, bu yüzden mantık/performans AYNI kalır, yalnızca kaynak
-    // kod tekrarı ortadan kalkar.
-    function blockerTaskGrantsAccess(taskId) {
+    // blockers/{id} read/create ve audit_logs/{id} create kurallarındaki AYNI
+    // "bağlı görev üzerinden erişim" deseni eskiden ayrı ayrı tekrarlanıyordu
+    // (bkz. kod denetimi) — taskId parametreli tek bir yardımcıya çıkarıldı.
+    // Firestore rules aynı dokümana yapılan tekrarlı get() çağrılarını tek bir
+    // evaluation içinde önbelleğe alır, bu yüzden mantık/performans AYNI
+    // kalır, yalnızca kaynak kod tekrarı ortadan kalkar.
+    function taskGrantsAccess(taskId) {
+      // tasks/{taskId} okuma kuralındaki assigneeId e-posta fallback'iyle
+      // (assigneeId ilk girişten önce UID yerine e-posta olabilir) PARİTE
+      // sağlanır — audit_logs create kuralı bu yardımcıyı kullandığından,
+      // bu fallback eksik olsaydı e-posta ile atanmış (henüz ilk girişini
+      // yapmamış) bir kullanıcının kendi görevini geçirmesi, audit_logs
+      // yazımının reddedilmesi yüzünden TÜM transaction'ı başarısız kılardı
+      // (bkz. kod denetimi).
+      let task = get(/databases/$(database)/documents/tasks/$(taskId)).data;
       return exists(/databases/$(database)/documents/tasks/$(taskId)) &&
         (
-          get(/databases/$(database)/documents/tasks/$(taskId)).data.creatorId == request.auth.uid ||
-          get(/databases/$(database)/documents/tasks/$(taskId)).data.assigneeId == request.auth.uid ||
-          get(/databases/$(database)/documents/tasks/$(taskId)).data.departmentId == getUserDepartment() ||
-          !('departmentId' in get(/databases/$(database)/documents/tasks/$(taskId)).data) ||
-          get(/databases/$(database)/documents/tasks/$(taskId)).data.departmentId == null ||
-          get(/databases/$(database)/documents/tasks/$(taskId)).data.departmentId == ""
+          task.creatorId == request.auth.uid ||
+          task.assigneeId == request.auth.uid ||
+          ('email' in request.auth.token && task.assigneeId == request.auth.token.email) ||
+          task.departmentId == getUserDepartment() ||
+          !('departmentId' in task) ||
+          task.departmentId == null ||
+          task.departmentId == ""
         );
     }
 
@@ -344,7 +354,19 @@ service cloud.firestore {
           isOwner(userId) &&
           request.auth.token.email_verified == true &&
           exists(/databases/$(database)/documents/users/$(incoming().email)) &&
-          get(/databases/$(database)/documents/users/$(incoming().email)).data.role == incoming().role
+          get(/databases/$(database)/documents/users/$(incoming().email)).data.role == incoming().role &&
+          // departmentId de davet dokümanıyla birebir eşleşmeli — aksi halde
+          // kullanıcı ilk girişte kendine keyfi bir departman atayıp
+          // tasks/blockers/audit_logs okuma kurallarındaki departman
+          // izolasyonunu tamamen atlatabilir (bkz. kod denetimi).
+          (
+            (
+              'departmentId' in get(/databases/$(database)/documents/users/$(incoming().email)).data
+                ? get(/databases/$(database)/documents/users/$(incoming().email)).data.departmentId
+                : null
+            ) ==
+            ('departmentId' in incoming() ? incoming().departmentId : null)
+          )
         )
       );
       allow update: if isSignedIn() && isValidId(userId) && (
@@ -382,6 +404,18 @@ service cloud.firestore {
         isValidTransition(existing().status, incoming().status) ||
         // Admin her zaman override edebilir
         isAdmin()
+      ) && (
+        // Optimistic locking: lockVersion yalnızca +1 artabilir — aksi halde
+        // bu alan tamamen client disiplinine bağlı kalır ve eşzamanlı
+        // düzenlemelerde VERSION_MISMATCH tespiti (conflictDetectionService)
+        // sessizce atlatılabilir (bkz. kod denetimi). restoreBackup gibi
+        // Admin'e özgü toplu geri yükleme akışları lockVersion'ı yedekteki
+        // değerle yazdığından Admin bu kısıtlamanın dışında tutulur — tıpkı
+        // yukarıdaki durum geçişi override'ında olduğu gibi.
+        !('lockVersion' in incoming()) ||
+        !('lockVersion' in existing()) ||
+        incoming().lockVersion == existing().lockVersion + 1 ||
+        isAdmin()
       ) && isValidTaskBusinessRules(incoming());
       allow delete: if isAdmin();
     }
@@ -391,10 +425,10 @@ service cloud.firestore {
       // koleksiyonuyla aynı desen. Bağlı görev yoksa (silinmiş/geçersiz
       // referans) yalnızca Admin erişebilir.
       allow read: if isSignedIn() && (
-        isAdmin() || blockerTaskGrantsAccess(resource.data.taskId)
+        isAdmin() || taskGrantsAccess(resource.data.taskId)
       );
       allow create: if isSignedIn() && isValidId(blockerId) && isValidBlocker(incoming()) && (
-        isAdmin() || blockerTaskGrantsAccess(incoming().taskId)
+        isAdmin() || taskGrantsAccess(incoming().taskId)
       );
       // Manager yalnızca kendi departmanındaki görevlere bağlı engelleri
       // güncelleyebilir (tasks update kuralıyla aynı sıkılıkta) — Admin sınırsız.
@@ -433,7 +467,15 @@ service cloud.firestore {
           )
         )
       );
-      allow create: if isSignedIn() && isValidId(logId) && isValidAuditLog(incoming());
+      // Yazan, kaydın ilişkili olduğu göreve gerçekten erişimi olmalı — aksi
+      // halde herhangi bir giriş yapmış kullanıcı, hiç erişimi olmayan bir
+      // taskId için uydurma oldValue/newValue/changes içeren bir "denetim
+      // kaydı" enjekte edebilir ve bu kayıt update/delete kapalı olduğundan
+      // kalıcı hale gelir (bkz. kod denetimi — audit_logs'un "değiştirilemez
+      // kanıt" iddiasını geçersiz kılan bir sahtecilik açığıydı).
+      allow create: if isSignedIn() && isValidId(logId) && isValidAuditLog(incoming()) && (
+        isAdmin() || taskGrantsAccess(incoming().taskId)
+      );
       // Denetim izi değiştirilemez/silinemez — Admin dahil hiçbir istemci rolü
       // kaydı sonradan değiştiremez veya silemez (kanıt bütünlüğü).
       allow update, delete: if false;
@@ -462,13 +504,40 @@ service cloud.firestore {
 
     match /system_logs/{logId} {
       allow read: if isAdmin();
-      allow create: if isSignedIn() && isValidId(logId) && isValidSystemLog(incoming());
-      allow update, delete: if false;
+      // Bu koleksiyona TEK yazan yer functions/src/scheduledAudit.ts ve
+      // statsReconciliation.ts'dir (Admin SDK, rules'ı zaten bypass eder) —
+      // client tarafında hiçbir meşru yazma yolu yok. isValidSystemLog'a
+      // uygun herhangi bir istemcinin create edebilmesi yalnızca sahte
+      // sistem-log enjeksiyonuna kapı açıyordu (bkz. kod denetimi), bu yüzden
+      // client create'i tamamen kapatıldı.
+      allow create, update, delete: if false;
     }
 
     match /system/{docId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      // Aggregate sayaç dokümanı (system/stats): totalTasks/status_X/
+      // completedTaskCount alanları taskService.ts + settingsService.ts
+      // (client, increment() ile) ve scheduledAudit.ts/taskTriggers.ts
+      // (Cloud Functions, Admin SDK — bu kuralı zaten bypass eder) tarafından
+      // güncellenir. Aşağıdaki dar istisna olmadan write yalnızca Admin'e
+      // açıktı; ama client kodu ROL AYRIMI YAPMADAN her görev
+      // oluşturma/durum değiştirme/silme transaction'ında bu dokümana da
+      // yazıyor — Firestore transaction/batch'te tek bir işlem rules'ı
+      // ihlal ederse TÜMÜ reddedilir, yani bu kural Admin olmayan hiçbir
+      // kullanıcının görev işlemi yapamamasına yol açan bir regresyon
+      // olabilirdi (bkz. kod denetimi). İstisna, yalnızca bu dar sayaç
+      // alan kümesini `stats` dokümanına yazmaya izin verir; başka bir
+      // system/{docId} dokümanı veya başka bir alan hâlâ yalnızca Admin'e açık.
+      allow write: if isAdmin() || (
+        isSignedIn() &&
+        docId == 'stats' &&
+        incoming().keys().hasOnly([
+          'totalTasks', 'completedTaskCount',
+          'status_ASSIGNED', 'status_PENDING_DELEGATION', 'status_IN_PROGRESS',
+          'status_BLOCKED', 'status_AWAITING_APPROVAL', 'status_COMPLETED',
+          'status_CANCELLED', 'status_CRISIS'
+        ])
+      );
     }
 
     // Uygulama hata kayıtları — errorLoggingService tarafından yazılır

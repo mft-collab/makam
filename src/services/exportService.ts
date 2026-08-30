@@ -217,6 +217,16 @@ export async function exportTasksToPDF(
 /**
  * Görevleri CSV olarak dışa aktar
  */
+// CSV/Formül Enjeksiyonu: bir hücre '=', '+', '-' veya '@' ile başlıyorsa
+// Excel/Google Sheets bunu içeri aktarırken formül olarak yorumlayabilir
+// (klasik "CSV Injection" — bkz. OWASP). Görev başlığı/açıklaması ve
+// kullanıcı adı gibi alanlar serbest metin kullanıcı girdisidir; tehlikeli
+// önekli bir değerin önüne tek tırnak eklemek hücreyi düz metne zorlar ve
+// formül olarak çalışmasını engeller (bkz. kod denetimi).
+function sanitizeCsvField(value: string): string {
+  return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+}
+
 export function exportTasksToCSV(
   tasks: Task[],
   users: User[],
@@ -228,12 +238,12 @@ export function exportTasksToCSV(
 
   const rows = filtered.map(task => [
     task.id,
-    `"${task.title.replace(/"/g, '""')}"`,
-    `"${(task.description ?? '').replace(/"/g, '""')}"`,
+    `"${sanitizeCsvField(task.title).replace(/"/g, '""')}"`,
+    `"${sanitizeCsvField(task.description ?? '').replace(/"/g, '""')}"`,
     STATUS_LABELS[task.status] ?? task.status,
     PRIORITY_LABELS[task.priority] ?? task.priority,
-    getUserName(task.assigneeId, users),
-    getUserName(task.creatorId, users),
+    sanitizeCsvField(getUserName(task.assigneeId, users)),
+    sanitizeCsvField(getUserName(task.creatorId, users)),
     format(task.createdAt, 'yyyy-MM-dd HH:mm'),
     format(task.deadline, 'yyyy-MM-dd'),
     task.parentId ? 'Evet' : 'Hayır',

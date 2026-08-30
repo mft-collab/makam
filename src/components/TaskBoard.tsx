@@ -353,7 +353,12 @@ export const TaskBoard = ({
         </div>
 
         {/* Priority filter */}
-        <div className="flex items-center gap-2 bg-makam-glass px-2.5 sm:px-3 rounded-xl border border-executive-blue/[0.05] h-8 min-w-0 flex-1 sm:flex-none">
+        {/* min-w-0 + flex-1 üçünü de tek satıra sıkıştırıp native <select>
+            metnini (ör. "TÜM ÖNCELİKLER") elipsissiz ortadan kesiyordu (bkz.
+            mobil tasarım denetimi) — flex-[1_1_46%] iki filtreyi bir satırda
+            tutacak kadar yer bırakır, sığmayan üçüncüsü/dördüncüsü elipsis
+            yerine okunaklı biçimde bir sonraki satıra sarar. */}
+        <div className="flex items-center gap-2 bg-makam-glass px-2.5 sm:px-3 rounded-xl border border-executive-blue/[0.05] h-8 min-w-0 flex-[1_1_46%] sm:flex-none">
           <Filter className="w-3 h-3 text-text-tertiary stroke-[1.5]" />
           <select
             value={priorityFilter}
@@ -369,7 +374,12 @@ export const TaskBoard = ({
         </div>
 
         {/* #12 — Durum filtresi */}
-        <div className="flex items-center gap-2 bg-makam-glass px-2.5 sm:px-3 rounded-xl border border-executive-blue/[0.05] h-8 min-w-0 flex-1 sm:flex-none">
+        {/* min-w-0 + flex-1 üçünü de tek satıra sıkıştırıp native <select>
+            metnini (ör. "TÜM ÖNCELİKLER") elipsissiz ortadan kesiyordu (bkz.
+            mobil tasarım denetimi) — flex-[1_1_46%] iki filtreyi bir satırda
+            tutacak kadar yer bırakır, sığmayan üçüncüsü/dördüncüsü elipsis
+            yerine okunaklı biçimde bir sonraki satıra sarar. */}
+        <div className="flex items-center gap-2 bg-makam-glass px-2.5 sm:px-3 rounded-xl border border-executive-blue/[0.05] h-8 min-w-0 flex-[1_1_46%] sm:flex-none">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -384,7 +394,12 @@ export const TaskBoard = ({
         </div>
 
         {/* Assignee filter */}
-        <div className="flex items-center gap-2 bg-makam-glass px-2.5 sm:px-3 rounded-xl border border-executive-blue/[0.05] h-8 min-w-0 flex-1 sm:flex-none">
+        {/* min-w-0 + flex-1 üçünü de tek satıra sıkıştırıp native <select>
+            metnini (ör. "TÜM ÖNCELİKLER") elipsissiz ortadan kesiyordu (bkz.
+            mobil tasarım denetimi) — flex-[1_1_46%] iki filtreyi bir satırda
+            tutacak kadar yer bırakır, sığmayan üçüncüsü/dördüncüsü elipsis
+            yerine okunaklı biçimde bir sonraki satıra sarar. */}
+        <div className="flex items-center gap-2 bg-makam-glass px-2.5 sm:px-3 rounded-xl border border-executive-blue/[0.05] h-8 min-w-0 flex-[1_1_46%] sm:flex-none">
           <select
             value={assigneeFilter}
             onChange={(e) => setAssigneeFilter(e.target.value)}

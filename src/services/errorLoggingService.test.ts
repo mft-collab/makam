@@ -67,7 +67,7 @@ describe('errorLoggingService.logError', () => {
 
   it('appVersion her zaman sabit sürüm değeridir', async () => {
     await logError(new Error('x'), 'manual');
-    expect(lastLoggedEntry()).toMatchObject({ appVersion: '2.2.0' });
+    expect(lastLoggedEntry()).toMatchObject({ appVersion: '2.3.0' });
   });
 
   it('timestamp Date.now() civarında bir sayıdır', async () => {

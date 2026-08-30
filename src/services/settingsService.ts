@@ -160,23 +160,32 @@ export const settingsService = {
     // fonksiyonlarında increment() ile güncellenir. Restore burada bunların
     // hiçbirini çağırmadan doğrudan writeBatch yazdığından, restore edilen
     // her görev için ESKİ durumu (varsa) okuyup gerçek delta'yı kendimiz
-    // hesaplıyor ve AYNI batch'e ekliyoruz — aksi halde sayaçlar restore
-    // sonrası kalıcı olarak gerçek veriden sapar ve hiçbir normal işlemle
-    // kendiliğinden düzelmez (her normal işlem yalnızca kendi deltasını uygular).
-    const statsDelta: Record<string, number> = {};
+    // hesaplıyoruz. Delta, görevin YAZILDIĞI chunk'ın batch'ine AYNI batch
+    // içinde ekleniyor (aşağıdaki chunk döngüsü) — önceden TÜM görevlerin
+    // deltası tek seferde yalnızca SON chunk'a ekleniyordu; restore yarıda
+    // kesilirse (ağ hatası, tarayıcı kapanması, runWithRetry tükenmesi) önceki
+    // chunk'ların görev yazımları zaten commit edilmiş olurdu ama telafi edici
+    // delta hiç uygulanmazdı ve sayaçlar kalıcı olarak sapardı (bkz. kod
+    // denetimi). Her chunk kendi görevlerinin deltasını kendi batch'iyle
+    // ATOMİK olarak taşıdığından, kesilme durumunda yalnızca commit edilmemiş
+    // chunk'ların hem görev yazımı hem deltası birlikte eksik kalır — sayaçlar
+    // hiçbir zaman gerçek veriden sapmaz.
+    const taskDeltaById = new Map<string, Record<string, number>>();
     for (const item of taskItems) {
       const prevSnap = await getDoc(item.ref);
       const newStatus = item.data.status as string | undefined;
+      const delta: Record<string, number> = {};
       if (!prevSnap.exists()) {
-        statsDelta.totalTasks = (statsDelta.totalTasks ?? 0) + 1;
-        if (newStatus) statsDelta[`status_${newStatus}`] = (statsDelta[`status_${newStatus}`] ?? 0) + 1;
+        delta.totalTasks = 1;
+        if (newStatus) delta[`status_${newStatus}`] = (delta[`status_${newStatus}`] ?? 0) + 1;
       } else {
         const prevStatus = (prevSnap.data() as { status?: string }).status;
         if (newStatus && prevStatus !== newStatus) {
-          if (prevStatus) statsDelta[`status_${prevStatus}`] = (statsDelta[`status_${prevStatus}`] ?? 0) - 1;
-          statsDelta[`status_${newStatus}`] = (statsDelta[`status_${newStatus}`] ?? 0) + 1;
+          if (prevStatus) delta[`status_${prevStatus}`] = (delta[`status_${prevStatus}`] ?? 0) - 1;
+          delta[`status_${newStatus}`] = (delta[`status_${newStatus}`] ?? 0) + 1;
         }
       }
+      taskDeltaById.set(item.id, delta);
     }
 
     const items = [...userItems, ...taskItems, ...blockerItems];
@@ -185,12 +194,20 @@ export const settingsService = {
       const chunk = items.slice(i, i + CHUNK);
       const batch = writeBatch(db);
       chunk.forEach(it => batch.set(it.ref, it.data, { merge: true }));
-      // Sayaç deltası tek seferlik, tüm chunk'lardan bağımsız bir işlem
-      // olarak yalnızca SON chunk'a eklenir — increment() atomik ve
-      // birikimli olduğundan hangi chunk'ta gönderildiği sonucu etkilemez.
-      if (i + CHUNK >= items.length && Object.keys(statsDelta).length > 0) {
+
+      const chunkStatsDelta: Record<string, number> = {};
+      chunk.forEach(it => {
+        const itemId = (it as { id?: string }).id;
+        if (!itemId) return;
+        const delta = taskDeltaById.get(itemId);
+        if (!delta) return;
+        Object.entries(delta).forEach(([key, value]) => {
+          chunkStatsDelta[key] = (chunkStatsDelta[key] ?? 0) + value;
+        });
+      });
+      if (Object.keys(chunkStatsDelta).length > 0) {
         const statsPayload: Record<string, ReturnType<typeof increment>> = {};
-        Object.entries(statsDelta).forEach(([key, value]) => {
+        Object.entries(chunkStatsDelta).forEach(([key, value]) => {
           if (value !== 0) statsPayload[key] = increment(value);
         });
         if (Object.keys(statsPayload).length > 0) {

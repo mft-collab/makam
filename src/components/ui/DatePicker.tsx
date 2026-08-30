@@ -35,6 +35,13 @@ export const DatePicker = ({ id, value, onChange, ariaLabel, className, icon, tr
   const selected = parseValue(value);
   const [isOpen, setIsOpen] = useState(false);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(selected ?? new Date()));
+  // WAI-ARIA date-picker deseni: takvim ızgarasında Tab yalnızca TEK bir
+  // durağa (roving tabindex) karşılık gelmeli, günler arası gezinme ok
+  // tuşlarıyla yapılmalı. Önceden 42 gün hücresi arasında yalnızca Tab ile
+  // dolaşılabiliyordu — ayın son günlerine ulaşmak klavye kullanıcıları için
+  // onlarca Tab basışı gerektirebiliyordu (bkz. kod denetimi).
+  const [focusedDay, setFocusedDay] = useState<Date | null>(null);
+  const dayRefs = useRef(new Map<string, HTMLButtonElement>());
   const stackIdRef = useRef<symbol | null>(null);
   if (stackIdRef.current === null) stackIdRef.current = Symbol('date-picker');
   // Takvim gövdesinin yaklaşık yüksekliği (başlık + hafta günleri + 6 satır gün hücresi).
@@ -68,7 +75,9 @@ export const DatePicker = ({ id, value, onChange, ariaLabel, className, icon, tr
   }, [isOpen]);
 
   const openPicker = () => {
-    setViewMonth(startOfMonth(selected ?? new Date()));
+    const initialDay = selected ?? new Date();
+    setViewMonth(startOfMonth(initialDay));
+    setFocusedDay(initialDay);
     const rect = containerRef.current?.getBoundingClientRect();
     if (rect) {
       const roomBelow = window.innerHeight - rect.bottom;
@@ -81,6 +90,36 @@ export const DatePicker = ({ id, value, onChange, ariaLabel, className, icon, tr
   const handleSelect = (day: Date) => {
     onChange(format(day, VALUE_FORMAT));
     setIsOpen(false);
+  };
+
+  // focusedDay değiştiğinde (açılış veya ok tuşu navigasyonu) DOM odağını
+  // ilgili gün butonuna taşır. Ay sınırını aşan bir hareket (ör. ayın 1'inde
+  // sola gitmek) `moveFocus` içinde viewMonth'u da güncellediğinden, bu
+  // effect viewMonth değiştiğinde de tekrar çalışıp yeni ayın ızgarası DOM'a
+  // yazıldıktan SONRA odağı doğru hücreye taşır.
+  useEffect(() => {
+    if (!isOpen || !focusedDay) return;
+    const key = format(focusedDay, VALUE_FORMAT);
+    dayRefs.current.get(key)?.focus();
+  }, [isOpen, focusedDay, viewMonth]);
+
+  const moveFocus = (deltaDays: number) => {
+    setFocusedDay(prev => {
+      const base = prev ?? selected ?? new Date();
+      const next = addDays(base, deltaDays);
+      if (!isSameMonth(next, viewMonth)) setViewMonth(startOfMonth(next));
+      return next;
+    });
+  };
+
+  const handleDayKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    switch (e.key) {
+      case 'ArrowLeft': e.preventDefault(); moveFocus(-1); break;
+      case 'ArrowRight': e.preventDefault(); moveFocus(1); break;
+      case 'ArrowUp': e.preventDefault(); moveFocus(-7); break;
+      case 'ArrowDown': e.preventDefault(); moveFocus(7); break;
+      default: break;
+    }
   };
 
   const days: Date[] = [];
@@ -156,11 +195,20 @@ export const DatePicker = ({ id, value, onChange, ariaLabel, className, icon, tr
               {days.map(day => {
                 const isSelected = !!selected && isSameDay(day, selected);
                 const inMonth = isSameMonth(day, viewMonth);
+                const dayKey = format(day, VALUE_FORMAT);
+                const isFocused = !!focusedDay && isSameDay(day, focusedDay);
                 return (
                   <button
-                    key={day.toISOString()}
+                    key={dayKey}
+                    ref={el => {
+                      if (el) dayRefs.current.set(dayKey, el);
+                      else dayRefs.current.delete(dayKey);
+                    }}
                     type="button"
                     onClick={() => handleSelect(day)}
+                    onKeyDown={handleDayKeyDown}
+                    onFocus={() => setFocusedDay(day)}
+                    tabIndex={isFocused ? 0 : -1}
                     aria-current={isToday(day) ? 'date' : undefined}
                     aria-pressed={isSelected}
                     className={cn(

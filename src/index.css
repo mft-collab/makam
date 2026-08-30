@@ -348,6 +348,20 @@
   animation: makam-flash 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/* prefers-reduced-motion: yalnızca dekoratif/dikkat-çekici döngüsel animasyonları
+   (pulse/ping/flash) kapatır — animate-spin gibi yükleme göstergeleri kasıtlı
+   olarak dışarıda bırakılıyor, çünkü onlar işlevsel durum bilgisi taşıyor ve
+   sabit hızda dönmeleri vestibüler rahatsızlık riski taşımıyor (bkz. mobil
+   tasarım denetimi — MobileDock/AppHeader'daki motion/react animasyonları
+   ise App.tsx'teki <MotionConfig reducedMotion="user"> ile ayrıca ele alınıyor). */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  .animate-ping,
+  .animate-makam-flash {
+    animation: none;
+  }
+}
+
 /* Hide scrollbar for modals to preserve luxury UI */
 .custom-scrollbar::-webkit-scrollbar {
   display: none;

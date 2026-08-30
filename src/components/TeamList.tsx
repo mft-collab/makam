@@ -17,6 +17,7 @@ import { AUDIT_FIELD_LABELS, formatAuditValue } from '../lib/auditLabels';
 import { roleConfig, OrgNodeCard } from './teamList/subcomponents';
 import { Skeleton } from './ui/Skeleton';
 import { useIsAdmin } from '../hooks/useIsAdmin';
+import { logger } from '../lib/logger';
 
 interface TeamListProps {
   users: User[];
@@ -98,14 +99,20 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
         const logs = await auditLogService.queryUserLogs(selectedUser.uid, selectedUser.email);
         setUserLogs(logs);
       } catch (error) {
-        console.error('Error fetching user logs:', error);
+        logger.error('Error fetching user logs:', error);
         addToast({ title: '⚠️ Denetim İzi Yüklenemedi', body: 'Personel geçmişi getirilirken bir hata oluştu.', type: 'danger' });
       } finally {
         setLoadingLogs(false);
       }
     };
     fetchUserLogs();
-  }, [selectedUser, currentUser]);
+    // currentUser NESNESİNİN TAMAMI değil, yalnızca uid'i bağımlılık olarak
+    // kullanılır — useSLASync/useSelfHealing'te de uygulanan AYNI prensip:
+    // photoURL/fcmTokens gibi alakasız bir alan değiştiğinde currentUser
+    // yeni bir referansla set edilir, bu da (uid değişmediği halde) gereksiz
+    // bir yeniden-fetch + kısa bir spinner flicker'ına yol açardı (bkz. kod
+    // denetimi).
+  }, [selectedUser, currentUser?.uid]);
 
   const handleEdit = (user: User) => {
     setEditingUser(user);
@@ -117,6 +124,12 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
   };
 
   const handleSave = () => {
+    // Edit User modalı gerçek bir <form> değil (bkz. altındaki JSX), bu yüzden
+    // Input'lardaki `required` özniteliği hiçbir zaman devreye girmez — boş
+    // isim/e-posta ile "Güncelle"ye basılırsa kullanıcı kaydı sessizce boş
+    // alanlarla güncellenirdi (bkz. kod denetimi). Add User formundaki
+    // (handleAddSubmit) aynı boş-alan koruması burada da zorunlu kılınır.
+    if (!editName.trim() || (isAdmin && !editEmail.trim())) return;
     if (editingUser) {
       // Firestore kuralları, kullanıcının kendi profilini düzenlerken yalnızca
       // fullName/photoURL/fcmTokens değiştirmesine izin verir — role/email/
@@ -495,7 +508,14 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                     {staffInDept.length > 0 && (
                       <>
                         <div className="w-[1px] h-4 bg-executive-blue/10" />
-                        <div className="flex flex-wrap justify-center gap-2.5 max-w-[400px]">
+                        {/* max-w sabit 400px'ti — dış konteynerin overflow-x-auto
+                            (bkz. mobil tasarım denetimi) tam da bunun gibi bir
+                            kadro grubunun mobil ekrandan (~360-400px) geniş
+                            olduğu durumlar için bir kaçış yoluydu, ama no-scrollbar
+                            ile kaydırma ipucu görünmez olduğundan içerik sessizce
+                            "kesilmiş" görünüyordu. Sınır artık viewport'u da
+                            hesaba katıyor, gerçek taşmayı büyük ölçüde önler. */}
+                        <div className="flex flex-wrap justify-center gap-2.5 max-w-[min(400px,calc(100vw-8rem))]">
                           {staffInDept.map(staff => (
                             <OrgNodeCard key={staff.uid} user={staff} tasks={tasks} onSelect={setSelectedUser} isMini />
                           ))}

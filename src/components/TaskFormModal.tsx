@@ -8,6 +8,7 @@ import { cn } from '../lib/utils';
 import { FileText, Target, Users, Calendar, AlertCircle } from 'lucide-react';
 import { DatePicker } from './ui/DatePicker';
 import { Button } from './ui/Button';
+import { logger } from '../lib/logger';
 
 const taskSchema = z.object({
   title: z.string().min(1, 'Başlık zorunludur.').trim(),
@@ -34,7 +35,7 @@ interface TaskFormModalProps {
   task?: Task;
   parentId?: string;
   initialTitle?: string;
-  onSubmit: (taskData: Partial<Task>) => void;
+  onSubmit: (taskData: Partial<Task>) => Promise<void> | void;
   onClose: () => void;
 }
 
@@ -120,9 +121,14 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
         }
       }
 
-      onSubmit(taskData);
+      // onSubmit'in promise'i await edilir ki react-hook-form'un isSubmitting'i
+      // gerçek Firestore round-trip'i süresince true kalsın — aksi halde
+      // "ATAMAYI TAMAMLA" butonu network gecikmesi sırasında tekrar
+      // tıklanabilir hale gelip aynı görevi iki kez oluşturabilirdi (bkz. kod
+      // denetimi).
+      await onSubmit(taskData);
     } catch (err) {
-      console.error('TaskFormModal submit error:', err);
+      logger.error('TaskFormModal submit error:', err);
     }
   };
 
@@ -141,7 +147,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
             placeholder="Talimat Başlığı"
             {...register('title')}
             className={cn(
-              "text-[28px] font-light text-text-heading font-serif tracking-tight outline-none bg-transparent placeholder:text-text-muted/30 w-full border-b border-text-muted/20 pb-3 transition-colors focus:border-executive-blue/50",
+              "text-[28px] font-light text-text-heading font-serif tracking-tight outline-none bg-field-surface placeholder:text-text-muted/30 w-full border-b border-text-muted/20 pb-3 transition-colors focus:border-executive-blue/50",
               errors.title && "border-status-danger/50 focus:border-status-danger/50"
             )}
           />

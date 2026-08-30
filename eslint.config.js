@@ -44,9 +44,13 @@ export default [
       'jsx-a11y/aria-proptypes': 'error',
       'jsx-a11y/aria-role': 'error',
       'jsx-a11y/aria-unsupported-elements': 'error',
-      'jsx-a11y/click-events-have-key-events': 'warn',
+      // Klavye erişilebilirliği doğrudan işlevsellik anlamına geldiğinden
+      // (bir mouse-only handler klavye kullanıcısı için tamamen erişilemez
+      // olur) 'error'a yükseltildi — önceden 'warn' idi ve CI'da tek güvenlik
+      // ağı Lighthouse'un genel a11y skoruydu (bkz. kod denetimi).
+      'jsx-a11y/click-events-have-key-events': 'error',
       'jsx-a11y/interactive-supports-focus': 'warn',
-      'jsx-a11y/label-has-associated-control': 'warn',
+      'jsx-a11y/label-has-associated-control': 'error',
       'jsx-a11y/no-aria-hidden-on-focusable': 'error',
       'jsx-a11y/no-redundant-roles': 'warn',
       'jsx-a11y/role-has-required-aria-props': 'error',

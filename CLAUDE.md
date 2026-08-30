@@ -26,7 +26,7 @@ E2E (Playwright):
 - `npx playwright test` → `tests/e2e/core.spec.ts`, gerçek Firebase projesine karşı, yalnızca kimlik doğrulama gerektirmeyen Login ekranını (yükleme + a11y) kapsar.
 - `npm run test:e2e:emulator` → Firebase Emulator Suite'i (Auth+Firestore) ayağa kaldırır, `scripts/seedE2E.ts` ile test verisi tohumlar, `tests/e2e/authenticated.spec.ts`'i çalıştırır, sonunda emulator'ları kapatır. Gerçek projeye dokunmaz. Gerektirir: Java 11+. Kimlik doğrulama, `src/App.tsx`'teki `isUsingFirebaseEmulator` bypass'ı ile custom auth token üzerinden yapılır — yalnızca `vite dev` + `VITE_USE_FIREBASE_EMULATOR=true` ile aktiftir, prod build'de asla çalışmaz.
 
-CI (`.github/workflows/ci.yml`) sırası: `security` (gitleaks + `npm audit --audit-level=critical`) → `quality` (lint + eslint + test) → `build` → `performance` (size + lighthouse) → `deploy`/`preview`. Notlar: `deploy` işi yalnızca `firebase deploy --only hosting` çalıştırır — Cloud Functions deploy'u bu pipeline'ın dışındadır (manuel: `cd functions && npm run deploy`). Emulator tabanlı authenticated e2e testleri (`test:e2e:emulator`) ayrı bir workflow'da (`.github/workflows/e2e.yml`) çalışır ve `deploy` işini engellemez.
+CI (`.github/workflows/ci.yml`) sırası: `security` (gitleaks + `npm audit --audit-level=critical`) → `quality` (lint + eslint + test) → `build` → `performance` (size + lighthouse) → `deploy`/`preview`. Notlar: `deploy` işi önce `firestore:rules,firestore:indexes` sonra `hosting` deploy eder (bu sıra bilinçli: rules/index'e bağımlı bir client değişikliği hosting'e çıktığında ilgili rules/index zaten yerinde olsun) — Cloud Functions deploy'u yine bu pipeline'ın dışındadır (manuel: `cd functions && npm run deploy`). Emulator tabanlı authenticated e2e testleri (`test:e2e:emulator`) ayrı bir workflow'da (`.github/workflows/e2e.yml`) çalışır ve `deploy` işini engellemez.
 
 ## Mimari
 
@@ -42,7 +42,7 @@ CI (`.github/workflows/ci.yml`) sırası: `security` (gitleaks + `npm audit --au
 
 **Firestore güvenlik kuralları** (`firestore.rules`): default-deny, custom claims tabanlı rol kontrolü (Admin/Manager/Staff), departman bazlı görünürlük, alan bazlı (field-level) yazma izinleri ve yukarıdaki state-machine doğrulaması burada da ayrıca uygulanır. `@firebase/eslint-plugin-security-rules` bu dosyayı `npm run eslint` kapsamında lint eder.
 
-**Cloud Functions** (`functions/src/`): `taskTriggers.ts` (görev tetikleyicileri), `scheduledAudit.ts` (zamanlanmış denetim), `cleanup.ts` (temizlik). Ana `src/` derlemesine dahil değildir, ayrı bir TS projesidir.
+**Cloud Functions** (`functions/src/`): `taskTriggers.ts` (görev tetikleyicileri), `scheduledAudit.ts` (zamanlanmış denetim), `cleanup.ts` (temizlik), `statsReconciliation.ts` (zamanlanmış istatistik mutabakatı). Ana `src/` derlemesine dahil değildir, ayrı bir TS projesidir — bkz. `functions/CLAUDE.md` (deploy komutu, her fonksiyonun tasarım gerekçeleri, kendi model seçimi notu). Not: `system/stats`'teki `totalTasks`/`status_X` sayaçları client (`taskService.ts`) ve `scheduledAudit.ts` tarafından birbirinden bağımsız `increment()`/`decrement()` ile güncellenir (tek atomik yazım yok) — eşzamanlı durum geçişleri veya yeniden denenen offline mutasyonlar bunları gerçek `tasks` koleksiyonundan koparabilir. `computeStats()` (`src/components/dashboard/helpers.ts`) bu sapmayı anlık tespit edip yerel görev listesinden yeniden hesaplayan geçici bir korumadır; `scheduledStatsReconciliation` (günlük 03:30 Europe/Istanbul, `count()` agregasyon sorgularıyla) kalıcı/kök çözümdür — kasıtlı olarak `scheduledAudit`'in 08:00 koşusundan farklı saatte çalışır ki aynı dokümana çakışan yazımlar azalsın.
 
 **SLA/deadline hesaplama** (`src/lib/sla.ts`): iş günü bazlı deadline hesaplama; `BLOCKED`/`AWAITING_APPROVAL` gibi duraklama durumlarında geçen süre deadline hesabından ayrıştırılır.
 
@@ -53,3 +53,11 @@ CI (`.github/workflows/ci.yml`) sırası: `security` (gitleaks + `npm audit --au
 **Config**: Client Firebase config (`apiKey`, `projectId` vb.) `firebase-applet-config.json`'da tutulur; `.env`'deki `VITE_FIREBASE_*` değişkenleri bunu override edebilir. `FIREBASE_PRIVATE_KEY`/`FIREBASE_CLIENT_EMAIL` gibi Admin SDK alanları yalnızca server-side (Cloud Functions) içindir, client bundle'a asla dahil edilmemeli.
 
 **Test ortamı**: Vitest + jsdom + Testing Library, `src/test/setup.ts` Firebase modüllerini global olarak mock'lar (gerçek bağlantı gerekmez). Path alias: `@/*` → proje kökü (`tsconfig.json`/`vite.config.ts`).
+
+## Model Seçimi (Claude Pro — verimli kullanım)
+
+Varsayılan Sonnet. Basit arama/keşif işlerinde Haiku yeterli. **Opus'a geç** (`/model opus` veya Agent çağrısında `model: "opus"`):
+
+- **Riskli kod**: görev durum makinesi (`src/lib/taskStateMachine.ts` + `firestore.rules`'taki `isValidTransition` — ikisi senkron kalmalı), `functions/` içindeki her şey (bkz. `functions/CLAUDE.md` — kendi model seçimi notu var, daha düşük eşikle Opus önerir), `firestore.rules` (default-deny + custom claims), offline kuyruk/optimistic-locking (`src/lib/offlineQueue.ts`, `conflictDetectionService.ts`).
+- **Planlama**: yeni bir görev durumu/geçişi eklerken (client state machine + rules + olası `scheduledAudit` istisnasını birlikte tasarlamak gerekir), ya da `system/stats` gibi dual-write sayaç deseni gerektiren bir özellik eklerken.
+- **Doğrulama**: state machine, Firestore rules veya Cloud Functions trigger değişikliğinden sonra `npm test`/`npm run eslint` yeşil olsa bile ikinci bir gözle geçir; CI'daki `security` aşaması (gitleaks + audit) geçse de mantıksal doğrulama ayrıdır.

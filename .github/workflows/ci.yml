@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+# En az ayrıcalık ilkesi: hiçbir job repo içeriğini okumaktan fazlasına
+# ihtiyaç duymuyor (PR/issue yorumu yazma, paket yayınlama vb. yok) — bu
+# olmadan GITHUB_TOKEN varsayılan izinleri repo/org ayarına bağlı kalıyordu
+# (bkz. kod denetimi).
+permissions:
+  contents: read
+
 env:
   NODE_VERSION: '20'
 
@@ -17,17 +24,17 @@ jobs:
 
     steps:
       - name: Kodu İndir
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
       - name: Gizli Anahtar Taraması (gitleaks)
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Node.js ${{ env.NODE_VERSION }} Kur
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -35,14 +42,25 @@ jobs:
       - name: Bağımlılıkları Yükle
         run: npm ci
 
-      - name: Bağımlılık Güvenlik Denetimi
-        # NOT: audit-level=critical olarak ayarlandı çünkü kalan "high" seviye
-        # bulgular yalnızca firebase-admin (google-gax/@grpc/grpc-js zinciri,
-        # server-side Admin SDK) ve @lhci/cli (dev-only) major sürüm
-        # atlamasıyla çözülüyor ve build zincirini kırma riski taşıyor.
-        # vite açığı (GHSA-fx2h-pf6j-xcff) 6.4.3 patch güncellemesiyle çözüldü.
-        # Bkz. takip: Faz 3.3 bağımlılık modernizasyonu.
-        run: npm audit --audit-level=critical
+      - name: Bağımlılık Güvenlik Denetimi (production — bloklayıcı)
+        # Yalnızca PRODUCTION bağımlılıkları (--omit=dev) client bundle'a
+        # girer/sunucuya deploy edilir; bu ağaçta bugün itibarıyla 0 açık var
+        # (doğrulandı: `npm audit --omit=dev --audit-level=high`). Eşik
+        # `high`a çekildi — önceden `critical` idi ve gerçek "high" seviye
+        # bulguları (aşağıya bkz.) hiç yakalamıyordu (bkz. kod denetimi).
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Bağımlılık Güvenlik Denetimi (devDependencies — bilgilendirici)
+        # Kalan tüm bilinen açıklar (17 adet) yalnızca devDependencies'te:
+        # firebase-admin→google-gax→uuid (scripts/seedE2E.ts, emulator seed)
+        # ve @lhci/cli→lighthouse→puppeteer→{tmp,extract-zip} (yalnızca CI'da
+        # çalışan Lighthouse aracı). Hiçbiri build çıktısına veya sunucuya
+        # taşınmıyor. Düzeltmeleri şu an yalnızca `npm audit fix --force` ile
+        # (büyük breaking-change, @lhci/cli@0.1.0'a düşürüyor) mümkün, bu
+        # yüzden bloklayıcı yapılmadı — ama `continue-on-error` ile CI
+        # loglarında görünür kalır ki yeni bir açık sessizce birikmesin.
+        run: npm audit --audit-level=high
+        continue-on-error: true
 
   # ─── 1. Kod Kalitesi ve Test ────────────────────────────────────────────────
   quality:
@@ -51,10 +69,10 @@ jobs:
 
     steps:
       - name: Kodu İndir
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Node.js ${{ env.NODE_VERSION }} Kur
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -71,12 +89,15 @@ jobs:
       - name: Testleri Çalıştır
         run: npm test
 
-      - name: Test Kapsamı Raporu
+      - name: Test Kapsamı Raporu (src/lib + src/services eşikleri)
+        # vite.config.ts'teki coverage.thresholds artık src/lib/src/services
+        # için minimum bir taban zorunlu kılıyor (bkz. kod denetimi: önceden
+        # eşiksizdi VE bu adım continue-on-error ile CI'ı hiç kıramıyordu —
+        # kapsam zamanla sessizce erozyona uğrayabiliyordu).
         run: npm run test:coverage
-        continue-on-error: true
 
       - name: Kapsam Raporunu Kaydet
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: coverage-report
@@ -91,10 +112,10 @@ jobs:
     
     steps:
       - name: Kodu İndir
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Node.js ${{ env.NODE_VERSION }} Kur
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -114,7 +135,7 @@ jobs:
           VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
 
       - name: Build Artifaktını Kaydet
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dist
           path: dist/
@@ -128,10 +149,10 @@ jobs:
 
     steps:
       - name: Kodu İndir
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Node.js ${{ env.NODE_VERSION }} Kur
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -140,7 +161,7 @@ jobs:
         run: npm ci
 
       - name: Build Artifaktını İndir
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: dist
           path: dist/
@@ -164,10 +185,10 @@ jobs:
 
     steps:
       - name: Kodu İndir
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Build Artifaktını İndir
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: dist
           path: dist/
@@ -198,6 +219,33 @@ jobs:
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
+      # Bozuk bir deploy'un sessizce production'da kalmasını önlemek için
+      # erken uyarı: hosting statik bir SPA servis ettiğinden (server.js /
+      # /api/health yalnızca LOKAL `npm run dev`/`start` içindir, bu Firebase
+      # Hosting deploy'unda hiç çalışmıyor) sağlık kontrolü kök sayfanın HTTP
+      # 200 dönüp dönmediğine ve beklenen SPA kök elemanını (`id="root"`,
+      # bkz. index.html) içerip içermediğine bakar. Otomatik rollback KASITLI
+      # olarak eklenmedi (yanlış bir rollback daha kötü olabilir) — bu adım
+      # yalnızca job'ı FAILED yapıp görünürlük sağlar; gerekirse elle geri
+      # almak için: `firebase hosting:releases:list --project makam-1453` ile
+      # önceki release'i bulup `firebase hosting:clone
+      # makam-1453:<ONCEKI_RELEASE_ID> makam-1453:live` çalıştırın (bkz. kod
+      # denetimi).
+      - name: Deploy Sonrası Sağlık Kontrolü (Smoke Test)
+        run: |
+          URL="https://makam-1453.web.app"
+          echo "Kontrol ediliyor: $URL"
+          BODY=$(curl -sf --retry 3 --retry-delay 5 "$URL")
+          if [ $? -ne 0 ]; then
+            echo "::error::Deploy sonrası $URL adresine erişilemedi. Elle rollback için: 'firebase hosting:releases:list --project makam-1453' ardından 'firebase hosting:clone makam-1453:<ONCEKI_RELEASE_ID> makam-1453:live'"
+            exit 1
+          fi
+          if ! echo "$BODY" | grep -q 'id="root"'; then
+            echo "::error::Deploy edilen sayfa beklenen SPA kök elemanını (id=\"root\") içermiyor — bozuk bir build yayınlanmış olabilir. Elle rollback için: 'firebase hosting:releases:list --project makam-1453' ardından 'firebase hosting:clone makam-1453:<ONCEKI_RELEASE_ID> makam-1453:live'"
+            exit 1
+          fi
+          echo "Sağlık kontrolü başarılı."
+
   # ─── 4. Pull Request Preview Deploy ────────────────────────────────────────
   preview:
     name: PR Preview Deploy
@@ -207,10 +255,10 @@ jobs:
 
     steps:
       - name: Kodu İndir
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Build Artifaktını İndir
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: dist
           path: dist/

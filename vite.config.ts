@@ -166,6 +166,18 @@ export default defineConfig(({ mode }) => {
         reporter: ['text', 'json', 'html'],
         include: ['src/lib/**', 'src/services/**', 'src/hooks/**', 'src/components/**'],
         exclude: ['src/test/**', 'src/components/ui/**', 'node_modules/**'],
+        // CLAUDE.md'de belgelenen kapsam hedefi src/lib + src/services'tir —
+        // src/hooks/src/components henüz sistematik olarak birim testli değil
+        // (çoğunlukla e2e/manuel test kapsıyor), bu yüzden tüm `include`
+        // üzerinden TEK bir global eşik anlamsız olurdu (~%45 gibi düşük ve
+        // yanıltıcı bir sayıya kilitlenirdi). Bunun yerine yalnızca zaten iyi
+        // test edilen iki klasöre, MEVCUT ölçümün (lib ~%79, services ~%76)
+        // biraz altında bir taban konur — eşiksiz olduğundan (bkz. kod
+        // denetimi) kapsam zamanla sessizce erozyona uğrayabiliyordu.
+        thresholds: {
+          'src/lib/**': { statements: 70, branches: 55, functions: 70, lines: 70 },
+          'src/services/**': { statements: 65, branches: 50, functions: 65, lines: 65 },
+        },
       },
     },
   };

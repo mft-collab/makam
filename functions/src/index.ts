@@ -8,3 +8,4 @@
 export { scheduledDailyAudit } from './scheduledAudit';
 export { onTaskCreated, onTaskStatusChanged } from './taskTriggers';
 export { cleanupOldNotifications } from './cleanup';
+export { scheduledStatsReconciliation } from './statsReconciliation';

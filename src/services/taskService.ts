@@ -143,12 +143,19 @@ async function transitionTaskInTransaction(
     }
   });
 
-  // Aggregate Stats
-  const statsRef = doc(db, 'system', 'stats');
-  transaction.set(statsRef, {
-    [`status_${task.status}`]: increment(-1),
-    [`status_${newStatus}`]: increment(1)
-  }, { merge: true });
+  // Aggregate Stats — task.status === newStatus olduğunda (sameStatus geçişi,
+  // bkz. taskStateMachine.ts) iki hesaplanmış anahtar AYNI string'e
+  // çözümlenir; obje literalinde ikinci değer birinciyi ezer ve net sıfır
+  // değişim yerine sunucuya yalnızca increment(1) gider — fantom +1 (bkz. kod
+  // denetimi). updateTaskInTransaction'daki eşdeğer korumayla tutarlı olsun
+  // diye burada da yalnızca durum GERÇEKTEN değiştiğinde yazılıyor.
+  if (task.status !== newStatus) {
+    const statsRef = doc(db, 'system', 'stats');
+    transaction.set(statsRef, {
+      [`status_${task.status}`]: increment(-1),
+      [`status_${newStatus}`]: increment(1)
+    }, { merge: true });
+  }
 
   return task;
 }
@@ -358,9 +365,61 @@ export const taskService = {
 
       if (tasksToDelete.length === 0) return;
 
+      // Blocker sorgusu da (üstteki görev-toplama gibi) 30'luk gruplar halinde
+      // TEK 'in' sorgusuyla yapılır — önceden her görev için AYRI bir getDocs
+      // çağrılıyordu (N görev → N sorgu), üstteki optimizasyonla tutarsızdı
+      // (bkz. kod denetimi).
+      const blockerIdChunks: string[][] = [];
+      for (let i = 0; i < tasksToDelete.length; i += 30) {
+        blockerIdChunks.push(tasksToDelete.slice(i, i + 30).map(t => t.id));
+      }
       const blockerSnapshots = await Promise.all(
-        tasksToDelete.map(t => getDocs(query(collection(db, 'blockers'), where('taskId', '==', t.id))))
+        blockerIdChunks.map(chunk => getDocs(query(collection(db, 'blockers'), where('taskId', 'in', chunk))))
       );
+
+      // Audit kaydı + stats deltası, SİLME işlemlerinden ÖNCE ve deterministik
+      // bir audit doküman ID'siyle AYRI bir batch'te commit edilir. Önceden bu
+      // ikisi silme işlemlerinden SONRA, son 450'lik batch'e ekleniyordu;
+      // batch'ler Promise.all ile BAĞIMSIZ commit edildiğinden, kök görevi
+      // silen batch başarılı olup bu son batch bir ağ hatasıyla başarısız
+      // olursa, runWithRetry fonksiyonu yeniden çalıştırdığında kök görev
+      // zaten silinmiş olduğundan `tasksToDelete.length === 0` ile sessizce
+      // erken çıkılıyor ve audit kaydı + stats düşüşü HİÇBİR ZAMAN
+      // yazılmıyordu (bkz. kod denetimi). Deterministik ID, retry'ın bu adımı
+      // atlayıp atlamayacağını (zaten commit edilmiş mi) güvenle söylemesini
+      // sağlar — silme işlemlerinin kendisi zaten idempotenttir (var olmayan
+      // bir dokümanı silmek no-op'tur), bu yüzden onlar için aynı korumaya
+      // gerek yoktur.
+      const deletionAuditRef = doc(db, 'audit_logs', `task-delete-${taskId}`);
+      const existingDeletionAudit = await getDoc(deletionAuditRef);
+      if (!existingDeletionAudit.exists()) {
+        const accountingBatch = writeBatch(db);
+        accountingBatch.set(deletionAuditRef, {
+          taskId,
+          changedBy: userId,
+          oldValue: rootData?.title ?? 'Silindi',
+          newValue: 'Silindi',
+          timestamp: Date.now(),
+          changes: {
+            deleted: { old: false, new: true },
+            status: { old: rootData?.status ?? null, new: null }
+          }
+        });
+
+        const statusDeltas: Record<string, number> = {};
+        tasksToDelete.forEach(t => {
+          statusDeltas[`status_${t.status}`] = (statusDeltas[`status_${t.status}`] ?? 0) - 1;
+        });
+        const statsPayload: Record<string, ReturnType<typeof increment>> = {
+          totalTasks: increment(-tasksToDelete.length)
+        };
+        Object.entries(statusDeltas).forEach(([key, value]) => {
+          if (value !== 0) statsPayload[key] = increment(value);
+        });
+        accountingBatch.set(doc(db, 'system', 'stats'), statsPayload, { merge: true });
+
+        await accountingBatch.commit();
+      }
 
       // Firestore batch'leri en fazla 500 işlem alır — güvenli pay için 450'de böl.
       const batches: ReturnType<typeof writeBatch>[] = [];
@@ -381,31 +440,6 @@ export const taskService = {
       // dahil) kanıt bütünlüğü için korunur.
       tasksToDelete.forEach(t => addOp(b => b.delete(doc(db, 'tasks', t.id))));
       blockerSnapshots.forEach(snap => snap.docs.forEach(bDoc => addOp(b => b.delete(bDoc.ref))));
-
-      addOp(b => b.set(doc(collection(db, 'audit_logs')), {
-        taskId,
-        changedBy: userId,
-        oldValue: rootData?.title ?? 'Silindi',
-        newValue: 'Silindi',
-        timestamp: Date.now(),
-        changes: {
-          deleted: { old: false, new: true },
-          status: { old: rootData?.status ?? null, new: null }
-        }
-      }));
-
-      // Aggregate Stats — silinen her görev kendi statüsü üzerinden düşülür
-      const statusDeltas: Record<string, number> = {};
-      tasksToDelete.forEach(t => {
-        statusDeltas[`status_${t.status}`] = (statusDeltas[`status_${t.status}`] ?? 0) - 1;
-      });
-      const statsPayload: Record<string, ReturnType<typeof increment>> = {
-        totalTasks: increment(-tasksToDelete.length)
-      };
-      Object.entries(statusDeltas).forEach(([key, value]) => {
-        if (value !== 0) statsPayload[key] = increment(value);
-      });
-      addOp(b => b.set(doc(db, 'system', 'stats'), statsPayload, { merge: true }));
 
       batches.push(batch);
       await Promise.all(batches.map(b => b.commit()));

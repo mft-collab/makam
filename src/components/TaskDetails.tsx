@@ -8,6 +8,7 @@ import {
 import { Task, User as UserType, TaskBlocker, AuditLog, TaskStatus, TaskPriority } from '../types';
 import { STATUS_LABELS, STATUS_LABELS_SHORT, PRIORITY_LABELS, PRIORITY_BADGE_VARIANT, STATUS_BADGE_VARIANT } from '../constants';
 import { cn, buildUsersById } from '../lib/utils';
+import { logger } from '../lib/logger';
 import { Badge } from './ui/Badge';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
@@ -155,7 +156,7 @@ export const TaskDetails = ({
         logsCacheRef.current[task.id] = list;
         setLocalLogs(list);
       } catch (err) {
-        console.error('Failed to fetch task audit logs:', err);
+        logger.error('Failed to fetch task audit logs:', err);
         if (!cancelled) setLogsError(true);
       } finally {
         if (!cancelled) setLoadingLogs(false);

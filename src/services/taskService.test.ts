@@ -414,10 +414,12 @@ describe('taskService', () => {
     });
 
     it('alt görevi olmayan bir görev silindiğinde: görev + engeller silinir, audit log korunur, stats düşürülür', async () => {
-      vi.mocked(firebase.getDoc).mockResolvedValue({
-        exists: () => true,
-        data: () => ({ status: 'IN_PROGRESS', title: 'Silinecek Görev' }),
-      } as any);
+      vi.mocked(firebase.getDoc)
+        .mockResolvedValueOnce({
+          exists: () => true,
+          data: () => ({ status: 'IN_PROGRESS', title: 'Silinecek Görev' }),
+        } as any) // rootSnap
+        .mockResolvedValueOnce({ exists: () => false } as any); // deterministik silme-audit kaydı henüz yok
       // Alt görev sorgusu boş, engel sorgusu bir kayıt döner
       vi.mocked(firebase.getDocs)
         .mockResolvedValueOnce({ docs: [] } as any) // alt görevler
@@ -432,7 +434,8 @@ describe('taskService', () => {
 
       // Görev + 1 engel silindi
       expect(batchDelete).toHaveBeenCalledTimes(2);
-      // Audit log SİLİNMEDİ, yeni bir "silindi" kaydı EKLENDİ
+      // Audit log SİLİNMEDİ, yeni bir "silindi" kaydı EKLENDİ (ayrı bir
+      // "accounting" batch'te, silme işlemlerinden ÖNCE commit edilir)
       const auditSetCall = batchSet.mock.calls.find(([, data]: any) => data?.newValue === 'Silindi');
       expect(auditSetCall).toBeTruthy();
       // Stats: bu görevin durumu (IN_PROGRESS) için -1
@@ -441,7 +444,8 @@ describe('taskService', () => {
         totalTasks: { __increment: -1 },
         status_IN_PROGRESS: { __increment: -1 },
       });
-      expect(batchCommit).toHaveBeenCalledOnce();
+      // Accounting batch (audit+stats) + ana silme batch'i ayrı ayrı commit edilir
+      expect(batchCommit).toHaveBeenCalledTimes(2);
     });
   });
 });
