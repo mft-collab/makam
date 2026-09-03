@@ -56,7 +56,7 @@ CI (`.github/workflows/ci.yml`) sırası: `security` (gitleaks + `npm audit --au
 
 ## Model Seçimi (Claude Pro — verimli kullanım)
 
-Varsayılan Sonnet. Basit arama/keşif işlerinde Haiku yeterli. **Opus'a geç** (`/model opus` veya Agent çağrısında `model: "opus"`):
+Varsayılan Sonnet. Basit arama/keşif işlerinde Haiku yeterli — ama `model: "haiku"`'yu **açıkça** ver, override'sız bırakmak artık güvenilir şekilde Haiku'ya düşmüyor (bkz. kök `CLAUDE.md` → Model Seçimi, 2026-09-03 ölçümü). **Opus'a geç** (`/model opus` veya Agent çağrısında `model: "opus"`):
 
 - **Riskli kod**: görev durum makinesi (`src/lib/taskStateMachine.ts` + `firestore.rules`'taki `isValidTransition` — ikisi senkron kalmalı), `functions/` içindeki her şey (bkz. `functions/CLAUDE.md` — kendi model seçimi notu var, daha düşük eşikle Opus önerir), `firestore.rules` (default-deny + custom claims), offline kuyruk/optimistic-locking (`src/lib/offlineQueue.ts`, `conflictDetectionService.ts`).
 - **Planlama**: yeni bir görev durumu/geçişi eklerken (client state machine + rules + olası `scheduledAudit` istisnasını birlikte tasarlamak gerekir), ya da `system/stats` gibi dual-write sayaç deseni gerektiren bir özellik eklerken.
