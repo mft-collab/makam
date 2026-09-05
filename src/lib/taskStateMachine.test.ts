@@ -14,7 +14,13 @@ describe('isValidTaskTransition', () => {
     expect(isValidTaskTransition('AWAITING_APPROVAL', 'CANCELLED')).toBe(true);
   });
 
-  it('firestore.rules isValidTransition ile birebir aynı geçerli geçişleri kabul eder', () => {
+  // NOT: Bu testin adı eskiden "firestore.rules isValidTransition ile birebir
+  // aynı..." idi ama bu dosya firestore.rules'ı hiç OKUMUYOR — yalnızca client
+  // tablosunun kendi içindeki davranışını doğruluyor. İsim, var olmayan bir
+  // senkronizasyon güvencesi vaat ettiği için yanıltıcıydı (bkz. kod denetimi).
+  // Gerçek parite doğrulaması artık taskStateMachine.parity.test.ts'te,
+  // firestore.rules dosyası ayrıştırılarak yapılıyor.
+  it('tablodaki tüm geçerli geçişleri kabul eder', () => {
     expect(isValidTaskTransition('ASSIGNED', 'IN_PROGRESS')).toBe(true);
     expect(isValidTaskTransition('ASSIGNED', 'BLOCKED')).toBe(true);
     expect(isValidTaskTransition('ASSIGNED', 'PENDING_DELEGATION')).toBe(true);
