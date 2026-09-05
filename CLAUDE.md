@@ -18,6 +18,7 @@ npm run test:watch           # vitest (watch modu)
 npm run test:coverage        # kapsam raporu (v8) — src/lib, src/services kapsar
 npx vitest run <path>        # tek test dosyası
 npx vitest run -t "<isim>"   # isme göre tek test
+npm run test:rules           # emulator gerektiren testler (firestore.rules matrisi + Admin SDK taşıma mantığı)
 npm run size                  # bundle boyutu bütçesi (size-limit)
 npm run lighthouse            # lhci autorun — a11y/best-practices/SEO gate, perf şimdilik warn
 ```
@@ -42,6 +43,8 @@ CI (`.github/workflows/ci.yml`) sırası: `security` (gitleaks + `npm audit --au
 
 **Firestore güvenlik kuralları** (`firestore.rules`): default-deny, custom claims tabanlı rol kontrolü (Admin/Manager/Staff), departman bazlı görünürlük, alan bazlı (field-level) yazma izinleri ve yukarıdaki state-machine doğrulaması burada da ayrıca uygulanır. `@firebase/eslint-plugin-security-rules` bu dosyayı `npm run eslint` kapsamında lint eder.
 
+**Departman = referans varlık** (`departments/{departmentId}`): doküman ID'si departmanın KENDİ string değeridir ("Operasyon") ve `name` alanıyla birebir eşittir — bu sayede `users.departmentId`/`tasks.departmentId` alanlarındaki mevcut değerlerin hiçbiri yeniden yazılmak zorunda kalmaz, yalnızca karşılık gelen dokümanın var olması gerekir. Görev ve kullanıcı departmanları `exists()` ile bu koleksiyona karşı doğrulanır; `tasks` için `departmentId` **zorunludur** ve görev oluşturulurken **atanan kişiden** türetilir (görevi oluşturandan DEĞİL — eski davranış, Admin'in departmanı boş olduğu için Admin'in oluşturduğu her görevi organizasyon geneline açıyordu). Silme kapalıdır (`allow delete: if false`): silinen bir departmanın referansları yetim kalır. Departman ATAMA akışları (`TeamList`, `TaskFormModal`) `useDepartments`/`departmentService` üzerinden bu koleksiyonu okur; `AuthenticatedApp.tsx`'teki users/tasks'tan TÜRETİLEN `departments` useMemo'su ise ayrı bir şeydir ve yalnızca AppHeader'ın salt-okunur "Birim Odak Filtresi"ni besler — ikisi bilinçli olarak farklı sorulara cevap verir, birbirinin yerine geçmez.
+
 **Cloud Functions** (`functions/src/`): `taskTriggers.ts` (görev tetikleyicileri), `scheduledAudit.ts` (zamanlanmış denetim), `cleanup.ts` (temizlik), `statsReconciliation.ts` (zamanlanmış istatistik mutabakatı). Ana `src/` derlemesine dahil değildir, ayrı bir TS projesidir — bkz. `functions/CLAUDE.md` (deploy komutu, her fonksiyonun tasarım gerekçeleri, kendi model seçimi notu). Not: `system/stats`'teki `totalTasks`/`status_X` sayaçları client (`taskService.ts`) ve `scheduledAudit.ts` tarafından birbirinden bağımsız `increment()`/`decrement()` ile güncellenir (tek atomik yazım yok) — eşzamanlı durum geçişleri veya yeniden denenen offline mutasyonlar bunları gerçek `tasks` koleksiyonundan koparabilir. `computeStats()` (`src/components/dashboard/helpers.ts`) bu sapmayı anlık tespit edip yerel görev listesinden yeniden hesaplayan geçici bir korumadır; `scheduledStatsReconciliation` (günlük 03:30 Europe/Istanbul, `count()` agregasyon sorgularıyla) kalıcı/kök çözümdür — kasıtlı olarak `scheduledAudit`'in 08:00 koşusundan farklı saatte çalışır ki aynı dokümana çakışan yazımlar azalsın.
 
 **SLA/deadline hesaplama** (`src/lib/sla.ts`): iş günü bazlı deadline hesaplama; `BLOCKED`/`AWAITING_APPROVAL` gibi duraklama durumlarında geçen süre deadline hesabından ayrıştırılır.
@@ -52,7 +55,7 @@ CI (`.github/workflows/ci.yml`) sırası: `security` (gitleaks + `npm audit --au
 
 **Config**: Client Firebase config (`apiKey`, `projectId` vb.) `firebase-applet-config.json`'da tutulur; `.env`'deki `VITE_FIREBASE_*` değişkenleri bunu override edebilir. `FIREBASE_PRIVATE_KEY`/`FIREBASE_CLIENT_EMAIL` gibi Admin SDK alanları yalnızca server-side (Cloud Functions) içindir, client bundle'a asla dahil edilmemeli.
 
-**Test ortamı**: Vitest + jsdom + Testing Library, `src/test/setup.ts` Firebase modüllerini global olarak mock'lar (gerçek bağlantı gerekmez). Path alias: `@/*` → proje kökü (`tsconfig.json`/`vite.config.ts`).
+**Test ortamı**: Vitest + jsdom + Testing Library, `src/test/setup.ts` Firebase modüllerini global olarak mock'lar (gerçek bağlantı gerekmez). Path alias: `@/*` → proje kökü (`tsconfig.json`/`vite.config.ts`). `npm test` yalnızca `src/**` altını kapsar; **emulator gerektiren** testler ayrı bir yapılandırmadadır (`vitest.rules.config.ts` → `tests/rules/**` kural matrisi + `tests/emulator/**` Admin SDK taşıma mantığı) ve `npm run test:rules` ile `firebase emulators:exec` içinden koşar — mock'lanmış SDK ile anlamsız oldukları için hızlı birim test aşamasında yer ALMAZLAR.
 
 ## Model Seçimi (Claude Pro — verimli kullanım)
 

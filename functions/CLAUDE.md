@@ -10,7 +10,9 @@ npm run deploy  # firebase deploy --only functions
 npm run logs    # firebase functions:log
 ```
 
-Test yok — bu paketin doğruluğu yalnızca emulator/canlı log ile doğrulanabilir. `firebase-functions/v1` (v2 değil) API'si kullanılır; yeni fonksiyon eklerken mevcut dosyalardaki `functions.region('europe-west1').pubsub/firestore...` deseninden sapmayın.
+Bu klasörün kendi test altyapısı yok; doğruluk emulator/canlı log ile doğrulanır. **Tek istisna** `departmentBackfillCore.ts`'tir: mantığı kök projedeki `tests/emulator/backfillDepartments.test.ts` tarafından gerçek Firestore emulator'ına karşı test edilir (`npm run test:rules` ile koşar). Bu ancak o dosya **`firebase-functions` ithal etmediği** için mümkün — kök `tsconfig.json` `functions/**`'ı hariç tutsa da import edilen dosyalar programa dahil edildiğinden, `firebase-functions` içeren bir modülü kök projeden import etmek CI'da (yalnızca kök `node_modules` kurulu) `tsc --noEmit`'i kırar. Aynı deseni tekrarlamak isterseniz: saf mantığı `firebase-admin`'e bağlı ayrı bir dosyaya, callable/trigger sarmalayıcısını yanına koyun.
+
+`firebase-functions/v1` (v2 değil) API'si kullanılır; yeni fonksiyon eklerken mevcut dosyalardaki `functions.region('europe-west1').pubsub/firestore...` deseninden sapmayın.
 
 ## `src/index.ts` — tüm export'lar burada toplanır
 
@@ -19,6 +21,7 @@ scheduledDailyAudit          (scheduledAudit.ts)
 onTaskCreated, onTaskStatusChanged  (taskTriggers.ts)
 cleanupOldNotifications       (cleanup.ts)
 scheduledStatsReconciliation  (statsReconciliation.ts)
+backfillDepartments           (backfillDepartments.ts — tek seferlik taşıma)
 ```
 
 ## `scheduledAudit.ts` — atıl görev denetimi (her gün 08:00 Europe/Istanbul)
@@ -44,6 +47,17 @@ scheduledStatsReconciliation  (statsReconciliation.ts)
 ## `statsReconciliation.ts` — günlük mutabakat (her gün 03:30 Europe/Istanbul)
 
 `system/stats`'teki `totalTasks`/`status_X` sayaçları client (`taskService.ts`) ve `scheduledAudit.ts` tarafından birbirinden bağımsız `increment()`/`decrement()` ile güncellenir (tek atomik yazım yok) — bu fonksiyon Firestore `count()` agregasyon sorgularıyla (ucuz, doküman sayısından bağımsız maliyetli) gerçek durumu yeniden hesaplayıp sapma varsa `system/stats`'i **tamamen üzerine yazar** (increment değil, `set` + `merge:true`). Kasıtlı olarak `scheduledDailyAudit`'in 08:00 koşusundan farklı saatte çalışır ki aynı dokümana çakışan yazımlar azalsın. `TASK_STATUSES` dizisi `src/types.ts`'teki `TaskStatusSchema` (zod) ile **aynı liste** olmalı — ayrı bir TS projesi olduğundan burada düz dizi olarak tekrarlanır; yeni bir durum eklerken iki tarafı da güncelleyin.
+
+## `backfillDepartments.ts` + `departmentBackfillCore.ts` — tek seferlik departman taşıması
+
+Admin-only callable (P0-1/P0-2). (a) `users`+`tasks` içindeki tüm distinct `departmentId` değerleri için eksik `departments/{value}` dokümanlarını oluşturur, (b) departmanı eksik/null/boş olan her görevi **sorumlusunun** güncel departmanıyla doldurur; sorumlu da departmansızsa `Genel` birimine düşürür. Bilinçli tasarım noktaları:
+
+- **Çalıştırma sırası kritiktir** — `tasks` okuma kuralındaki eski "departmanı yoksa serbest" fallback'leri kaldırılmadan ÖNCE koşmalıdır, aksi halde departmansız görevler sorumlusu dışında herkes için görünmez olur. Tam adım listesi, doğrulama script'i ve geri alma: **`BACKFILL_RUNBOOK.md`**.
+- **İdempotent**: var olan departman dokümanı yeniden yazılmaz (kuraldaki `createdAt` değişmezliği zaten reddederdi), departmanı dolu görev güncellenmez.
+- **`updatedAt`/`lockVersion`'a dokunmaz**: bu bir veri taşımasıdır, kullanıcı eylemi değil. `updatedAt` ilerletmek `scheduledAudit`'in "24 saattir atıl" denetimini sıfırlar ve listelerde gerçek aktiviteyi gizler; `lockVersion` artırmak açık istemcilerde sahte `VERSION_MISMATCH` üretir.
+- **Varsayılan birimin ID'si ve `name`'i aynıdır (`Genel`)**: `firestore.rules` `isValidDepartment`, `name == doküman ID` eşitliğini zorunlu kılar. Admin SDK rules'ı bypass ettiğinden `genel`/`Genel` gibi sapmış bir doküman yazılabilirdi — ama bu, taşımanın kapattığı ad/değer sapmasını yeniden üretir ve dokümanı istemciden kalıcı olarak güncellenemez kılardı.
+- `assigneeId` bazen UID bazen e-posta taşıdığından (bkz. `taskTriggers.ts` `resolveUid`) kullanıcı haritası **her iki anahtarla** kurulur — görev başına ayrı sorgu yapmamak için (Spark okuma kotası).
+- Doküman ID'si olamayacak departman adları (`/`, `.`/`..`, `__x__`) atlanır ve sonuçta `skippedInvalidDepartmentNames` olarak raporlanır; elle düzeltilmeleri gerekir.
 
 ## Model Seçimi (Claude Pro — verimli kullanım)
 
