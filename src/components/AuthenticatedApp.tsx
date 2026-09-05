@@ -55,6 +55,8 @@ const TaskDetailsFooter = lazy(() => import('./taskDetails/Footer').then(m => ({
 
 import { useAppHandlers } from '../services/useAppHandlers';
 import { useFirestoreData, fetchTaskById } from '../hooks/useFirestoreData';
+import { useDepartments } from '../hooks/useDepartments';
+import { departmentService } from '../services/departmentService';
 import { useNotifications } from '../hooks/useNotifications';
 import { applyOfflineMutations, type OfflineMutation } from '../lib/offlineQueue';
 import { useSLASync } from '../hooks/useSLASync';
@@ -158,6 +160,19 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
       setGlobalFocusDept(user.departmentId);
     }
   }, [user]);
+
+  // departments koleksiyonundaki KAYITLI birimler — departman ATAMA akışlarını
+  // (TeamList, TaskFormModal) besler. Aşağıdaki türetilmiş `departments`
+  // useMemo'su ile BİLİNÇLİ olarak ayrıdır ve onun yerini ALMAZ: o, mevcut
+  // kayıtlardaki (geçmişte yazılmış, artık kayıtlı olmayabilecek) departmanları
+  // da kapsayan salt-okunur bir odak filtresidir; atama ise yalnızca gerçek
+  // referans varlıklara yapılabilir (bkz. kod denetimi P0-2).
+  const registeredDepartments = useDepartments(user, onError);
+
+  const handleCreateDepartment = useCallback(
+    (name: string) => departmentService.createDepartment(name, user.uid, registeredDepartments),
+    [user.uid, registeredDepartments]
+  );
 
   const departments = useMemo(() => {
     const depts = new Set<string>();
@@ -313,9 +328,11 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
               {activeTab === 'team' && (
                 <TeamList
                   users={filteredUsersByFocus} tasks={filteredTasksByFocus} currentUser={user}
+                  departments={registeredDepartments}
                   onUpdateUser={updateUserRole}
                   onDeleteUser={deleteUser}
                   onAddUser={addUser}
+                  onCreateDepartment={handleCreateDepartment}
                   isLoading={isDataLoading}
                 />
               )}

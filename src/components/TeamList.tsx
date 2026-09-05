@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { UserPlus, Shield, Mail, Building, Trash2, Edit2, Target, CheckCircle2, AlertTriangle, Activity, ArrowRight, History, Loader2 } from 'lucide-react';
-import { User, UserRole, Task, AuditLog, TaskStatus } from '../types';
+import { User, UserRole, Task, AuditLog, TaskStatus, Department } from '../types';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
@@ -14,7 +14,7 @@ import { motion } from 'motion/react';
 import { auditLogService } from '../services/auditLogService';
 import { useUIStore } from '../store/uiStore';
 import { AUDIT_FIELD_LABELS, formatAuditValue } from '../lib/auditLabels';
-import { roleConfig, OrgNodeCard } from './teamList/subcomponents';
+import { roleConfig, OrgNodeCard, DepartmentPicker } from './teamList/subcomponents';
 import { Skeleton } from './ui/Skeleton';
 import { useIsAdmin } from '../hooks/useIsAdmin';
 import { logger } from '../lib/logger';
@@ -23,9 +23,15 @@ interface TeamListProps {
   users: User[];
   tasks: Task[];
   currentUser: User | null;
+  /** departments koleksiyonundaki KAYITLI birimler (bkz. useDepartments).
+   *  AuthenticatedApp'teki users/tasks'tan TÜRETİLEN `departments` listesiyle
+   *  karıştırılmamalı — o yalnızca salt-okunur odak filtresini besler; atama
+   *  yalnızca gerçek referans varlıklara yapılabilir. */
+  departments: Department[];
   onUpdateUser: (userId: string, data: Partial<User>) => void;
   onDeleteUser: (userId: string) => void;
   onAddUser: (data: { email: string; fullName: string; role: UserRole; departmentId?: string }) => void;
+  onCreateDepartment: (name: string) => Promise<string>;
   isLoading?: boolean;
 }
 
@@ -53,7 +59,7 @@ const TeamListSkeleton = () => (
   </div>
 );
 
-export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser, onAddUser, isLoading = false }: TeamListProps) => {
+export const TeamList = ({ users, tasks, currentUser, departments, onUpdateUser, onDeleteUser, onAddUser, onCreateDepartment, isLoading = false }: TeamListProps) => {
   const addToast = useUIStore(state => state.addToast);
   const isAdmin = useIsAdmin(currentUser);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -141,7 +147,12 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
               role: editRole,
               fullName: editName.trim(),
               email: editEmail.toLowerCase().trim(),
-              departmentId: editDept.trim()
+              // .trim() BİLİNÇLİ olarak kaldırıldı: değer artık serbest metin
+              // değil, DepartmentPicker'dan gelen bir departman ID'sidir ve
+              // aynı zamanda departments dokümanının ID'sidir. Burada herhangi
+              // bir dönüşüm uygulamak, referansı sessizce var olmayan bir
+              // departmana kaydırabilirdi (bkz. kod denetimi P0-2).
+              departmentId: editDept
             }
           : { fullName: editName.trim() }
       );
@@ -174,7 +185,9 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
       email: normalizedEmail,
       fullName: newName.trim(),
       role: newRole,
-      departmentId: newDept.trim()
+      // Bkz. handleSave'deki aynı gerekçe — departman artık bir referanstır,
+      // üzerinde string dönüşümü yapılmaz.
+      departmentId: newDept
     });
     setIsAddModalOpen(false);
     setNewEmail('');
@@ -803,7 +816,14 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
               { value: 'Admin', label: ROLE_LABELS.Admin }
             ]} />
           </div>
-          <Input label="Departman / Birim" placeholder="Örn: Operasyon" value={newDept} onChange={(e) => setNewDept(e.target.value)} />
+          <DepartmentPicker
+            id="add-user-department-select"
+            value={newDept}
+            onChange={setNewDept}
+            departments={departments}
+            canCreate={isAdmin}
+            onCreateDepartment={onCreateDepartment}
+          />
           <div className="flex justify-end gap-2.5 pt-4 border-t border-executive-blue/[0.04]">
             <Button variant="secondary" type="button" onClick={() => { setIsAddModalOpen(false); setAddUserError(''); }}>İptal</Button>
             <Button type="submit">Kadroyu Onayla</Button>
@@ -826,7 +846,14 @@ export const TeamList = ({ users, tasks, currentUser, onUpdateUser, onDeleteUser
                   { value: 'Admin', label: ROLE_LABELS.Admin }
                 ]} />
               </div>
-              <Input label="Departman / Birim" value={editDept} onChange={(e) => setEditDept(e.target.value)} />
+              <DepartmentPicker
+                id="edit-user-department-select"
+                value={editDept}
+                onChange={setEditDept}
+                departments={departments}
+                canCreate={isAdmin}
+                onCreateDepartment={onCreateDepartment}
+              />
             </>
           ) : (
             <div className="flex items-start gap-2 p-2.5 bg-surface-glass border border-surface-border rounded-xl">
