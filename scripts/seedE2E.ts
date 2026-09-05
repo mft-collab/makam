@@ -31,7 +31,19 @@ const ADMIN_UID = 'e2e-admin-uid';
 const ADMIN_EMAIL = 'admin@e2e.test';
 const TASK_TITLE = 'E2E Test Görevi';
 
+const DEPARTMENT_ID = 'Genel';
+
 async function seed() {
+  // Departman artık bir REFERANS VARLIKtır (bkz. firestore.rules
+  // `departments`): görev dokümanlarının departmentId'si var olan bir
+  // dokümana işaret etmek zorunda. Admin BİLİNÇLİ olarak departmansız kalır —
+  // organizasyon geneli çalışır ve bu kuralca geçerlidir.
+  await db.collection('departments').doc(DEPARTMENT_ID).set({
+    name: DEPARTMENT_ID,
+    createdAt: Date.now(),
+    createdBy: ADMIN_UID,
+  });
+
   await db.collection('users').doc(ADMIN_UID).set({
     uid: ADMIN_UID,
     fullName: 'E2E Test Admin',
@@ -54,6 +66,7 @@ async function seed() {
     updatedAt: now,
     lockVersion: 0,
     totalPausedTime: 0,
+    departmentId: DEPARTMENT_ID,
   });
 
   const token = await auth.createCustomToken(ADMIN_UID);

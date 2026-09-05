@@ -19,7 +19,13 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['tests/rules/**/*.test.ts'],
+    // tests/emulator/** de buraya dahildir: firestore.rules testleriyle AYNI
+    // koşulu paylaşırlar (gerçek bir Firestore emulator'ı gerekir, mock'lanmış
+    // SDK ile anlamsızdırlar) ve bu yüzden `npm test`in hızlı birim test
+    // aşamasında YER ALAMAZLAR. Ayrı bir klasör, "kural matrisi" ile "Admin SDK
+    // taşıma mantığı" testlerini birbirine karıştırmadan aynı script'te
+    // (`npm run test:rules`) toplar.
+    include: ['tests/rules/**/*.test.ts', 'tests/emulator/**/*.test.ts'],
     // Rules testleri tek bir paylaşılan emulator örneğine karşı çalışır ve her
     // testten önce clearFirestore() ile veritabanını sıfırlar — paralel dosya
     // çalıştırma bu sıfırlamayı testler arasında yarıştırır.
