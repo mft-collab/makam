@@ -6,7 +6,7 @@ import {
   runTransaction,
   db
 } from '../firebase';
-import { auditTaskTitle, transitionTaskInTransaction } from './taskService';
+import { auditLogType, auditTaskTitle, transitionTaskInTransaction } from './taskService';
 import { runWithRetry } from '../lib/retry';
 import { TaskPriority } from '../types';
 
@@ -72,6 +72,10 @@ export const blockerService = {
         batch.set(doc(collection(db, 'audit_logs')), {
           taskId,
           ...auditTaskTitle(taskTitle),
+          // Risk unsurunun yaşam döngüsü olayı (aktif → çözüldü) — görevin
+          // durumu bu dalda değişmiyor olsa da kayıt bir DURUM olayını
+          // anlatır, bir içerik düzenlemesini değil (bkz. auditLogType).
+          ...auditLogType('STATUS'),
           changedBy: userId,
           oldValue: 'Risk Unsuru Aktif',
           newValue: 'Risk Unsuru Çözüldü',
@@ -93,6 +97,11 @@ export const blockerService = {
       batch.set(doc(collection(db, 'audit_logs')), {
         taskId,
         ...auditTaskTitle(taskTitle),
+        // Serbest metin bir GEREKÇE düzenlemesi — risk unsurunun durumu
+        // değişmiyor, yalnızca içeriği. İstemci-taraflı eski tahmin bu kaydı
+        // `changes` yazmadığı için "Durum Değişikliği" sayıyordu; yanlıştı
+        // (bkz. auditLogType).
+        ...auditLogType('FIELD'),
         changedBy: actorId,
         oldValue: 'Risk Gerekçesi',
         newValue: reason,
@@ -130,6 +139,8 @@ export const blockerService = {
         batch.set(doc(collection(db, 'audit_logs')), {
           taskId,
           ...auditTaskTitle(taskTitle),
+          // resolveBlocker ile AYNI gerekçe: risk unsurunun yaşam döngüsü sonu.
+          ...auditLogType('STATUS'),
           changedBy: userId,
           oldValue: 'Risk Unsuru Aktif',
           newValue: 'Risk Unsuru Silindi',

@@ -152,7 +152,9 @@ describe('blockerService', () => {
       const auditCall = set.mock.calls.find(([, data]: any) => data?.changedBy !== undefined);
       // Çağıranın geçirdiği görev başlığı kayda donar (bkz. P1-14) — bu servis
       // görevi kendisi okumaz, başlık opsiyoneldir.
-      expect(auditCall?.[1]).toMatchObject({ taskId: 'task-1', changedBy: 'user-1', taskTitle: 'Risk Görevi' });
+      // logType: risk unsurunun YAŞAM DÖNGÜSÜ olayı (aktif → çözüldü), bir
+      // içerik düzenlemesi değil (bkz. taskService.auditLogType).
+      expect(auditCall?.[1]).toMatchObject({ taskId: 'task-1', changedBy: 'user-1', taskTitle: 'Risk Görevi', logType: 'STATUS' });
       expect(commit).toHaveBeenCalledOnce();
     });
   });
@@ -169,7 +171,10 @@ describe('blockerService', () => {
 
       expect(update).toHaveBeenCalledWith({ id: 'generated-ref-1' }, { reason: 'Yeni sebep' });
       const auditCall = set.mock.calls.find(([, data]: any) => data?.changedBy !== undefined);
-      expect(auditCall?.[1]).toMatchObject({ taskId: 'task-1', changedBy: 'user-1', newValue: 'Yeni sebep', taskTitle: 'Risk Görevi' });
+      // logType 'FIELD': bu bir gerekçe METNİ düzenlemesidir. Kayıt `changes`
+      // yazmadığı için ESKİ istemci-taraflı tahmin bunu "Durum Değişikliği"
+      // sayıyordu — tip artık şekilden türetilmiyor (bkz. auditLogType, P2-22).
+      expect(auditCall?.[1]).toMatchObject({ taskId: 'task-1', changedBy: 'user-1', newValue: 'Yeni sebep', taskTitle: 'Risk Görevi', logType: 'FIELD' });
       expect(commit).toHaveBeenCalledOnce();
     });
 
@@ -225,7 +230,7 @@ describe('blockerService', () => {
       expect(firebase.runTransaction).not.toHaveBeenCalled();
       expect(del).toHaveBeenCalledWith({ id: 'generated-ref-1' });
       const auditCall = set.mock.calls.find(([, data]: any) => data?.changedBy !== undefined);
-      expect(auditCall?.[1]).toMatchObject({ taskId: 'task-1', changedBy: 'user-1', newValue: 'Risk Unsuru Silindi', taskTitle: 'Risk Görevi' });
+      expect(auditCall?.[1]).toMatchObject({ taskId: 'task-1', changedBy: 'user-1', newValue: 'Risk Unsuru Silindi', taskTitle: 'Risk Görevi', logType: 'STATUS' });
       expect(commit).toHaveBeenCalledOnce();
     });
   });

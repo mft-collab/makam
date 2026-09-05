@@ -45,6 +45,9 @@ describe('taskService', () => {
         // Başlık kayda DONDURULARAK yazılır: denetim izi ekranı, görevin hâlâ
         // yüklü görev penceresinde olmasına bağlı kalmasın (bkz. P1-14).
         taskTitle: 'Denetim Hedefi',
+        // Bu kayıt TANIM GEREĞİ bir durum geçişidir — aşağıdaki `changes.status`
+        // diff'i geçişin DETAYIdır, tipi değil (bkz. taskService.auditLogType).
+        logType: 'STATUS',
         changes: { status: { old: 'IN_PROGRESS', new: 'COMPLETED' } },
       });
 
@@ -68,6 +71,25 @@ describe('taskService', () => {
 
       const auditCall = set.mock.calls.find(call => 'changedBy' in (call[1] as object));
       expect(auditCall?.[1]).not.toHaveProperty('taskTitle');
+    });
+
+    it('durum geçişi kaydı `changes` TAŞISA BİLE logType STATUS yazılır (eski istemci tahmininin düzeltmesi)', async () => {
+      // Bu, P2-22'nin özüdür: tip eskiden istemcide kaydın şeklinden tahmin
+      // ediliyordu (`!log.changes && log.newValue !== undefined` → 'STATUS').
+      // transitionTaskInTransaction hem `newValue` HEM `changes` yazdığı için
+      // tahmin burada YANILIYOR ve gerçek durum geçişleri "İçerik
+      // Güncellemeleri" filtresine düşüyordu. Tip artık şekilden değil, olayı
+      // yazan kodun zaten bildiği bilgiden geliyor — bu testin kırılması, o
+      // hatanın geri geldiği anlamına gelir.
+      const { transaction, set } = makeTransactionMock({
+        status: 'IN_PROGRESS', title: 'Denetim Hedefi', lockVersion: 0, totalPausedTime: 0, deadline: Date.now() + 100_000,
+      });
+
+      await transitionTaskInTransaction(transaction, 'task-1', 'COMPLETED', 'user-1', {});
+
+      const auditCall = set.mock.calls.find(call => 'changedBy' in (call[1] as object));
+      expect(auditCall?.[1]).toHaveProperty('changes');
+      expect(auditCall?.[1].logType).toBe('STATUS');
     });
 
     it('BLOCKED durumuna geçişte pausedAt şimdiki zamana ayarlanır (SLA duraklatılır)', async () => {
@@ -283,7 +305,8 @@ describe('taskService', () => {
       expect(taskSetCall?.[1]).toMatchObject({ id: 'ref-1', status: 'ASSIGNED', lockVersion: 0, totalPausedTime: 0 });
 
       const auditSetCall = capturedTransaction.set.mock.calls.find(([, data]: any) => data?.newValue === 'Talimat Oluşturuldu ve Atandı');
-      expect(auditSetCall?.[1]).toMatchObject({ taskId: 'ref-1', changedBy: 'user-1', taskTitle: 'Yeni Görev' });
+      // logType 'STATUS': görevin yaşam döngüsünün başlangıcı (→ ASSIGNED).
+      expect(auditSetCall?.[1]).toMatchObject({ taskId: 'ref-1', changedBy: 'user-1', taskTitle: 'Yeni Görev', logType: 'STATUS' });
 
       const statsSetCall = capturedTransaction.set.mock.calls.find(([, data]: any) => 'status_ASSIGNED' in (data ?? {}));
       expect(statsSetCall?.[1]).toMatchObject({ totalTasks: { __increment: 1 }, status_ASSIGNED: { __increment: 1 } });
@@ -389,6 +412,9 @@ describe('taskService', () => {
 
       const auditCall = set.mock.calls.find(call => 'changes' in (call[1] as object));
       expect(auditCall?.[1].taskTitle).toBe('Mevcut Başlık');
+      // Durum-DIŞI genel güncelleme yolu — tek 'FIELD' üreten görev yazma
+      // noktası budur (durum geçişleri transitionTaskInTransaction'dan gider).
+      expect(auditCall?.[1].logType).toBe('FIELD');
     });
 
     it('durum değişikliği varsa stats deltası aynı transaction\'da yazılır, yoksa yazılmaz', async () => {
@@ -473,7 +499,9 @@ describe('taskService', () => {
       // Silme kaydında başlık, görev SİLİNMEDEN ÖNCEKİ halidir — silinmiş bir
       // görev için görev listesi fallback'i zaten hiçbir zaman çözülemez, bu
       // yüzden denormalize başlık burada tek başlık kaynağıdır (bkz. P1-14).
-      expect(auditSetCall?.[1]).toMatchObject({ taskTitle: 'Silinecek Görev', oldValue: 'Silinecek Görev' });
+      // logType 'STATUS': görevin yaşam döngüsünün SONU. transitionTask ile
+      // aynı gerekçe — bu kayıt da `changes` taşır ama tipi bu değiştirmez.
+      expect(auditSetCall?.[1]).toMatchObject({ taskTitle: 'Silinecek Görev', oldValue: 'Silinecek Görev', logType: 'STATUS' });
       // Stats: bu görevin durumu (IN_PROGRESS) için -1
       const statsSetCall = batchSet.mock.calls.find(([, data]: any) => 'status_IN_PROGRESS' in (data ?? {}));
       expect(statsSetCall?.[1]).toMatchObject({

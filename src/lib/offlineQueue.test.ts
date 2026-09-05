@@ -286,7 +286,7 @@ describe('OfflineQueue', () => {
       offlineQueue.enqueue(
         'users', 'set', { uid: 'a@b.com', fullName: 'X', role: 'Staff', email: 'a@b.com' }, 'a@b.com',
         undefined, undefined, undefined, undefined, undefined,
-        { taskId: 'a@b.com', changedBy: 'admin-1', oldValue: 'Yok', newValue: 'Personel Eklendi: X (Staff)' }
+        { taskId: 'a@b.com', logType: 'STATUS', changedBy: 'admin-1', oldValue: 'Yok', newValue: 'Personel Eklendi: X (Staff)' }
       );
       const result = await offlineQueue.sync();
 
@@ -299,7 +299,10 @@ describe('OfflineQueue', () => {
       // Audit kaydı: ayrı bir batch.set çağrısı
       expect(batch.set).toHaveBeenCalledTimes(2);
       const auditCallArgs = batch.set.mock.calls[1]!;
-      expect(auditCallArgs[1]).toMatchObject({ taskId: 'a@b.com', changedBy: 'admin-1', newValue: 'Personel Eklendi: X (Staff)' });
+      // logType, online userService.addUser'ın yazdığı değerle AYNI olmalı —
+      // yoksa aynı işlem çevrimiçi/çevrimdışı yapıldığında denetim izinde
+      // farklı tipte görünürdü (bkz. taskService.auditLogType).
+      expect(auditCallArgs[1]).toMatchObject({ taskId: 'a@b.com', logType: 'STATUS', changedBy: 'admin-1', newValue: 'Personel Eklendi: X (Staff)' });
       // Kullanıcı-yönetimi kayıtlarında "taskId" bir görev değil bir kullanıcı
       // id'sidir — denormalize görev başlığı BİLEREK yazılmaz (uydurma veri
       // olurdu, bkz. userService.ts'teki aynı gerekçe).
@@ -314,7 +317,7 @@ describe('OfflineQueue', () => {
       offlineQueue.enqueue(
         'blockers', 'update', { reason: 'Yeni sebep' }, 'blocker-1',
         undefined, undefined, undefined, undefined, undefined,
-        { taskId: 'task-1', taskTitle: 'Risk Görevi', changedBy: 'user-1', oldValue: 'Risk Gerekçesi', newValue: 'Yeni sebep' }
+        { taskId: 'task-1', taskTitle: 'Risk Görevi', logType: 'FIELD', changedBy: 'user-1', oldValue: 'Risk Gerekçesi', newValue: 'Yeni sebep' }
       );
       const result = await offlineQueue.sync();
 
@@ -323,8 +326,27 @@ describe('OfflineQueue', () => {
       expect(batch.update).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ reason: 'Yeni sebep' }));
       // taskTitle, online blockerService.editBlocker yoluyla PARİTE için
       // offline senkronda da yazılır (bkz. P1-14 denormalizasyonu).
-      expect(batch.set).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ taskId: 'task-1', taskTitle: 'Risk Görevi', newValue: 'Yeni sebep' }));
+      expect(batch.set).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ taskId: 'task-1', taskTitle: 'Risk Görevi', logType: 'FIELD', newValue: 'Yeni sebep' }));
       expect(batch.commit).toHaveBeenCalledOnce();
+    });
+
+    it('logType verilmezse audit kaydına anahtar HİÇ eklenmez (eski/legacy kuyruk öğeleri)', async () => {
+      // Firestore `undefined` değer kabul etmez ve alan opsiyoneldir. Bu dal
+      // pratikte yalnızca bu alandan ÖNCE kuyruğa alınmış (localStorage'da
+      // bekleyen) mutasyonlar için çalışır — onlar da yine yazılabilmeli,
+      // aksi halde sürüm geçişinde bekleyen kuyruk kalıcı olarak düşerdi.
+      const batch = makeBatch();
+      vi.mocked(firebase.writeBatch).mockReturnValueOnce(batch as any);
+
+      offlineQueue.enqueue(
+        'users', 'delete', undefined, 'legacy-uid',
+        undefined, undefined, undefined, undefined, undefined,
+        { taskId: 'legacy-uid', changedBy: 'admin-1', oldValue: 'Aktif', newValue: 'Personel Silindi' }
+      );
+      await offlineQueue.sync();
+
+      const auditCall = batch.set.mock.calls.find(call => 'changedBy' in (call[1] as object));
+      expect(auditCall?.[1]).not.toHaveProperty('logType');
     });
 
     it('delete + withAuditLog: hem doküman silme hem audit_logs kaydı TEK writeBatch ile yazılır', async () => {

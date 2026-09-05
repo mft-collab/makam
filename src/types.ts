@@ -142,6 +142,12 @@ export const GlobalStatsSchema = z.object({
   status_CRISIS: z.number().default(0),
 });
 
+/** Denetim kaydının işlem tipi — hem yazma noktalarının (taskService/
+ *  blockerService/userService/settingsService/offlineQueue) sınıflandırması
+ *  hem AuditLogList'in sunucu-taraflı filtresi bu TEK tanımı kullanır. */
+export const AuditLogTypeSchema = z.enum(['STATUS', 'FIELD']);
+export type AuditLogType = z.infer<typeof AuditLogTypeSchema>;
+
 export const AuditLogSchema = z.object({
   id: z.string(),
   taskId: z.string(),
@@ -150,6 +156,16 @@ export const AuditLogSchema = z.object({
    *  kayıtlarda yoktur ve geriye dönük backfill yapılmaz — AuditLogList o
    *  eski kayıtlarda eskisi gibi yüklü görev listesine düşer. */
   taskTitle: z.string().optional(),
+  /** Kaydın YAZIM ANINDA belirlenen işlem tipi: bir durum/yaşam-döngüsü olayı
+   *  mı ('STATUS'), yoksa bir alan/içerik güncellemesi mi ('FIELD') (bkz.
+   *  taskService.AUDIT_LOG_TYPE). AuditLogList'in "İşlem Tipi" filtresi bunu
+   *  SUNUCU tarafında (`where`) kullanır; eskiden tip, istemcide kaydın
+   *  şeklinden (`changes` var mı / `newValue` set mi) TAHMİN ediliyordu —
+   *  sayfalanmış bir sayfanın parçası elenince sayfalama tutarsızlaşıyordu ve
+   *  tahmin, `changes` de yazan durum geçişlerinde YANLIŞTI (bkz. kod
+   *  denetimi P2-22). Opsiyoneldir: bu alandan önce yazılmış kayıtlarda
+   *  yoktur ve geriye dönük backfill yapılmaz. */
+  logType: AuditLogTypeSchema.optional(),
   changedBy: z.string(),
   changes: z.record(z.string(), z.object({
     old: z.unknown(),

@@ -365,7 +365,10 @@ export function useAppHandlers({
       offlineQueue.enqueue(
         'users', 'set', { uid: emailId, ...data, email: emailId }, emailId,
         undefined, undefined, undefined, undefined, undefined,
-        { taskId: emailId, changedBy: user.uid, oldValue: 'Yok', newValue: `Personel Eklendi: ${data.fullName} (${data.role})` }
+        // logType: userService.addUser'daki online karşılığıyla BİREBİR aynı
+        // olmalı — aksi halde aynı işlem çevrimiçi/çevrimdışı yapıldığında
+        // denetim izinde farklı tipte görünürdü (bkz. taskService.auditLogType).
+        { taskId: emailId, logType: 'STATUS', changedBy: user.uid, oldValue: 'Yok', newValue: `Personel Eklendi: ${data.fullName} (${data.role})` }
       );
       toast('👤 Çevrimdışı Personel Ekleme', `"${data.fullName}" lokal sıraya alındı.`, 'warning');
       return;
@@ -383,7 +386,7 @@ export function useAppHandlers({
         'users', 'update', data, userId,
         undefined, undefined, undefined, undefined, undefined,
         {
-          taskId: userId, changedBy: user.uid,
+          taskId: userId, logType: 'FIELD', changedBy: user.uid,
           oldValue: 'Personel Bilgisi', newValue: 'Personel Bilgisi Güncellendi',
           // userService.updateUser ile AYNI gerekçe: bu katmanda eski değerler
           // bilinmiyor, yalnızca HANGİ alanların değiştiği ve yeni değerleri
@@ -409,7 +412,7 @@ export function useAppHandlers({
       offlineQueue.enqueue(
         'users', 'delete', undefined, userId,
         undefined, undefined, undefined, undefined, undefined,
-        { taskId: userId, changedBy: user.uid, oldValue: 'Aktif', newValue: 'Personel Silindi' }
+        { taskId: userId, logType: 'STATUS', changedBy: user.uid, oldValue: 'Aktif', newValue: 'Personel Silindi' }
       );
       toast('🗑 Çevrimdışı Personel Silme', 'Personel silme işlemi lokal sıraya alındı.', 'warning');
       return;
@@ -438,7 +441,7 @@ export function useAppHandlers({
       offlineQueue.enqueue(
         'blockers', 'update', { reason }, blockerId,
         undefined, undefined, undefined, undefined, undefined,
-        { taskId: blocker.taskId, taskTitle: task?.title, changedBy: user.uid, oldValue: 'Risk Gerekçesi', newValue: reason }
+        { taskId: blocker.taskId, taskTitle: task?.title, logType: 'FIELD', changedBy: user.uid, oldValue: 'Risk Gerekçesi', newValue: reason }
       );
       toast('🔄 Çevrimdışı Risk Düzenleme', 'Risk gerekçesi lokal sıraya alındı.', 'warning', blocker.taskId);
       return;

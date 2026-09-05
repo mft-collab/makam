@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { DocumentReference } from 'firebase/firestore';
 import { db, doc, setDoc, addDoc, collection, getDoc, writeBatch, increment } from '../firebase';
 import { runWithRetry } from '../lib/retry';
+import { auditLogType } from './taskService';
 import { UserRoleSchema, TaskStatusSchema, TaskPrioritySchema } from '../types';
 import { normalizeSessionTimeoutMs } from '../constants';
 import { SESSION_TIMEOUT_STORAGE_KEY } from '../hooks/useSessionTimeout';
@@ -99,6 +100,10 @@ export const settingsService = {
 
     await runWithRetry(() => addDoc(collection(db, 'audit_logs'), {
       taskId: 'system_settings',
+      // Dizge YAPILANDIRMASININ içerik güncellemesi — bir yaşam döngüsü olayı
+      // değil. userService'teki aynı gerekçe: `logType` yazılmazsa bu kayıt
+      // her iki tip filtresinden de düşerdi (bkz. taskService.auditLogType).
+      ...auditLogType('FIELD'),
       changedBy: userId,
       oldValue: 'SLA Yapılandırması Değiştirildi',
       newValue: summaryLabel,
@@ -124,6 +129,8 @@ export const settingsService = {
 
     await runWithRetry(() => addDoc(collection(db, 'audit_logs'), {
       taskId: 'system_settings',
+      // saveSlaConfig ile AYNI desen: yapılandırma değeri güncellemesi.
+      ...auditLogType('FIELD'),
       changedBy: userId,
       oldValue: 'Oturum Zaman Aşımı Değiştirildi',
       newValue: `${Math.round(normalized / 60000)} dakika`,
@@ -258,6 +265,9 @@ export const settingsService = {
     // Register restore audit log — hangi dosyadan, kaç kayıt geri yüklendiği kaydedilir
     await runWithRetry(() => addDoc(collection(db, 'audit_logs'), {
       taskId: 'system_backup_restore',
+      // Dizge düzeyinde bir OLAY (toplu geri yükleme), tek tek alanların
+      // düzenlenmesi değil — bkz. taskService.auditLogType sınıflandırması.
+      ...auditLogType('STATUS'),
       changedBy: userId,
       oldValue: `Yedek dosyası: ${fileName}`,
       newValue: `${data.users?.length ?? 0} kullanıcı, ${data.tasks?.length ?? 0} talimat, ${data.blockers?.length ?? 0} engel geri yüklendi`,
@@ -272,6 +282,8 @@ export const settingsService = {
   async archiveAuditLogs(logCount: number, userId: string) {
     await runWithRetry(() => addDoc(collection(db, 'audit_logs'), {
       taskId: 'system_log_export',
+      // restoreBackup ile AYNI gerekçe: dışa aktarma bir dizge olayıdır.
+      ...auditLogType('STATUS'),
       changedBy: userId,
       oldValue: logCount + ' kayıt (veritabanında)',
       newValue: 'Yerel dosyaya aktarıldı',

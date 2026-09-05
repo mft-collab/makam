@@ -14,8 +14,8 @@ import {
 import { logger } from './logger';
 import { conflictDetectionService } from '../services/conflictDetectionService';
 import { useUIStore } from '../store/uiStore';
-import { auditTaskTitle, transitionTaskInTransaction, updateTaskInTransaction, taskService } from '../services/taskService';
-import type { Task, TaskBlocker, TaskStatus, User } from '../types';
+import { auditLogType, auditTaskTitle, transitionTaskInTransaction, updateTaskInTransaction, taskService } from '../services/taskService';
+import type { AuditLogType, Task, TaskBlocker, TaskStatus, User } from '../types';
 
 // Sunucu bu hata kodlarıyla reddettiğinde yeniden deneme sonucu asla değişmez
 // (ör. firestore.rules'taki bir iş kuralı ihlali veya bozuk veri) — kuyrukta
@@ -121,6 +121,14 @@ export interface OfflineMutation {
      *  taskService.auditTaskTitle). Görev-dışı senaryolarda (kullanıcı
      *  yönetimi) verilmez ve alan hiç yazılmaz. */
     taskTitle?: string;
+    /** Kaydın işlem tipi — online yoldaki karşılığıyla (userService.addUser/
+     *  updateUser/deleteUser, blockerService.editBlocker) BİREBİR AYNI değer
+     *  olmalıdır, aksi halde aynı işlem çevrimiçi/çevrimdışı yapıldığında
+     *  denetim izinde FARKLI tipte görünür ve "İşlem Tipi" filtresi tutarsız
+     *  sonuç verir (bkz. taskService.auditLogType). Tek bir genel değer
+     *  gömülemez: bu kuyruk hem durum olaylarını (personel ekleme/silme) hem
+     *  içerik güncellemelerini (personel bilgisi, risk gerekçesi) taşır. */
+    logType?: AuditLogType;
     changedBy: string;
     oldValue: string;
     newValue: string;
@@ -208,6 +216,7 @@ async function writeWithAuditLog(
   batch.set(doc(collection(db, 'audit_logs')), {
     taskId: auditLog.taskId,
     ...auditTaskTitle(auditLog.taskTitle),
+    ...auditLogType(auditLog.logType),
     changedBy: auditLog.changedBy,
     oldValue: auditLog.oldValue,
     newValue: auditLog.newValue,

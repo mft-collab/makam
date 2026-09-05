@@ -556,7 +556,11 @@ describe('useAppHandlers', () => {
       expect(call[0]).toBe('users');
       expect(call[1]).toBe('set');
       expect(call[3]).toBe('a@b.com');
-      expect(call[9]).toMatchObject({ taskId: 'a@b.com', changedBy: 'user-1' });
+      // logType, online userService.addUser'ın yazdığı değerle AYNI olmalı —
+      // aksi halde aynı işlem çevrimiçi/çevrimdışı yapıldığında denetim izinde
+      // farklı tipte görünür ve "İşlem Tipi" filtresi tutarsızlaşırdı
+      // (bkz. taskService.auditLogType).
+      expect(call[9]).toMatchObject({ taskId: 'a@b.com', logType: 'STATUS', changedBy: 'user-1' });
     });
 
     it('addUser: servis reddederse onError(err, \'create\', \'users\') çağrılır', async () => {
@@ -583,7 +587,9 @@ describe('useAppHandlers', () => {
       expect(call[1]).toBe('update');
       expect(call[2]).toEqual({ role: 'Manager' });
       expect(call[3]).toBe('target-uid');
-      expect(call[9]).toMatchObject({ taskId: 'target-uid', changedBy: 'user-1' });
+      // Personel BİLGİSİ güncellemesi bir alan düzenlemesidir (userService.
+      // updateUser ile parite) — ekleme/silmeden farklı olarak 'FIELD'.
+      expect(call[9]).toMatchObject({ taskId: 'target-uid', logType: 'FIELD', changedBy: 'user-1' });
     });
 
     it('updateUserRole: servis reddederse onError(err, \'update\', \'users/{id}\') çağrılır', async () => {
@@ -609,7 +615,7 @@ describe('useAppHandlers', () => {
       expect(call[0]).toBe('users');
       expect(call[1]).toBe('delete');
       expect(call[3]).toBe('target-uid');
-      expect(call[9]).toMatchObject({ taskId: 'target-uid', changedBy: 'user-1' });
+      expect(call[9]).toMatchObject({ taskId: 'target-uid', logType: 'STATUS', changedBy: 'user-1' });
     });
 
     it('deleteUser: servis reddederse onError(err, \'delete\', \'users/{id}\') çağrılır', async () => {
@@ -667,7 +673,10 @@ describe('useAppHandlers', () => {
       // taskTitle, online editBlocker yoluyla PARİTE için offline payload'a da
       // konur — aynı işlem çevrimiçi/çevrimdışı yapıldığında audit kaydı aynı
       // olmalı (bkz. offlineQueue.writeWithAuditLog).
-      expect(call[9]).toMatchObject({ taskId: 'task-1', taskTitle: 'Talimat', changedBy: 'user-1', newValue: 'Yeni sebep' });
+      // logType da aynı gerekçeyle payload'a konur: bir risk GEREKÇESİ
+      // düzenlemesi içerik güncellemesidir ('FIELD'), online
+      // blockerService.editBlocker ile birebir aynı.
+      expect(call[9]).toMatchObject({ taskId: 'task-1', taskTitle: 'Talimat', logType: 'FIELD', changedBy: 'user-1', newValue: 'Yeni sebep' });
     });
 
     it('servis reddederse onError(err, \'update\', \'blockers/{id}\') çağrılır', async () => {

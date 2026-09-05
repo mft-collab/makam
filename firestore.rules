@@ -325,11 +325,20 @@ service cloud.firestore {
       // Uzunluk sınırı, isValidTask'taki title sınırıyla (<=200) BİLEREK
       // aynıdır — daha dar bir sınır, uzun başlıklı bir görevin geçişini
       // audit yazımı reddedildiği için tümüyle başarısız kılardı.
-      let allowedFields = ['taskId', 'taskTitle', 'changedBy', 'oldValue', 'newValue', 'timestamp', 'changes'];
+      // 'logType': kaydın yazım anında belirlenen işlem tipi (bkz.
+      // taskService.auditLogType) — denetim izi ekranının "İşlem Tipi" filtresi
+      // artık bunu SUNUCU tarafında (`where`) kullanır; eskiden tip, istemcide
+      // kaydın şeklinden tahmin ediliyordu (bkz. kod denetimi P2-22).
+      // Opsiyoneldir: bu alandan önce yazılmış kayıtlarda yoktur. Değer kümesi
+      // BURADA da kısıtlanır — audit_logs silinemediği için şemaya uymayan bir
+      // değer sonsuza dek koleksiyonda kalır ve `where` eşitliğiyle hiçbir
+      // filtreye düşmeyen "görünmez" bir kayıt üretirdi.
+      let allowedFields = ['taskId', 'taskTitle', 'logType', 'changedBy', 'oldValue', 'newValue', 'timestamp', 'changes'];
       return data.keys().hasAll(['taskId', 'changedBy', 'timestamp']) &&
              data.keys().hasOnly(allowedFields) &&
              data.taskId is string && data.taskId.size() <= 200 &&
              (!('taskTitle' in data) || (data.taskTitle is string && data.taskTitle.size() <= 200)) &&
+             (!('logType' in data) || data.logType in ['STATUS', 'FIELD']) &&
              data.changedBy is string &&
              // Kaydı oluşturan istemci, başka bir kullanıcı adına sahte kayıt
              // yazamaz — "kim yaptı" bilgisi request.auth.uid'e bağlanır.
