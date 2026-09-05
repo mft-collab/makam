@@ -2,10 +2,10 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Task, User, TaskPrioritySchema } from '../types';
+import { Task, User, Department, TaskPrioritySchema } from '../types';
 import { PRIORITY_LABELS, ROLE_LABELS } from '../constants';
 import { cn } from '../lib/utils';
-import { FileText, Target, Users, Calendar, AlertCircle } from 'lucide-react';
+import { FileText, Target, Users, Calendar, AlertCircle, Building } from 'lucide-react';
 import { DatePicker } from './ui/DatePicker';
 import { Button } from './ui/Button';
 import { logger } from '../lib/logger';
@@ -15,6 +15,12 @@ const taskSchema = z.object({
   description: z.string().min(1, 'Açıklama zorunludur.').trim(),
   assigneeId: z.string().min(1, 'Sorumlu seçimi zorunludur.'),
   coordinatorId: z.string().optional(),
+  // Görevin departmanı normalde SORUMLUDAN türetilir (bkz. processForm) — bu
+  // alan yalnızca sorumlunun departmanı yokken (tipik olarak Admin'e atanan
+  // görevlerde) kullanıcıdan AÇIKÇA istenir. Zorunluluğu şemada değil
+  // processForm'da uygulanır: gerekli olup olmadığı seçili sorumluya bağlıdır
+  // ve zod şeması bu bağlamı göremez.
+  departmentId: z.string().optional(),
   priority: TaskPrioritySchema,
   deadline: z.string().min(1, 'Mühlet seçilmelidir.')
 }).refine(data => {
@@ -32,6 +38,9 @@ type TaskFormValues = z.infer<typeof taskSchema>;
 interface TaskFormModalProps {
   users: User[];
   currentUser: User | null;
+  /** departments koleksiyonundaki kayıtlı birimler. Yalnızca sorumlunun
+   *  departmanı yokken gösterilen "birim seç" alanını besler. */
+  departments?: Department[];
   task?: Task;
   parentId?: string;
   initialTitle?: string;
@@ -39,7 +48,7 @@ interface TaskFormModalProps {
   onClose: () => void;
 }
 
-export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle, onSubmit, onClose }: TaskFormModalProps) => {
+export const TaskFormModal = ({ users, currentUser, departments = [], task, parentId, initialTitle, onSubmit, onClose }: TaskFormModalProps) => {
   const isSubTask = Boolean(parentId);
 
   const {
@@ -47,6 +56,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
     handleSubmit,
     watch,
     setValue,
+    setError,
     formState: { errors, isSubmitting }
   } = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
@@ -55,6 +65,7 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
       description: task?.description || '',
       assigneeId: task?.assigneeId || '',
       coordinatorId: task?.coordinatorId || '',
+      departmentId: task?.departmentId || '',
       priority: task?.priority || 'Medium',
       deadline: task?.deadline ? new Date(task.deadline).toISOString().split('T')[0] : '',
     }
@@ -88,6 +99,31 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
     ? [currentAssignee, ...roleFilteredUsers]
     : roleFilteredUsers;
 
+  // ─── Departman türetimi (bkz. kod denetimi P0-1) ─────────────────────────
+  // Görevin departmanı ARTIK GÖREVİ OLUŞTURANDAN DEĞİL, ATANAN KİŞİDEN
+  // türetilir. Eski davranış (currentUser?.departmentId) P0-1'in kaynağıydı:
+  // Admin'in departmanı tipik olarak boş olduğundan Admin'in oluşturduğu her
+  // görev departmansız kalıyor ve firestore.rules'taki "departmanı yoksa
+  // serbest" fallback'leri yüzünden tüm organizasyona okunur hale geliyordu.
+  const selectedAssignee = users.find(u => u.uid === assigneeId);
+  const assigneeDepartment = selectedAssignee?.departmentId ?? '';
+
+  // Sorumlunun departmanı yoksa (tipik olarak görev bir Admin'e atanıyorsa)
+  // departman ARTIK ZORUNLU bir form alanı olarak kullanıcıdan istenir —
+  // sessizce boş bırakmak, kapatılan boşluğu geri açardı.
+  const needsExplicitDepartment = !task && assigneeId !== '' && assigneeDepartment === '';
+
+  // Müdür yalnızca KENDİ departmanında görev oluşturabilir (firestore.rules
+  // tasks create kuralı) — bu yüzden seçenekleri de o birimle sınırlanır,
+  // aksi halde kullanıcıya ancak sunucudan dönen ham bir izin hatası kalırdı.
+  const isManagerCreator = !task && currentUser?.role === 'Manager';
+  const selectableDepartments = isManagerCreator && currentUser?.departmentId
+    ? departments.filter(d => d.id === currentUser.departmentId)
+    : departments;
+
+  const explicitDepartment = watch('departmentId') ?? '';
+  const effectiveDepartment = needsExplicitDepartment ? explicitDepartment : assigneeDepartment;
+
   const coordinatorUsers = users.filter(
     u => u.role !== 'Admin'
       && u.uid !== assigneeId
@@ -95,6 +131,25 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
   );
 
   const processForm = async (data: TaskFormValues) => {
+    // Departman zorunluluğu zod şemasında değil burada uygulanır: gerekli olup
+    // olmadığı seçili sorumluya bağlı (bkz. taskSchema'daki departmentId notu).
+    if (!task) {
+      if (effectiveDepartment === '') {
+        setError('departmentId', {
+          message: 'Sorumlunun bağlı olduğu bir birim yok — talimatın birimini seçmelisiniz.',
+        });
+        return;
+      }
+      if (isManagerCreator && currentUser?.departmentId && effectiveDepartment !== currentUser.departmentId) {
+        // Sunucu tarafı bunu zaten reddederdi (tasks create kuralı); burada
+        // anlaşılır bir mesaja çevrilir.
+        setError('assigneeId', {
+          message: 'Bu personel sizin biriminizde değil — yalnızca kendi biriminize talimat atayabilirsiniz.',
+        });
+        return;
+      }
+    }
+
     try {
       // updatedAt burada elle gönderilmiyor — taskService.createTask/updateTask
       // bunu zaten kendisi (senkron anına göre) set ediyor. Burada gönderilmesi
@@ -113,9 +168,10 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
         taskData.status = 'ASSIGNED';
         taskData.creatorId = currentUser?.uid;
         taskData.createdAt = Date.now();
-        if (currentUser?.departmentId) {
-          taskData.departmentId = currentUser.departmentId;
-        }
+        // Departman artık ZORUNLU ve sorumludan türetilir (yukarıdaki
+        // "Departman türetimi" bloğuna bakın) — boş kalması yukarıdaki
+        // doğrulamada zaten engellendi.
+        taskData.departmentId = effectiveDepartment;
         if (parentId) {
           taskData.parentId = parentId;
         }
@@ -233,6 +289,33 @@ export const TaskFormModal = ({ users, currentUser, task, parentId, initialTitle
                 </p>
              )}
           </div>
+
+          {needsExplicitDepartment && (
+            <div className="flex flex-col gap-3 md:col-span-2">
+              <label htmlFor="task-department-select" className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.18em] px-1 flex items-center gap-2.5">
+                <Building className="w-3.5 h-3.5 text-executive-gold stroke-[1.2]" />
+                Sorumlu Birim
+              </label>
+              <p className="text-[9px] text-status-warning/80 px-1 tracking-wide flex items-center gap-1.5">
+                <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                Seçilen sorumlu bir birime bağlı değil — talimatın hangi birime ait olduğunu belirtmelisiniz.
+              </p>
+              <select
+                id="task-department-select"
+                {...register('departmentId')}
+                className={cn(
+                  "w-full bg-field-surface border border-executive-blue/[0.05] rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-text-heading transition-all focus:border-executive-blue/30 focus:ring-4 focus:ring-executive-blue/5",
+                  errors.departmentId && "border-status-danger/50"
+                )}
+              >
+                <option value="" className="bg-surface-base text-text-heading">Birim Seçiniz</option>
+                {selectableDepartments.map(d => (
+                  <option key={d.id} value={d.id} className="bg-surface-base text-text-heading">{d.name}</option>
+                ))}
+              </select>
+              {errors.departmentId && <span className="text-status-danger text-[10px] px-1 uppercase tracking-wider">{errors.departmentId.message}</span>}
+            </div>
+          )}
 
           <div className="flex flex-col gap-3">
              <label htmlFor="task-priority-select" className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.18em] px-1 flex items-center gap-2.5">

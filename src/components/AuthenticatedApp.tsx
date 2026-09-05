@@ -388,6 +388,7 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
         <TaskFormModal
           users={users}
           currentUser={user}
+          departments={registeredDepartments}
           task={isEditModalOpen && selectedTask ? selectedTask : undefined}
           parentId={parentTaskId}
           initialTitle={initialTitle}
