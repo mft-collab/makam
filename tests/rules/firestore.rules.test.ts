@@ -21,7 +21,7 @@ import {
   assertFails,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField } from 'firebase/firestore';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 // ── Emulator koruması ────────────────────────────────────────────────────────
@@ -75,6 +75,41 @@ const staffC = () =>
   testEnv.authenticatedContext('staff-c', { email: 'staff-c@makam.test', email_verified: true }).firestore();
 
 const anon = () => testEnv.unauthenticatedContext().firestore();
+
+/**
+ * Firestore'un istek başına 1000 ifade bütçesi aşıldığında emulator, ret
+ * mesajının İÇİNE bu cümleyi koyar. Üretimde de aynı bütçe geçerlidir; aşım
+ * fail-closed olduğu için isteği zaten reddeder, ama ret NEDENİNİ belirsizleştirir
+ * ("kural mı reddetti, bütçe mi bitti?") ve günlükleri kirletir.
+ */
+const BUDGET_OVERFLOW = /maximum of 1000 expressions/i;
+
+/**
+ * `assertFails` + ret NEDENİNİN doğruluğu: istek reddedilmeli AMA reddin
+ * gerekçesi ifade bütçesinin tükenmesi OLMAMALI.
+ *
+ * Neden gerekli (bkz. firestore.rules → canUpdateTask "İFADE BÜTÇESİ" yorumu):
+ * REDDEDİLEN bir istekte Firestore kuralın TÜM ifade ağacını (kısa devre
+ * YAPMADAN) değerlendirir, bu yüzden reddedilen yol izin verilen yoldan
+ * belirgin biçimde pahalıdır. Bütçe aşılırsa her `assertFails` testi
+ * "doğru nedenle mi geçti, yoksa bütçe bittiği için mi?" sorusunu açık
+ * bırakır — bu yardımcı o belirsizliği testin kendisinde kapatır.
+ */
+async function assertFailsForRuleReason(op: Promise<unknown>): Promise<string> {
+  let message = '';
+  try {
+    await op;
+  } catch (e) {
+    message = e instanceof Error ? e.message : String(e);
+  }
+  expect(message, 'istek reddedilmeliydi ama BAŞARILI oldu').not.toBe('');
+  expect(message, 'ret, izin kuralından değil başka bir hatadan geliyor').toMatch(/PERMISSION_DENIED/);
+  expect(
+    message.replace(/\s+/g, ' '),
+    'ret gerekçesi kuralın mantığı değil, 1000 ifade bütçesinin aşılması'
+  ).not.toMatch(BUDGET_OVERFLOW);
+  return message;
+}
 
 // ── Seed yardımcıları ────────────────────────────────────────────────────────
 const userDoc = (uid: string, role: string, departmentId?: string) => ({
@@ -835,10 +870,16 @@ describe('gerçekçi alan genişliğinde (24 alan) görev güncellemeleri', () =
   //     oluşturmuyor — aşağıdaki testler bunu sabitliyor.
   //
   // Ölçümün gerçekten gösterdiği şey: ifade bütçesi aşımı yalnızca REDDEDİLEN
-  // (izin verilmeyen) güncellemelerde oluşuyor; izin verilen hiçbir yolda
-  // oluşmuyor. Reddedilen bir istek zaten reddedileceği için (fail-closed)
-  // gözlemlenebilir bir davranış farkı yok — bu yüzden aşağıdaki ret testleri
-  // "reddedilir" iddiasını doğrulamaya devam eder.
+  // (izin verilmeyen) güncellemelerde oluşuyordu; izin verilen hiçbir yolda
+  // oluşmuyordu. Reddedilen istek zaten reddedileceği için (fail-closed)
+  // gözlemlenebilir bir DAVRANIŞ farkı yoktu, ama ret gerekçesi belirsiz
+  // kalıyordu.
+  //
+  // Bu aşım ARTIK YOK (bkz. firestore.rules → canUpdateTask "İFADE BÜTÇESİ"
+  // yorumu): `written` kapıları ve iş kurallarındaki tek doküman okuması
+  // toplam maliyeti bütçenin altına indirdi. Aşağıdaki ret testleri bu yüzden
+  // yalnızca "reddedilir"i değil, "DOĞRU NEDENLE reddedilir"i de doğrular
+  // (assertFailsForRuleReason).
 
   /** Üretimdeki bir görevin taşıyabileceği TÜM alanlar (24 alan). */
   const wideTaskDoc = (over: Record<string, unknown> = {}) => ({
@@ -914,43 +955,113 @@ describe('gerçekçi alan genişliğinde (24 alan) görev güncellemeleri', () =
   // ── Güvenlik regresyonu: genişlik yetkilendirmeyi GEVŞETMEMELİ ────────────
   it('BAŞKA departmanın Müdürü 24 alanlı görevi güncelleyemez', async () => {
     await seedWide('wide-deny-mgr');
-    await assertFails(updateDoc(doc(managerB(), 'tasks', 'wide-deny-mgr'), {
+    await assertFailsForRuleReason(updateDoc(doc(managerB(), 'tasks', 'wide-deny-mgr'), {
       priority: 'High', updatedAt: NOW + 1, lockVersion: 4,
     }));
   });
 
   it('başkasının 24 alanlı görevini Memur güncelleyemez', async () => {
     await seedWide('wide-deny-staff');
-    await assertFails(updateDoc(doc(staffC(), 'tasks', 'wide-deny-staff'), {
+    await assertFailsForRuleReason(updateDoc(doc(staffC(), 'tasks', 'wide-deny-staff'), {
       status: 'IN_PROGRESS', updatedAt: NOW + 1, lockVersion: 4,
     }));
   });
 
   it('Memur, 24 alanlı görevde İZİNSİZ alanı (title) değiştiremez', async () => {
     await seedWide('wide-deny-title');
-    await assertFails(updateDoc(doc(staffA(), 'tasks', 'wide-deny-title'), {
+    await assertFailsForRuleReason(updateDoc(doc(staffA(), 'tasks', 'wide-deny-title'), {
       title: 'Yeniden adlandırıldı', updatedAt: NOW + 1, lockVersion: 4,
     }));
   });
 
   it('24 alanlı görevde geçersiz durum geçişi hâlâ reddedilir', async () => {
     await seedWide('wide-deny-transition', { status: 'COMPLETED' });
-    await assertFails(updateDoc(doc(staffA(), 'tasks', 'wide-deny-transition'), {
+    await assertFailsForRuleReason(updateDoc(doc(staffA(), 'tasks', 'wide-deny-transition'), {
       status: 'IN_PROGRESS', updatedAt: NOW + 1, lockVersion: 4,
     }));
   });
 
   it('24 alanlı görevde lockVersion artırılmazsa reddedilir', async () => {
     await seedWide('wide-deny-lock');
-    await assertFails(updateDoc(doc(staffA(), 'tasks', 'wide-deny-lock'), {
+    await assertFailsForRuleReason(updateDoc(doc(staffA(), 'tasks', 'wide-deny-lock'), {
       status: 'IN_PROGRESS', updatedAt: NOW + 1,
     }));
   });
 
   it('24 alanlı görevde şema dışı alan enjekte edilemez', async () => {
     await seedWide('wide-deny-extra');
-    await assertFails(updateDoc(doc(staffA(), 'tasks', 'wide-deny-extra'), {
+    await assertFailsForRuleReason(updateDoc(doc(staffA(), 'tasks', 'wide-deny-extra'), {
       keyfiAlan: 'x', updatedAt: NOW + 1, lockVersion: 4,
+    }));
+  });
+});
+
+// =============================================================================
+// 7c. İfade bütçesi regresyonu + `changed` / `written` ayrımı
+// =============================================================================
+describe('ifade bütçesi: 24 alanlı istekler 1000 ifade sınırını AŞMAZ', () => {
+  const wideTaskDoc = (over: Record<string, unknown> = {}) => ({
+    id: 'task-wide', parentId: 'parent-1', title: 'Geniş Talimat',
+    description: 'tüm opsiyonel alanları taşıyan görev',
+    creatorId: 'mgr-a', assigneeId: 'staff-a', coordinatorId: 'mgr-b',
+    status: 'ASSIGNED', priority: 'Medium', deadline: NOW + 7 * DAY,
+    createdAt: NOW, updatedAt: NOW, evidence: 'kanit metni', evidenceType: 'text',
+    pausedAt: null, totalPausedTime: 0, comments: [], lockVersion: 3,
+    departmentId: 'dept-a', completedAt: NOW, estimatedHours: 4,
+    tags: ['acil'], checklist: [], changedBy: 'mgr-a', ...over,
+  });
+  const seedWide = async (id: string, over: Record<string, unknown> = {}) => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'tasks', id), wideTaskDoc(over));
+    });
+  };
+
+  // ── Bütçe ────────────────────────────────────────────────────────────────
+  // REDDEDİLEN yol, kuralın TÜM ifade ağacını (kısa devre yapmadan)
+  // değerlendirdiği için izin verilen yoldan pahalıdır; bütçe aşımı bu yüzden
+  // ÖNCE burada görülürdü. İzin verilen yolda ayrı bir iddiaya gerek yoktur:
+  // aşım fail-closed olduğundan isteği reddederdi, yani BAŞARI = aşım yok.
+  it('reddedilen 24 alanlı istek, bütçe aşımıyla DEĞİL kural mantığıyla reddedilir', async () => {
+    await seedWide('budget-deny');
+    const message = await assertFailsForRuleReason(
+      updateDoc(doc(staffC(), 'tasks', 'budget-deny'), {
+        status: 'IN_PROGRESS', updatedAt: NOW + 1, lockVersion: 4,
+      })
+    );
+    // Yardımcının iddiası tersine dönerse (ör. regex hiçbir şeye uymaz hale
+    // gelirse) sessiz yanlış-yeşil olmasın diye mesajın gerçekten kuralı
+    // işaret ettiğini de doğrula.
+    expect(message).toMatch(/for 'update'/);
+  });
+
+  it('izin verilen 24 alanlı istek geçer (aşım olsaydı fail-closed reddedilirdi)', async () => {
+    await seedWide('budget-allow');
+    await assertSucceeds(updateDoc(doc(managerA(), 'tasks', 'budget-allow'), {
+      priority: 'High', updatedAt: NOW + 1, lockVersion: 4,
+    }));
+  });
+
+  // ── `changed` (affectedKeys) ile `written` (added ∪ changed) ayrımı ───────
+  // Tip/şema doğrulaması `written` kapılarını kullanır (silinen alana tip
+  // kontrolü uygulanamaz); yetki zincirindeki alan kilidi ise `changed`
+  // kullanmak ZORUNDADIR. Aşağıdaki iki test bu ayrımı sabitler: ikisi de
+  // alan SİLME işlemidir ve yalnızca doğru kümeyle doğru sonucu verir.
+  it('Memur, yazma izni OLMAYAN bir alanı SİLEREK alan kilidini atlatamaz', async () => {
+    // `tags` Memur'un yazabileceği alanlar listesinde değil. Silme işlemi
+    // affectedKeys'te görünür ama added∪changed'de GÖRÜNMEZ — alan kilidi
+    // `written` üzerinden kurulsaydı bu istek sessizce GEÇERDİ.
+    await seedWide('del-forbidden');
+    await assertFailsForRuleReason(
+      updateDoc(doc(staffA(), 'tasks', 'del-forbidden'), {
+        tags: deleteField(), updatedAt: NOW + 1, lockVersion: 4,
+      })
+    );
+  });
+
+  it('Memur, yazma izni OLAN bir alanı silebilir (tip kontrolü yok olan alana uygulanmaz)', async () => {
+    await seedWide('del-allowed');
+    await assertSucceeds(updateDoc(doc(staffA(), 'tasks', 'del-allowed'), {
+      evidence: deleteField(), updatedAt: NOW + 1, lockVersion: 4,
     }));
   });
 });

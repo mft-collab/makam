@@ -229,70 +229,76 @@ service cloud.firestore {
              (!('checklist' in data) || (data.checklist is list && data.checklist.size() <= 100));
     }
 
-    // `changed` = bu istekte GERÇEKTEN değişen alan kümesi
-    // (incoming().diff(existing()).affectedKeys(); create tarafında ise
+    // `written` = bu istekte YAZILAN ve dokümanda HÂLÂ DURAN alanlar kümesi
+    // (diff().addedKeys() ∪ diff().changedKeys(); create tarafında ise
     // incoming().keys(), çünkü orada her alan yenidir).
     //
-    // Neden alan başına `!changed.hasAny(['x'])` ile başlıyoruz (bkz. kod denetimi
-    // — ifade bütçesi bulgusu): eskiden her alan `!('x' in data)` ile
-    // kontrol ediliyordu ve `data`, update'te dokümanın BİRLEŞTİRİLMİŞ tam
-    // hâli olduğundan, istemci o alana hiç dokunmasa bile 24 alanın tümü her
-    // güncellemede yeniden doğrulanıyordu. Değişmeyen bir alanın tipini
-    // yeniden doğrulamak güvenlik kazancı sağlamaz (istemci o değeri bu
-    // istekte yazmıyor; değer zaten yazıldığı anda doğrulanmıştı) ama
-    // Firestore'un istek başına 1000 ifade bütçesini boşa harcar.
+    // Neden alan başına bir kapıyla başlıyoruz (bkz. kod denetimi — ifade
+    // bütçesi bulgusu): eskiden her alan `!('x' in data)` ile kontrol ediliyordu
+    // ve `data`, update'te dokümanın BİRLEŞTİRİLMİŞ tam hâli olduğundan,
+    // istemci o alana hiç dokunmasa bile 24 alanın tümü her güncellemede
+    // yeniden doğrulanıyordu. Değişmeyen bir alanın tipini yeniden doğrulamak
+    // güvenlik kazancı sağlamaz (istemci o değeri bu istekte yazmıyor; değer
+    // zaten yazıldığı anda doğrulanmıştı) ama Firestore'un istek başına 1000
+    // ifade bütçesini boşa harcar.
     //
-    // İkinci terim (`!('x' in data)`) alanın SİLİNDİĞİ durumu korur: silinen
-    // alan `changed` içindedir ama `data` içinde değildir — eski davranışta
-    // olduğu gibi silme serbest kalır, tip kontrolü yok olan alana uygulanmaz.
+    // Kapı neden `changed` (affectedKeys) DEĞİL de `written`: eski biçim alan
+    // başına İKİ terim gerektiriyordu — `!changed.hasAny(['x']) || !('x' in data)`
+    // — çünkü SİLİNEN bir alan affectedKeys içindedir ama `data` içinde
+    // değildir ve tip kontrolü yok olan alana uygulanmamalıdır. `written`
+    // tam olarak "affectedKeys ∩ data.keys()" kümesidir (silinenler
+    // removedKeys'te kalır, added ∪ changed'de yer almaz), yani ikinci terim
+    // TANIMI GEREĞİ gereksizdir. Küme AYNI, terim sayısı alan başına yarı
+    // yarıya azalıyor — ölçülen kazanç için canUpdateTask'teki "İFADE BÜTÇESİ"
+    // yorumuna bakın.
     //
     // Alan KİLİDİ (hasOnly) bilinçli olarak TÜM dokümana uygulanmaya devam
     // eder: şemada tanımsız bir alan hiçbir koşulda dokümanda kalamaz.
-    function isValidTaskUpdate(data, changed) {
+    function isValidTaskUpdate(data, written) {
       let allowedFields = ['id', 'parentId', 'title', 'description', 'creatorId', 'assigneeId', 'coordinatorId',
                            'status', 'priority', 'deadline', 'createdAt', 'updatedAt', 'evidence', 'evidenceType',
                            'pausedAt', 'totalPausedTime', 'comments', 'lockVersion', 'departmentId',
                            'completedAt', 'estimatedHours', 'tags', 'checklist', 'changedBy'];
 
       return data.keys().hasOnly(allowedFields) &&
-             (!changed.hasAny(['id']) || !('id' in data) || data.id is string) &&
-             (!changed.hasAny(['parentId']) || !('parentId' in data) || data.parentId is string) &&
-             (!changed.hasAny(['title']) || !('title' in data) || (data.title is string && data.title.size() >= 1 && data.title.size() <= 200)) &&
-             (!changed.hasAny(['description']) || !('description' in data) || (data.description is string && data.description.size() >= 1 && data.description.size() <= 2000)) &&
-             (!changed.hasAny(['creatorId']) || !('creatorId' in data) || isValidId(data.creatorId)) &&
-             (!changed.hasAny(['assigneeId']) || !('assigneeId' in data) || isValidId(data.assigneeId)) &&
-             (!changed.hasAny(['coordinatorId']) || !('coordinatorId' in data) || data.coordinatorId == null || isValidId(data.coordinatorId)) &&
-             (!changed.hasAny(['status']) || !('status' in data) || (data.status in ['ASSIGNED', 'PENDING_DELEGATION', 'IN_PROGRESS', 'BLOCKED', 'AWAITING_APPROVAL', 'COMPLETED', 'CANCELLED', 'CRISIS'])) &&
-             (!changed.hasAny(['priority']) || !('priority' in data) || (data.priority in ['Low', 'Medium', 'High', 'Urgent'])) &&
-             (!changed.hasAny(['deadline']) || !('deadline' in data) || (data.deadline is number && data.deadline > 0)) &&
-             (!changed.hasAny(['createdAt']) || !('createdAt' in data) || data.createdAt is number) &&
-             (!changed.hasAny(['updatedAt']) || !('updatedAt' in data) || data.updatedAt is number) &&
-             (!changed.hasAny(['evidence']) || !('evidence' in data) || (data.evidence is string && data.evidence.size() <= 1000)) &&
-             (!changed.hasAny(['evidenceType']) || !('evidenceType' in data) || (data.evidenceType is string && data.evidenceType.size() <= 100)) &&
-             (!changed.hasAny(['pausedAt']) || !('pausedAt' in data) || (data.pausedAt == null || data.pausedAt is number)) &&
-             (!changed.hasAny(['totalPausedTime']) || !('totalPausedTime' in data) || data.totalPausedTime is number) &&
-             (!changed.hasAny(['comments']) || !('comments' in data) || (data.comments is list && data.comments.size() <= 200)) &&
-             (!changed.hasAny(['lockVersion']) || !('lockVersion' in data) || data.lockVersion is number) &&
-             (!changed.hasAny(['completedAt']) || !('completedAt' in data) || data.completedAt is number) &&
-             (!changed.hasAny(['estimatedHours']) || !('estimatedHours' in data) || (data.estimatedHours is number && data.estimatedHours >= 0)) &&
-             (!changed.hasAny(['tags']) || !('tags' in data) || (data.tags is list && data.tags.size() <= 10)) &&
-             (!changed.hasAny(['checklist']) || !('checklist' in data) || (data.checklist is list && data.checklist.size() <= 100)) &&
+             (!('id' in written) || data.id is string) &&
+             (!('parentId' in written) || data.parentId is string) &&
+             (!('title' in written) || (data.title is string && data.title.size() >= 1 && data.title.size() <= 200)) &&
+             (!('description' in written) || (data.description is string && data.description.size() >= 1 && data.description.size() <= 2000)) &&
+             (!('creatorId' in written) || isValidId(data.creatorId)) &&
+             (!('assigneeId' in written) || isValidId(data.assigneeId)) &&
+             (!('coordinatorId' in written) || data.coordinatorId == null || isValidId(data.coordinatorId)) &&
+             (!('status' in written) || (data.status in ['ASSIGNED', 'PENDING_DELEGATION', 'IN_PROGRESS', 'BLOCKED', 'AWAITING_APPROVAL', 'COMPLETED', 'CANCELLED', 'CRISIS'])) &&
+             (!('priority' in written) || (data.priority in ['Low', 'Medium', 'High', 'Urgent'])) &&
+             (!('deadline' in written) || (data.deadline is number && data.deadline > 0)) &&
+             (!('createdAt' in written) || data.createdAt is number) &&
+             (!('updatedAt' in written) || data.updatedAt is number) &&
+             (!('evidence' in written) || (data.evidence is string && data.evidence.size() <= 1000)) &&
+             (!('evidenceType' in written) || (data.evidenceType is string && data.evidenceType.size() <= 100)) &&
+             (!('pausedAt' in written) || data.pausedAt == null || data.pausedAt is number) &&
+             (!('totalPausedTime' in written) || data.totalPausedTime is number) &&
+             (!('comments' in written) || (data.comments is list && data.comments.size() <= 200)) &&
+             (!('lockVersion' in written) || data.lockVersion is number) &&
+             (!('completedAt' in written) || data.completedAt is number) &&
+             (!('estimatedHours' in written) || (data.estimatedHours is number && data.estimatedHours >= 0)) &&
+             (!('tags' in written) || (data.tags is list && data.tags.size() <= 10)) &&
+             (!('checklist' in written) || (data.checklist is list && data.checklist.size() <= 100)) &&
              // departmentId'nin BİÇİMİ burada, gerçek bir departmana işaret
              // ettiği ise isValidTaskBusinessRules'taki hasValidDepartment'ta
-             // (exists) doğrulanır — pahalı doküman erişimi `changed` kapısının
+             // (exists) doğrulanır — pahalı doküman erişimi `written` kapısının
              // arkasında kalsın diye ikisi bilinçli olarak ayrı yerlerdedir.
              // Eskiden bu alan update tarafında HİÇ doğrulanmıyordu.
-             (!changed.hasAny(['departmentId']) || !('departmentId' in data) || isValidDepartmentId(data.departmentId)) &&
+             (!('departmentId' in written) || isValidDepartmentId(data.departmentId)) &&
              // changedBy, audit_logs kuralındaki (isValidAuditLog) desenle aynı: istemci
              // başka bir kullanıcı adına sahte "değiştiren" kaydı yazamaz.
              //
-             // `changed` kapısı burada aynı zamanda GERÇEK bir hatayı düzeltir:
+             // `written` kapısı burada aynı zamanda GERÇEK bir hatayı düzeltir:
              // eski `!('changedBy' in data)` biçimi, birleştirilmiş dokümana
              // baktığından, changedBy'ı bir kez yazılmış bir görevi BAŞKA
              // hiçbir kullanıcının güncelleyememesine yol açıyordu (data.changedBy
              // hâlâ önceki yazarın uid'iydi). Sahtecilik koruması aynen korunur:
              // changedBy'ı bu istekte YAZAN kişi kendi uid'ini yazmak zorunda.
-             (!changed.hasAny(['changedBy']) || !('changedBy' in data) || data.changedBy == request.auth.uid);
+             (!('changedBy' in written) || data.changedBy == request.auth.uid);
     }
 
     function isValidBlocker(data) {
@@ -434,7 +440,7 @@ service cloud.firestore {
     }
 
     // Bu üç iş kuralının HER BİRİ bir exists()+get() çifti (yani ayrı bir
-    // doküman erişimi) içerir. `changed` kapıları (bkz. isValidTaskUpdate'teki
+    // doküman erişimi) içerir. Alan kapıları (bkz. isValidTaskUpdate'teki
     // aynı desen ve gerekçe) bu erişimlerin YALNIZCA ilgili alan bu istekte
     // gerçekten değiştiğinde yapılmasını sağlar. Eskiden, güncelleme
     // coordinatorId/parentId/status'a hiç dokunmasa bile (birleştirilmiş
@@ -445,16 +451,35 @@ service cloud.firestore {
     // Güvenlik açısından kayıp yok: değişmeyen bir alan bu istekle yazılmıyor,
     // değeri zaten yazıldığı anda bu kurallardan geçmişti.
     //
-    // create tarafında çağıran `changed` olarak incoming().keys() geçirir —
+    // İKİ AYRI kapı kümesi alınır ve bu ayrım BİLİNÇLİdir:
+    //  * `written` (added ∪ changed) — kapının alanı ile DOĞRULANAN alan AYNI
+    //    olduğunda (coordinatorId, departmentId). Silinen alan `written`de
+    //    olmadığından ayrıca `!('x' in data)` yazmaya gerek kalmaz.
+    //  * `changed` (affectedKeys) — kapı BİRDEN FAZLA alana bakıp BAŞKA bir
+    //    alanı doğruladığında (parentId+assigneeId, status+assigneeId).
+    //    Burada `written`e geçmek DAVRANIŞ DEĞİŞTİRİRDİ: ör. assigneeId'nin
+    //    SİLİNDİĞİ bir güncellemede kapı `written` ile hiç açılmaz ve
+    //    doğrulama tamamen atlanırdı; `changed` ile kapı açılır ve kural
+    //    (bugünkü gibi) eksik alan üzerinden reddeder.
+    //
+    // create tarafında çağıran her iki küme için de incoming().keys() geçirir —
     // orada her alan yeni olduğundan kapılar hiçbir şeyi elemez ve davranış
     // eskisiyle BİREBİR aynı kalır.
-    function isValidTaskBusinessRules(data, changed) {
-      let hasNoAdminCoordinator = !changed.hasAny(['coordinatorId']) ||
-                                  !('coordinatorId' in data) ||
+    function isValidTaskBusinessRules(data, changed, written) {
+      // Sorumlu dokümanı AŞAĞIDA İKİ kuralda (alt görev sorumlusu + devir
+      // hedefi) gerekiyor; yolun iki kez kurulup exists()+get() ile iki kez
+      // erişilmesi yerine TEK bir tembel `let` ile okunur — canUpdateTask'teki
+      // uDoc ile AYNI gerekçe: get() olmayan doküman için null döner, bu yüzden
+      // exists() koruması hem gereksiz bir doküman erişimi hem de boşa harcanan
+      // ifade bütçesidir.
+      let coordDoc = get(/databases/$(database)/documents/users/$(data.coordinatorId));
+      let assigneeDoc = get(/databases/$(database)/documents/users/$(data.assigneeId));
+
+      let hasNoAdminCoordinator = !('coordinatorId' in written) ||
                                   data.coordinatorId == null ||
                                   data.coordinatorId == "" ||
-                                  !exists(/databases/$(database)/documents/users/$(data.coordinatorId)) ||
-                                  get(/databases/$(database)/documents/users/$(data.coordinatorId)).data.role != 'Admin';
+                                  coordDoc == null ||
+                                  coordDoc.data.role != 'Admin';
 
       // parentId değişmese bile assigneeId değiştiyse yeniden doğrulanmalı:
       // alt görevin YENİ sorumlusu da Memur olmak zorunda.
@@ -462,8 +487,8 @@ service cloud.firestore {
                                     !('parentId' in data) ||
                                     data.parentId == null ||
                                     data.parentId == "" ||
-                                    (exists(/databases/$(database)/documents/users/$(data.assigneeId)) &&
-                                     get(/databases/$(database)/documents/users/$(data.assigneeId)).data.role == 'Staff');
+                                    (assigneeDoc != null &&
+                                     assigneeDoc.data.role == 'Staff');
 
       // İzin/mazeret devri yalnızca Müdür → Müdür yapılabilir — devredilen
       // görev PENDING_DELEGATION'a girerken yeni sorumlu Müdür olmalı.
@@ -472,18 +497,17 @@ service cloud.firestore {
       let hasValidDelegationTarget = !changed.hasAny(['status', 'assigneeId']) ||
                                       !('status' in data) ||
                                       data.status != 'PENDING_DELEGATION' ||
-                                      (exists(/databases/$(database)/documents/users/$(data.assigneeId)) &&
-                                       get(/databases/$(database)/documents/users/$(data.assigneeId)).data.role == 'Manager');
+                                      (assigneeDoc != null &&
+                                       assigneeDoc.data.role == 'Manager');
 
       // Departman REFERANS bütünlüğü (bkz. kod denetimi P0-2): görevin
       // departmanı, departments koleksiyonunda gerçekten var olan bir dokümana
       // işaret etmek zorundadır — serbest metin bir yazım hatası artık sessizce
-      // yeni bir "hayalet departman" üretemez. `changed` kapısı sayesinde bu
+      // yeni bir "hayalet departman" üretemez. `written` kapısı sayesinde bu
       // exists() maliyeti YALNIZCA departman gerçekten yazıldığında ödenir;
       // create tarafında çağıran incoming().keys() geçirdiğinden orada her
       // zaman doğrulanır (departmentId create'te zaten zorunlu alandır).
-      let hasValidDepartment = !changed.hasAny(['departmentId']) ||
-                               !('departmentId' in data) ||
+      let hasValidDepartment = !('departmentId' in written) ||
                                departmentExists(data.departmentId);
 
       return hasNoAdminCoordinator && hasValidSubtaskAssignee && hasValidDelegationTarget && hasValidDepartment;
@@ -503,8 +527,7 @@ service cloud.firestore {
     // incoming().diff(existing()).affectedKeys() hesabı ve isValidTaskUpdate'in
     // her güncellemede TÜM alanları yeniden doğrulaması ekleniyordu.
     //
-    // ÖLÇÜLEN DURUM (emulator, `maximum of 1000 expressions` günlük kayıtları
-    // sayılarak; senaryo x alan sayısı matrisi 9..24 alan):
+    // ÖLÇÜLEN DURUM (emulator, senaryo x alan sayısı matrisi 9..24 alan):
     //
     //   * İZİN VERİLEN yolların HİÇBİRİ bütçeyi aşmıyor — 24 alanlı (yani tüm
     //     opsiyonel alanları dolu) bir görevi Müdür de Memur de
@@ -512,15 +535,63 @@ service cloud.firestore {
     //     güncellenemiyor" şeklindeki eski teşhis YANLIŞTI; oradaki ret
     //     bütçeden değil, artırılmayan lockVersion'dan geliyordu
     //     (bkz. tests/rules/firestore.rules.test.ts, ilgili describe bloğu).
-    //   * Bütçe aşımı YALNIZCA REDDEDİLEN güncellemelerde günlüğe düşüyor.
-    //     Aynı kural, aynı işi yapıp yalnızca SONUCU "izin ver"e döndüğünde
-    //     (ör. Memur'un yazabileceği alan listesine 'title' eklenince) bütçe
-    //     aşımı kayboluyor — yani maliyet yapılan işten değil, ret sonucundan
-    //     kaynaklanıyor. Ret zaten ret olduğundan (fail-closed) gözlemlenebilir
-    //     bir davranış farkı YOK; kalan bu davranış açık bir konu olarak
-    //     bırakıldı, güvenlik etkisi bulunmuyor.
     //
-    // Bu refactor'ın ÖLÇÜLEN kazancı: users/{uid} dokümanı henüz olmayan
+    // ── İFADE BÜTÇESİ (neden ret yolu izin yolundan PAHALI) ──────────────────
+    //
+    // Bütçe aşımı eskiden YALNIZCA REDDEDİLEN güncellemelerde oluşuyordu; izin
+    // verilen hiçbir yolda oluşmuyordu. Bu ilk bakışta ters görünür (izin
+    // verilen yol TÜM koşulları doğru bulana kadar hepsini değerlendirmek
+    // zorundadır, reddedilen yol ise ilk `false`ta kısa devre yapmalıdır) —
+    // ölçüm bunun NEDENİNİ gösterdi:
+    //
+    //   * Reddedilen bir istekte maliyet, hangi alt-ifadenin reddettiğinden
+    //     BAĞIMSIZ olarak SABİTtir. Altı farklı ret senaryosu (yetkisiz Müdür,
+    //     başkasının görevi, izinsiz alan, geçersiz geçiş, artmayan
+    //     lockVersion, şema dışı alan — ilki `hasOnly`da, sonuncusu en sonda
+    //     düşer) TIPATIP aynı maliyeti ölçtü. Yani ret yolunda kısa devre
+    //     YOKTUR: Firestore kuralın TÜM ifade ağacını değerlendirir.
+    //   * Sonuç: ret yolunun maliyeti = kuralın TOPLAM statik maliyeti; izin
+    //     yolunun maliyeti ise kısa devre sayesinde bunun yarısı kadar.
+    //     Bütçeyi belirleyen taraf bu yüzden HER ZAMAN ret yoludur.
+    //
+    // ÖLÇÜM YÖNTEMİ (yeniden üretmek için): kuralın return'üne, her zaman true
+    // dönen ve sabit maliyetli N adet "pad" ifadesi (`request.auth.uid != null`)
+    // enjekte edilip, bütçeyi aşıran en küçük N ikili aramayla bulunur; N ne
+    // kadar büyükse kural o kadar ucuzdur ("headroom"). Pad biriminin mutlak
+    // maliyeti, kuralın tamamı yalnızca pad ile değiştirilerek kalibre edilir
+    // (ölçülen: 142 birim = 1000 ifade, yani birim ~7 ifade). Aşımın kendisi
+    // emulator log'undan KAZINMAZ; istemciye dönen PERMISSION_DENIED mesajının
+    // içinde metin olarak gelir ("...maximum of 1000 expressions..."), bu
+    // yüzden testten de doğrudan iddia edilebilir (bkz. testlerdeki
+    // assertFailsForRuleReason).
+    //
+    // ÖLÇÜLEN MALİYET DAĞILIMI (ret yolu, toplam bütçe 1000 ifade):
+    //     24 alanın tip kontrolü      ~472    isValidTaskBusinessRules  ~176
+    //     isValidTransition           ~106    geri kalan (hasOnly, yetki
+    //                                         zinciri, lockVersion, kimlik
+    //                                         okuması, diff/union)      ~230
+    //
+    // ÖNCE / SONRA (ret yolu headroom, pad birimi ~7 ifade):
+    //     önce:  bütçe AŞILIYOR (headroom < 0, altı ret senaryosunun hepsinde)
+    //     sonra: +9 birim (~63 ifade) pay ile bütçenin ALTINDA
+    // İzin verilen yolda da kazanç var (headroom 56..77 -> 63..82 birim).
+    //
+    // Aşımı kapatan İKİ değişiklik (ikisi de davranışı DEĞİŞTİRMEZ):
+    //   1. Tip/şema kapıları `changed`(affectedKeys) yerine `written`
+    //      (added ∪ changed) kullanır; böylece alan başına iki terim yerine
+    //      bir terim yeter (bkz. isValidTaskUpdate yorumu). ~-100 ifade.
+    //   2. isValidTaskBusinessRules'ta aynı users/{uid} yolu artık iki kez
+    //      kurulup exists()+get() ile iki kez okunmuyor, tek bir tembel `let`
+    //      ile okunuyor (aşağıdaki uDoc ile aynı gerekçe). ~-50 ifade.
+    //
+    // DİKKAT — kalan pay DAR (~63 ifade). Ölçülen birim maliyet alan başına
+    // ~20 ifade olduğundan, tasks şemasına 3'ten fazla yeni alan eklemek bu
+    // bütçeyi yeniden aşırır. Aşım fail-closed olduğu için sessiz bir güvenlik
+    // açığı yaratmaz ama ret gerekçesini belirsizleştirir; regresyonu
+    // yakalamak için testlerdeki "ifade bütçesi" bloğu vardır — yeni alan
+    // eklerken o blok kırmızıya dönerse maliyet düşürülmeden alan EKLENMEMELİ.
+    //
+    // Bu refactor'ın ÖLÇÜLEN diğer kazancı: users/{uid} dokümanı henüz olmayan
     // (ilk girişini yapmamış) bir sorumlunun geniş bir görevi güncellemesi
     // eskiden 22+ alanda bütçeyi aşıp MEŞRU biçimde reddediliyordu; artık
     // 24 alanda da geçiyor. Ayrıca aşağıdaki changedBy kilitlenmesi düzeltildi.
@@ -531,7 +602,18 @@ service cloud.firestore {
     function canUpdateTask() {
       let inc = request.resource.data;
       let cur = resource.data;
-      let changed = inc.diff(cur).affectedKeys();
+      let d = inc.diff(cur);
+      // İKİ farklı küme, İKİ farklı soru (bkz. isValidTaskUpdate ve
+      // isValidTaskBusinessRules yorumları):
+      //  * `changed` (affectedKeys) = eklenen ∪ değişen ∪ SİLİNEN. Yetki
+      //    zincirindeki alan kilidi (hasOnly) bunu kullanmak ZORUNDADIR —
+      //    aksi halde Memur, yazma izni olmayan bir alanı SİLEREK kilidi
+      //    atlatabilirdi (silinen alan `written` içinde yer almaz).
+      //  * `written` (addedKeys ∪ changedKeys) = bu istekte yazılan ve
+      //    dokümanda HÂLÂ DURAN alanlar. Tip/şema doğrulaması bunu kullanır:
+      //    yok olan bir alana tip kontrolü uygulanamaz zaten.
+      let changed = d.affectedKeys();
+      let written = d.addedKeys().union(d.changedKeys());
 
       // Kimlik dokümanı (users/{uid}) TEK KEZ okunur. Eskiden aynı doküman
       // için isAdmin() bir exists()+get(), isManager() ikinci bir exists()+get()
@@ -551,7 +633,7 @@ service cloud.firestore {
       // users/{uid}.role == 'Admin'. Doküman yoksa uRole '' olur → false.
       let admin = request.auth.token.get('admin', false) == true || uRole == 'Admin';
 
-      return isValidTaskUpdate(inc, changed) && (
+      return isValidTaskUpdate(inc, written) && (
         admin ||
         // isManager() ile AYNI sözleşme (yalnızca Firestore dokümanına bakar).
         // `uDept != ''` KASITLI: departmanı hiç atanmamış bir Müdür aksi halde
@@ -591,7 +673,7 @@ service cloud.firestore {
         !('lockVersion' in cur) ||
         inc.lockVersion == cur.lockVersion + 1 ||
         admin
-      ) && isValidTaskBusinessRules(inc, changed);
+      ) && isValidTaskBusinessRules(inc, changed, written);
     }
 
     // ===============================================================
@@ -694,7 +776,7 @@ service cloud.firestore {
       allow create: if isSignedIn() && isValidId(taskId) && isValidTaskCreate(incoming()) && (
         isAdmin() ||
         (isManager() && incoming().departmentId == getUserDepartment())
-      ) && isValidTaskBusinessRules(incoming(), incoming().keys());
+      ) && isValidTaskBusinessRules(incoming(), incoming().keys(), incoming().keys());
       // Kuralın tamamı canUpdateTask()'e taşındı — gerekçe için oradaki
       // "KÖK NEDEN" yorumuna bakın (ifade bütçesi / tekrarlı doküman erişimi).
       allow update: if isSignedIn() && isValidId(taskId) && canUpdateTask();
