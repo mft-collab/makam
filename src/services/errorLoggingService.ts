@@ -38,6 +38,12 @@ const APP_VERSION = '2.3.0';
 /**
  * Firestore'a yapılandırılmış hata kaydı yazar.
  * Silently fails — hata loglama sistemi asla uygulamayı çökertmemeli.
+ *
+ * Dönüş değeri (oluşturulan `error_logs` dokümanının ID'si, ya da loglama
+ * başarısızsa `null`) kullanıcıya gösterilen hata mesajında "Destek
+ * Referansı" olarak sunulabilir — errorLoggingService kaydı zaten tutuyordu
+ * ama bu ID hiçbir zaman kullanıcıya geri yansıtılmıyordu (bkz. kod
+ * denetimi, src/lib/errorMessages.ts).
  */
 export async function logError(
   error: unknown,
@@ -47,7 +53,7 @@ export async function logError(
     path?: string;
     context?: Record<string, unknown>;
   } = {}
-): Promise<void> {
+): Promise<string | null> {
   try {
     const entry: ErrorLogEntry = {
       message: error instanceof Error ? error.message : String(error),
@@ -67,9 +73,11 @@ export async function logError(
       Object.entries(entry).filter(([, v]) => v !== undefined)
     );
 
-    await addDoc(collection(db, 'error_logs'), clean);
+    const docRef = await addDoc(collection(db, 'error_logs'), clean);
+    return docRef?.id ?? null;
   } catch {
     // Hata loglama başarısız olursa sessizce geç — sonsuz döngüyü önle
     console.warn('[ErrorLogging] Firestore log yazımı başarısız — sessizce geçildi.');
+    return null;
   }
 }

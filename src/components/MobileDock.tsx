@@ -1,4 +1,5 @@
 import React from 'react';
+import { NavLink } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ShieldCheck, CheckSquare, AlertTriangle,
@@ -8,11 +9,11 @@ import {
 import { cn } from '../lib/utils';
 import { User } from '../types';
 import { triggerHaptic } from '../lib/haptics';
-import { TAB_ROLES } from '../constants';
+import { TAB_ROLES, tabPath, type AppTabId } from '../constants';
 import { useModalBehavior } from './ui/Modal';
 
 interface DockItem {
-  id: string;
+  id: AppTabId;
   label: string;
   icon: React.ElementType;
   roles: string[];
@@ -39,19 +40,19 @@ const MAX_VISIBLE = 4;
 
 interface MobileDockProps {
   user: User | null;
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
   onLogout: () => void;
   /** Bekleyen bildirim sayısı — bugün tamamı görev kaynaklı olduğundan
-   *  (bkz. NotificationPanel'in setActiveTab('tasks') yönlendirmesi)
-   *  rozet yalnızca 'tasks' öğesinde gösterilir. */
+   *  (bkz. NotificationPanel'in /tasks/:taskId yönlendirmesi) rozet yalnızca
+   *  'tasks' öğesinde gösterilir. */
   notificationCount?: number;
 }
 
-export const MobileDock = ({ user, activeTab, setActiveTab, onLogout, notificationCount = 0 }: MobileDockProps) => {
+export const MobileDock = ({ user, onLogout, notificationCount = 0 }: MobileDockProps) => {
   const [showMore, setShowMore] = React.useState(false);
   const overflowPanelRef = React.useRef<HTMLDivElement>(null);
-  const firstOverflowItemRef = React.useRef<HTMLButtonElement>(null);
+  // NavLink bir <a> render eder — overflow panelinin açılış odağı için ref tipi
+  // de HTMLAnchorElement olmalı (eskiden <button> idi).
+  const firstOverflowItemRef = React.useRef<HTMLAnchorElement>(null);
 
   const filtered = ALL_ITEMS.filter(item => user && item.roles.includes(user.role));
   const primary  = filtered.slice(0, MAX_VISIBLE);
@@ -78,9 +79,10 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout, notificati
     initialFocusRef: firstOverflowItemRef,
   });
 
-  const handleSelect = (id: string) => {
+  // Gezinmenin kendisini artık NavLink yapıyor (bkz. Sidebar'daki aynı gerekçe)
+  // — burada yalnızca dokunsal geri bildirim ve overflow panelinin kapanışı kalır.
+  const handleSelect = () => {
     triggerHaptic('light');
-    setActiveTab(id);
     setShowMore(false);
   };
 
@@ -125,45 +127,48 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout, notificati
 
               {overflow.map((item, index) => {
                 const Icon = item.icon;
-                const isActive = activeTab === item.id;
                 const badgeCount = badges[item.id];
                 return (
-                  <button
+                  <NavLink
                     key={item.id}
+                    to={tabPath(item.id)}
                     ref={index === 0 ? firstOverflowItemRef : undefined}
-                    onClick={() => handleSelect(item.id)}
-                    aria-current={isActive ? 'page' : undefined}
+                    onClick={handleSelect}
                     aria-label={badgeCount ? `${item.label}, ${badgeCount} bekleyen bildirim` : item.label}
-                    className={cn(
+                    className={({ isActive }) => cn(
                       'flex items-center gap-3 w-full px-4 py-3.5 transition-all duration-200 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-inset',
                       isActive
                         ? 'bg-executive-blue/5 text-executive-blue'
                         : 'text-text-muted hover:bg-executive-blue/[0.03] hover:text-text-heading'
                     )}
                   >
-                    <Icon
-                      className={cn(
-                        'w-4 h-4 flex-shrink-0',
-                        isActive ? 'text-executive-blue' : 'text-text-muted/75'
-                      )}
-                      strokeWidth={isActive ? 2 : 1.5}
-                      aria-hidden={true}
-                    />
-                    <span className="text-[12px] font-medium tracking-wide flex-1 min-w-0 truncate">
-                      {item.label}
-                    </span>
-                    {Boolean(badgeCount) && (
-                      <span
-                        aria-hidden="true"
-                        className="flex-shrink-0 min-w-[16px] h-[16px] px-1 flex items-center justify-center rounded-full bg-status-danger text-white text-[9px] font-bold leading-none"
-                      >
-                        {badgeCount! > 9 ? '9+' : badgeCount}
-                      </span>
+                    {({ isActive }) => (
+                      <>
+                        <Icon
+                          className={cn(
+                            'w-4 h-4 flex-shrink-0',
+                            isActive ? 'text-executive-blue' : 'text-text-muted/75'
+                          )}
+                          strokeWidth={isActive ? 2 : 1.5}
+                          aria-hidden={true}
+                        />
+                        <span className="text-[12px] font-medium tracking-wide flex-1 min-w-0 truncate">
+                          {item.label}
+                        </span>
+                        {Boolean(badgeCount) && (
+                          <span
+                            aria-hidden="true"
+                            className="flex-shrink-0 min-w-[16px] h-[16px] px-1 flex items-center justify-center rounded-full bg-status-danger text-[color:var(--status-danger-text)] text-[9px] font-bold leading-none"
+                          >
+                            {badgeCount! > 9 ? '9+' : badgeCount}
+                          </span>
+                        )}
+                        {isActive && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-executive-gold flex-shrink-0" aria-hidden="true" />
+                        )}
+                      </>
                     )}
-                    {isActive && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-executive-gold flex-shrink-0" aria-hidden="true" />
-                    )}
-                  </button>
+                  </NavLink>
                 );
               })}
 
@@ -201,14 +206,16 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout, notificati
         >
           {primary.map((item) => {
             const Icon = item.icon;
-            const isActive = activeTab === item.id;
             const badgeCount = badges[item.id];
             return (
-              <button
+              <NavLink
                 key={item.id}
-                onClick={() => handleSelect(item.id)}
-                aria-current={isActive ? 'page' : undefined}
+                to={tabPath(item.id)}
+                onClick={handleSelect}
                 aria-label={badgeCount ? `${item.label}, ${badgeCount} bekleyen bildirim` : item.label}
+                // Aktif görünüm bu sınıflarda değil, içerideki motion.div
+                // zemininde/ikon renklerinde ifade ediliyor — className
+                // callback'i isActive'e ihtiyaç duymaz.
                 className={cn(
                   'flex flex-col items-center justify-center',
                   'gap-1 py-2.5 rounded-xl transition-all duration-300',
@@ -216,72 +223,76 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout, notificati
                   isCompact ? 'w-20 sm:w-24 shrink-0' : 'flex-1 px-0.5 sm:px-1'
                 )}
               >
-                {/* Aktif zemin */}
-                {isActive && (
-                  <motion.div
-                    layoutId="dock-active-bg"
-                    className="absolute inset-0 bg-executive-blue/[0.07] rounded-xl"
-                    transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-                    aria-hidden="true"
-                  />
-                )}
-
-                {/* İkon */}
-                <div className="relative flex items-center justify-center w-6 h-6" aria-hidden="true">
-                  <motion.div
-                    animate={{ scale: isActive ? 1.12 : 1 }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-                  >
-                    <Icon
-                      className={cn(
-                        'w-5 h-5 transition-colors duration-300',
-                        isActive ? 'text-executive-blue' : 'text-text-muted/70 group-hover:text-text-muted'
-                      )}
-                      strokeWidth={isActive ? 2 : 1.5}
-                    />
-                  </motion.div>
-
-                  {/* Gold aktif nokta */}
-                  <AnimatePresence>
+                {({ isActive }) => (
+                  <>
+                    {/* Aktif zemin */}
                     {isActive && (
-                      <motion.span
-                        key="dot"
-                        initial={{ scale: 0, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0, opacity: 0 }}
-                        transition={{ type: 'spring', stiffness: 500, damping: 28 }}
-                        className="absolute -top-0.5 -right-0.5
-                                   w-1.5 h-1.5 rounded-full bg-executive-gold
-                                   shadow-[0_0_6px_rgba(197,160,89,0.5)]"
+                      <motion.div
+                        layoutId="dock-active-bg"
+                        className="absolute inset-0 bg-executive-blue/[0.07] rounded-xl"
+                        transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                        aria-hidden="true"
                       />
                     )}
-                  </AnimatePresence>
 
-                  {/* Bekleyen bildirim rozeti — aktif noktayla çakışmaması için
-                      karşı köşede (bkz. mobil tasarım denetimi). */}
-                  {Boolean(badgeCount) && (
+                    {/* İkon */}
+                    <div className="relative flex items-center justify-center w-6 h-6" aria-hidden="true">
+                      <motion.div
+                        animate={{ scale: isActive ? 1.12 : 1 }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+                      >
+                        <Icon
+                          className={cn(
+                            'w-5 h-5 transition-colors duration-300',
+                            isActive ? 'text-executive-blue' : 'text-text-muted/70 group-hover:text-text-muted'
+                          )}
+                          strokeWidth={isActive ? 2 : 1.5}
+                        />
+                      </motion.div>
+
+                      {/* Gold aktif nokta */}
+                      <AnimatePresence>
+                        {isActive && (
+                          <motion.span
+                            key="dot"
+                            initial={{ scale: 0, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0, opacity: 0 }}
+                            transition={{ type: 'spring', stiffness: 500, damping: 28 }}
+                            className="absolute -top-0.5 -right-0.5
+                                       w-1.5 h-1.5 rounded-full bg-executive-gold
+                                       shadow-[0_0_6px_rgba(197,160,89,0.5)]"
+                          />
+                        )}
+                      </AnimatePresence>
+
+                      {/* Bekleyen bildirim rozeti — aktif noktayla çakışmaması için
+                          karşı köşede (bkz. mobil tasarım denetimi). */}
+                      {Boolean(badgeCount) && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute -top-1 -left-1.5 min-w-[15px] h-[15px] px-[3px]
+                                     flex items-center justify-center rounded-full
+                                     bg-status-danger text-[color:var(--status-danger-text)] text-[8.5px] font-bold leading-none"
+                        >
+                          {badgeCount! > 9 ? '9+' : badgeCount}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Etiket */}
                     <span
+                      className={cn(
+                        'text-[10px] sm:text-[10.5px] font-medium tracking-normal sm:tracking-wide truncate leading-none transition-colors duration-300 max-w-full',
+                        isActive ? 'text-executive-blue' : 'text-text-muted/70 group-hover:text-text-muted'
+                      )}
                       aria-hidden="true"
-                      className="absolute -top-1 -left-1.5 min-w-[15px] h-[15px] px-[3px]
-                                 flex items-center justify-center rounded-full
-                                 bg-status-danger text-white text-[8.5px] font-bold leading-none"
                     >
-                      {badgeCount! > 9 ? '9+' : badgeCount}
+                      {item.label}
                     </span>
-                  )}
-                </div>
-
-                {/* Etiket */}
-                <span
-                  className={cn(
-                    'text-[10px] sm:text-[10.5px] font-medium tracking-normal sm:tracking-wide truncate leading-none transition-colors duration-300 max-w-full',
-                    isActive ? 'text-executive-blue' : 'text-text-muted/70 group-hover:text-text-muted'
-                  )}
-                  aria-hidden="true"
-                >
-                  {item.label}
-                </span>
-              </button>
+                  </>
+                )}
+              </NavLink>
             );
           })}
 

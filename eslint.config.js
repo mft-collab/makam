@@ -22,8 +22,25 @@ export default [
   {
     files: ['src/**/*.{ts,tsx}', '*.{ts,tsx}'],
     rules: {
-      // TODO(Faz 1.3): CRUD sınırlarına Zod validasyonu eklendikçe 'error'a çekilecek.
-      '@typescript-eslint/no-explicit-any': 'warn',
+      // Üretim kodunda bugün itibarıyla SIFIR `any` var (doğrulandı, bkz. kod
+      // denetimi) — 'error' bunu bir ratchet olarak kilitler. Test dosyaları
+      // aşağıdaki override ile ayrı tutulur (mock/spy tiplemesi genellikle
+      // `any` gerektirir ve bu, üretim kod kalitesiyle karıştırılmamalı).
+      '@typescript-eslint/no-explicit-any': 'error',
+    },
+  },
+  {
+    // Test dosyalarında `any`, mock/spy dönüş tiplerini taklit ederken sık
+    // kaçınılmazdır (ör. `vi.mocked(fn).mockResolvedValueOnce(x as any)`) ve
+    // üretim koduna hiç gönderilmez — bu yüzden üretim kodundaki
+    // 'error' kuralından AYRI, kendi başına 'off' tutulur. Eskiden tek bir
+    // ortak 'warn' kuralı + `--max-warnings=187` ratchet'i vardı: bu, her yeni
+    // test dosyasının ratchet sayısını el yordamıyla güncellemesini
+    // gerektiriyordu ve üretim kodunda gerçek bir `any` sızıntısını 187
+    // uyarının içinde görünmez kılıyordu (bkz. kod denetimi P2-21).
+    files: ['src/**/*.test.{ts,tsx}', 'src/**/*.spec.{ts,tsx}', 'src/test/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
   // ─── Firebase Security Rules ──────────────────────────────────────────────

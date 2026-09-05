@@ -2,13 +2,21 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TaskFormModal } from './TaskFormModal';
-import type { Task, User } from '../types';
+import type { Department, Task, User } from '../types';
 
+// Admin BİLİNÇLİ olarak departmansız: organizasyon geneli çalışır ve P0-1'in
+// kaynağı tam da buydu (görev departmanı oluşturandan türetildiğinde Admin'in
+// oluşturduğu her görev departmansız kalıyordu).
 const admin: User = { uid: 'admin-1', fullName: 'Müftü Bey', email: 'admin@makam.com', role: 'Admin' };
-const manager: User = { uid: 'mgr-1', fullName: 'Müdür Hanım', email: 'mgr@makam.com', role: 'Manager' };
-const staff1: User = { uid: 'staff-1', fullName: 'Memur Ali', email: 'staff1@makam.com', role: 'Staff' };
-const staff2: User = { uid: 'staff-2', fullName: 'Memur Veli', email: 'staff2@makam.com', role: 'Staff' };
+const manager: User = { uid: 'mgr-1', fullName: 'Müdür Hanım', email: 'mgr@makam.com', role: 'Manager', departmentId: 'Operasyon' };
+const staff1: User = { uid: 'staff-1', fullName: 'Memur Ali', email: 'staff1@makam.com', role: 'Staff', departmentId: 'Operasyon' };
+const staff2: User = { uid: 'staff-2', fullName: 'Memur Veli', email: 'staff2@makam.com', role: 'Staff', departmentId: 'Basın' };
 const allUsers = [admin, manager, staff1, staff2];
+
+const departments: Department[] = [
+  { id: 'Basın', name: 'Basın', createdAt: 1, createdBy: 'admin-1' },
+  { id: 'Operasyon', name: 'Operasyon', createdAt: 1, createdBy: 'admin-1' },
+];
 
 const renderForm = (overrides: Partial<React.ComponentProps<typeof TaskFormModal>> = {}) => {
   const onSubmit = vi.fn();
@@ -17,6 +25,7 @@ const renderForm = (overrides: Partial<React.ComponentProps<typeof TaskFormModal
     <TaskFormModal
       users={allUsers}
       currentUser={admin}
+      departments={departments}
       onSubmit={onSubmit}
       onClose={onClose}
       {...overrides}
@@ -72,9 +81,89 @@ describe('TaskFormModal', () => {
       expect(data).toMatchObject({
         title: 'Test Talimatı', description: 'Detaylı açıklama', assigneeId: 'staff-1',
         priority: 'Medium', status: 'ASSIGNED', creatorId: 'admin-1',
+        // Departman OLUŞTURANDAN (departmansız Admin) değil, SORUMLUDAN gelir.
+        departmentId: 'Operasyon',
       });
       expect(data.deadline).toBeTypeOf('number');
       expect(data.coordinatorId).toBeUndefined();
+    });
+  });
+
+  describe('departman türetimi (P0-1)', () => {
+    const getDepartmentSelect = () => screen.getByLabelText('Sorumlu Birim') as HTMLSelectElement;
+
+    it('görevin departmanı OLUŞTURANDAN değil ATANAN KİŞİDEN türetilir', async () => {
+      const user = userEvent.setup();
+      // Oluşturan: departmansız Admin. Sorumlu: Basın biriminden Memur Veli.
+      // Eski davranışta (currentUser?.departmentId) görev departmansız kalır
+      // ve tüm organizasyona okunur hale gelirdi.
+      const { onSubmit } = renderForm({ currentUser: admin });
+
+      await fillValidForm(user, 'staff-2');
+      await userEvent.click(getSubmitButton());
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      expect(onSubmit.mock.calls[0]![0]).toMatchObject({ assigneeId: 'staff-2', departmentId: 'Basın' });
+    });
+
+    it('sorumlunun departmanı yoksa (Admin\'e atanan görev) birim alanı görünür ve zorunlu olur', async () => {
+      const user = userEvent.setup();
+      const { onSubmit } = renderForm({ currentUser: admin });
+
+      await fillValidForm(user, 'admin-1');
+      await userEvent.click(getSubmitButton());
+
+      expect(await screen.findByText(/talimatın birimini seçmelisiniz/i)).toBeInTheDocument();
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(getDepartmentSelect()).toBeInTheDocument();
+    });
+
+    it('birim açıkça seçilirse görev o birimle oluşturulur', async () => {
+      const user = userEvent.setup();
+      const { onSubmit } = renderForm({ currentUser: admin });
+
+      await fillValidForm(user, 'admin-1');
+      await user.selectOptions(getDepartmentSelect(), 'Basın');
+      await userEvent.click(getSubmitButton());
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      expect(onSubmit.mock.calls[0]![0]).toMatchObject({ assigneeId: 'admin-1', departmentId: 'Basın' });
+    });
+
+    it('sorumlunun departmanı varsa birim alanı hiç gösterilmez (gereksiz soru sorulmaz)', async () => {
+      const user = userEvent.setup();
+      renderForm({ currentUser: admin });
+
+      await user.selectOptions(getAssigneeSelect(), 'staff-1');
+
+      expect(screen.queryByLabelText('Sorumlu Birim')).not.toBeInTheDocument();
+    });
+
+    it('Müdür, kendi birimi dışındaki bir personele talimat atayamaz (anlaşılır hata)', async () => {
+      const user = userEvent.setup();
+      // Müdür Operasyon'da; staff-2 Basın'da. Sunucu tarafı bunu zaten
+      // reddederdi (tasks create kuralı) — burada ham izin hatası yerine
+      // anlaşılır bir mesaj gösterilir.
+      const { onSubmit } = renderForm({ currentUser: manager });
+
+      await fillValidForm(user, 'staff-2');
+      await userEvent.click(getSubmitButton());
+
+      expect(await screen.findByText(/yalnızca kendi biriminize talimat atayabilirsiniz/i)).toBeInTheDocument();
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it('Müdür için birim seçenekleri kendi birimiyle sınırlıdır', async () => {
+      const user = userEvent.setup();
+      // Birim alanını görünür kılmak için departmansız bir sorumlu gerekir
+      // (Müdür'ün kendisi departmanlı) — departmansız ikinci bir Müdür.
+      const deptlessManager: User = { uid: 'mgr-2', fullName: 'Müdür İkinci', email: 'mgr2@makam.com', role: 'Manager' };
+      renderForm({ currentUser: manager, users: [...allUsers, deptlessManager] });
+
+      await user.selectOptions(getAssigneeSelect(), 'mgr-2');
+
+      const options = Array.from(getDepartmentSelect().options).map(o => o.value).filter(Boolean);
+      expect(options).toEqual(['Operasyon']);
     });
   });
 

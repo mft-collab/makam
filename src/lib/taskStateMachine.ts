@@ -15,7 +15,11 @@ import type { TaskStatus } from '../types';
  * kısayol vardı; bu, oldStatus'tan bağımsız çalıştığından COMPLETED bir
  * görevin bile CANCELLED'a çekilmesine izin veriyordu (bkz. kod denetimi).
  */
-const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
+// export edilmesinin TEK nedeni parity testidir (taskStateMachine.parity.test.ts,
+// firestore.rules'taki isValidTransition tablosuyla makine-okunur karşılaştırma).
+// Üretim kodu bu tabloya doğrudan erişmemeli, yalnızca isValidTaskTransition()
+// üzerinden sorgulamalı.
+export const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   ASSIGNED: ['IN_PROGRESS', 'BLOCKED', 'CANCELLED', 'PENDING_DELEGATION'],
   PENDING_DELEGATION: ['IN_PROGRESS', 'BLOCKED', 'CANCELLED'],
   IN_PROGRESS: ['BLOCKED', 'AWAITING_APPROVAL', 'COMPLETED', 'CANCELLED', 'CRISIS', 'PENDING_DELEGATION'],

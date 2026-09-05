@@ -35,7 +35,10 @@ test.describe('MAKAM E2E — Kimlik Doğrulamalı Akışlar', () => {
   });
 
   test('Talimatlar sekmesi seed edilen görevi gösterir', async ({ page }) => {
-    await page.getByRole('button', { name: 'Talimatlar' }).click();
+    // Menü öğeleri routing katmanıyla birlikte <button> değil <NavLink> (yani
+    // gerçek bir <a href="/tasks">) — rol 'button' değil 'link'.
+    await page.getByRole('link', { name: 'Talimatlar' }).click();
+    await expect(page).toHaveURL(/\/tasks$/);
     // Responsive tasarım hem mobil kart hem masaüstü tablo satırını DOM'da
     // tutar (CSS ile birini gizler) — masaüstü test viewport'unda görünür
     // olan tablo satırına özel olarak bak.

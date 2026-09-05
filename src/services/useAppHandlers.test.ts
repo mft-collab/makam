@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { createElement, type ReactNode } from 'react';
 import { renderHook, act } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { useAppHandlers } from './useAppHandlers';
 import { taskService } from './taskService';
 import { userService } from './userService';
@@ -27,6 +29,16 @@ vi.mock('./notificationService', () => ({
 vi.mock('../lib/offlineQueue', () => ({ offlineQueue: { enqueue: vi.fn() } }));
 vi.mock('../store/uiStore', () => ({ useUIStore: vi.fn() }));
 
+// Açık görev detayı artık uiStore'da değil URL'de tutuluyor (bkz. kod denetimi
+// P1-6). Hook gerçek bir <MemoryRouter> içinde koşar — böylece useMatch
+// başlangıç route'undan `selectedTaskId`'yi GERÇEKTEN çözer; yalnızca
+// `useNavigate` casuslanır ki yönlendirmenin olup olmadığı doğrulanabilsin.
+const navigateMock = vi.fn();
+vi.mock('react-router-dom', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('react-router-dom')>()),
+  useNavigate: () => navigateMock,
+}));
+
 const goOffline = () => Object.defineProperty(window.navigator, 'onLine', { value: false, writable: true });
 const goOnline = () => Object.defineProperty(window.navigator, 'onLine', { value: true, writable: true });
 
@@ -46,8 +58,6 @@ const makeBlocker = (overrides: Partial<TaskBlocker> = {}): TaskBlocker => ({
 
 describe('useAppHandlers', () => {
   let uiState: {
-    selectedTaskId: string | null;
-    setSelectedTaskId: ReturnType<typeof vi.fn>;
     setIsCreateModalOpen: ReturnType<typeof vi.fn>;
     setIsEditModalOpen: ReturnType<typeof vi.fn>;
     addToast: ReturnType<typeof vi.fn>;
@@ -57,22 +67,26 @@ describe('useAppHandlers', () => {
     vi.clearAllMocks();
     goOnline();
     uiState = {
-      selectedTaskId: null, setSelectedTaskId: vi.fn(), setIsCreateModalOpen: vi.fn(),
-      setIsEditModalOpen: vi.fn(), addToast: vi.fn(),
+      setIsCreateModalOpen: vi.fn(), setIsEditModalOpen: vi.fn(), addToast: vi.fn(),
     };
     vi.mocked(useUIStore).mockImplementation((selector: any) => selector(uiState));
   });
 
   afterEach(() => { goOnline(); });
 
-  const setup = (opts: { user?: User | null; tasks?: Task[]; blockers?: TaskBlocker[] } = {}) => {
+  /** `route`: hook'un içinde koşacağı URL. `/tasks/task-1` verildiğinde
+   *  useSelectedTaskId 'task-1' döner, yani "o görevin detayı açık" demektir. */
+  const setup = (opts: { user?: User | null; tasks?: Task[]; blockers?: TaskBlocker[]; route?: string } = {}) => {
     const onError = vi.fn();
     const { result } = renderHook(() => useAppHandlers({
       user: opts.user === undefined ? makeUser() : opts.user,
       tasks: opts.tasks ?? [],
       blockers: opts.blockers ?? [],
       onError,
-    }));
+    }), {
+      wrapper: ({ children }: { children: ReactNode }) =>
+        createElement(MemoryRouter, { initialEntries: [opts.route ?? '/tasks'] }, children),
+    });
     return { handlers: result.current, onError };
   };
 
@@ -253,23 +267,21 @@ describe('useAppHandlers', () => {
   });
 
   describe('deleteTask', () => {
-    it('online: taskService.deleteTask çağrılır; silinen görev seçiliyse seçim temizlenir', async () => {
-      uiState.selectedTaskId = 'task-1';
-      const { handlers } = setup();
+    it('online: taskService.deleteTask çağrılır; silinen görev detayı AÇIKSA /tasks\'a dönülür', async () => {
+      const { handlers } = setup({ route: '/tasks/task-1' });
 
       await act(async () => { await handlers.deleteTask('task-1'); });
 
       expect(taskService.deleteTask).toHaveBeenCalledWith('task-1', 'user-1');
-      expect(uiState.setSelectedTaskId).toHaveBeenCalledWith(null);
+      expect(navigateMock).toHaveBeenCalledWith('/tasks');
     });
 
-    it('online: silinen görev seçili değilse seçim state\'ine dokunulmaz', async () => {
-      uiState.selectedTaskId = 'baska-gorev';
-      const { handlers } = setup();
+    it('online: silinen görev detayı açık DEĞİLSE yönlendirme yapılmaz', async () => {
+      const { handlers } = setup({ route: '/tasks/baska-gorev' });
 
       await act(async () => { await handlers.deleteTask('task-1'); });
 
-      expect(uiState.setSelectedTaskId).not.toHaveBeenCalled();
+      expect(navigateMock).not.toHaveBeenCalled();
     });
 
     it('servis reddederse onError(err, \'delete\', \'tasks/{id}\') çağrılır', async () => {
@@ -387,7 +399,10 @@ describe('useAppHandlers', () => {
 
       await act(async () => { await handlers.resolveBlocker('blocker-1'); });
 
-      expect(blockerService.resolveBlocker).toHaveBeenCalledWith('blocker-1', 'task-1', 0, 'user-1', 4);
+      // Son parametre, denetim kaydına donacak görev başlığı — blockerService
+      // görevi kendisi okumadığından bu katman geçirir (bkz. P1-14: audit
+      // kaydı, yüklü görev penceresinden bağımsız olmalı).
+      expect(blockerService.resolveBlocker).toHaveBeenCalledWith('blocker-1', 'task-1', 0, 'user-1', 4, 'Talimat');
     });
 
     it('online + başka aktif engel de varsa: otherActiveCount buna göre pozitif iletilir', async () => {
@@ -397,7 +412,7 @@ describe('useAppHandlers', () => {
 
       await act(async () => { await handlers.resolveBlocker('blocker-1'); });
 
-      expect(blockerService.resolveBlocker).toHaveBeenCalledWith('blocker-1', 'task-1', 1, 'user-1', 3);
+      expect(blockerService.resolveBlocker).toHaveBeenCalledWith('blocker-1', 'task-1', 1, 'user-1', 3, 'Talimat');
     });
 
     it('servis reddederse onError(err, \'update\', \'tasks/{taskId}\') çağrılır (VERSION_MISMATCH tespiti için)', async () => {
@@ -541,7 +556,11 @@ describe('useAppHandlers', () => {
       expect(call[0]).toBe('users');
       expect(call[1]).toBe('set');
       expect(call[3]).toBe('a@b.com');
-      expect(call[9]).toMatchObject({ taskId: 'a@b.com', changedBy: 'user-1' });
+      // logType, online userService.addUser'ın yazdığı değerle AYNI olmalı —
+      // aksi halde aynı işlem çevrimiçi/çevrimdışı yapıldığında denetim izinde
+      // farklı tipte görünür ve "İşlem Tipi" filtresi tutarsızlaşırdı
+      // (bkz. taskService.auditLogType).
+      expect(call[9]).toMatchObject({ taskId: 'a@b.com', logType: 'STATUS', changedBy: 'user-1' });
     });
 
     it('addUser: servis reddederse onError(err, \'create\', \'users\') çağrılır', async () => {
@@ -568,7 +587,9 @@ describe('useAppHandlers', () => {
       expect(call[1]).toBe('update');
       expect(call[2]).toEqual({ role: 'Manager' });
       expect(call[3]).toBe('target-uid');
-      expect(call[9]).toMatchObject({ taskId: 'target-uid', changedBy: 'user-1' });
+      // Personel BİLGİSİ güncellemesi bir alan düzenlemesidir (userService.
+      // updateUser ile parite) — ekleme/silmeden farklı olarak 'FIELD'.
+      expect(call[9]).toMatchObject({ taskId: 'target-uid', logType: 'FIELD', changedBy: 'user-1' });
     });
 
     it('updateUserRole: servis reddederse onError(err, \'update\', \'users/{id}\') çağrılır', async () => {
@@ -594,7 +615,7 @@ describe('useAppHandlers', () => {
       expect(call[0]).toBe('users');
       expect(call[1]).toBe('delete');
       expect(call[3]).toBe('target-uid');
-      expect(call[9]).toMatchObject({ taskId: 'target-uid', changedBy: 'user-1' });
+      expect(call[9]).toMatchObject({ taskId: 'target-uid', logType: 'STATUS', changedBy: 'user-1' });
     });
 
     it('deleteUser: servis reddederse onError(err, \'delete\', \'users/{id}\') çağrılır', async () => {
@@ -624,15 +645,23 @@ describe('useAppHandlers', () => {
       expect(blockerService.editBlocker).not.toHaveBeenCalled();
     });
 
-    it('online: blockerService.editBlocker actorId + taskId ile çağrılır (audit log için)', async () => {
-      const { handlers } = setup({ blockers: [makeBlocker()] });
+    it('online: blockerService.editBlocker actorId + taskId + görev başlığı ile çağrılır (audit log için)', async () => {
+      const { handlers } = setup({ tasks: [makeTask()], blockers: [makeBlocker()] });
       await act(async () => { await handlers.updateBlocker('blocker-1', 'Yeni sebep'); });
-      expect(blockerService.editBlocker).toHaveBeenCalledWith('blocker-1', 'Yeni sebep', 'user-1', 'task-1');
+      expect(blockerService.editBlocker).toHaveBeenCalledWith('blocker-1', 'Yeni sebep', 'user-1', 'task-1', 'Talimat');
+    });
+
+    it('online: görev yüklü listede yoksa başlık undefined geçilir (audit kaydı yine yazılır)', async () => {
+      // Başlık zorunlu DEĞİL — bulunamadığında alan hiç yazılmaz ve
+      // AuditLogList eski kayıtlardaki gibi görev listesi fallback'ine düşer.
+      const { handlers } = setup({ tasks: [], blockers: [makeBlocker()] });
+      await act(async () => { await handlers.updateBlocker('blocker-1', 'Yeni sebep'); });
+      expect(blockerService.editBlocker).toHaveBeenCalledWith('blocker-1', 'Yeni sebep', 'user-1', 'task-1', undefined);
     });
 
     it('offline ise servis çağrılmaz, offlineQueue.enqueue withAuditLog ile (blockers/update) kuyruğa alır', async () => {
       goOffline();
-      const { handlers } = setup({ blockers: [makeBlocker()] });
+      const { handlers } = setup({ tasks: [makeTask()], blockers: [makeBlocker()] });
       await act(async () => { await handlers.updateBlocker('blocker-1', 'Yeni sebep'); });
       expect(blockerService.editBlocker).not.toHaveBeenCalled();
       expect(offlineQueue.enqueue).toHaveBeenCalledOnce();
@@ -641,7 +670,13 @@ describe('useAppHandlers', () => {
       expect(call[1]).toBe('update');
       expect(call[2]).toEqual({ reason: 'Yeni sebep' });
       expect(call[3]).toBe('blocker-1');
-      expect(call[9]).toMatchObject({ taskId: 'task-1', changedBy: 'user-1', newValue: 'Yeni sebep' });
+      // taskTitle, online editBlocker yoluyla PARİTE için offline payload'a da
+      // konur — aynı işlem çevrimiçi/çevrimdışı yapıldığında audit kaydı aynı
+      // olmalı (bkz. offlineQueue.writeWithAuditLog).
+      // logType da aynı gerekçeyle payload'a konur: bir risk GEREKÇESİ
+      // düzenlemesi içerik güncellemesidir ('FIELD'), online
+      // blockerService.editBlocker ile birebir aynı.
+      expect(call[9]).toMatchObject({ taskId: 'task-1', taskTitle: 'Talimat', logType: 'FIELD', changedBy: 'user-1', newValue: 'Yeni sebep' });
     });
 
     it('servis reddederse onError(err, \'update\', \'blockers/{id}\') çağrılır', async () => {
@@ -687,7 +722,7 @@ describe('useAppHandlers', () => {
 
       await act(async () => { await handlers.deleteBlocker('blocker-1'); });
 
-      expect(blockerService.deleteBlocker).toHaveBeenCalledWith('blocker-1', 'task-1', 0, 'user-1', 4);
+      expect(blockerService.deleteBlocker).toHaveBeenCalledWith('blocker-1', 'task-1', 0, 'user-1', 4, 'Talimat');
       expect(taskService.updateTaskStatus).not.toHaveBeenCalled();
     });
 
@@ -702,7 +737,7 @@ describe('useAppHandlers', () => {
       // taskId/userId artık HER ZAMAN iletiliyor (audit log yazımı için) —
       // blockerService bu durumda otherActiveCount!==0 olduğundan yine de
       // transaction/task-geçişi başlatmaz, yalnızca audit kaydı yazar.
-      expect(blockerService.deleteBlocker).toHaveBeenCalledWith('blocker-1', 'task-1', 1, 'user-1', 3);
+      expect(blockerService.deleteBlocker).toHaveBeenCalledWith('blocker-1', 'task-1', 1, 'user-1', 3, 'Talimat');
       expect(taskService.updateTaskStatus).not.toHaveBeenCalled();
     });
 

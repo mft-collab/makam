@@ -145,12 +145,16 @@ describe('blockerService', () => {
       const commit = vi.fn().mockResolvedValue(undefined);
       vi.mocked(firebase.writeBatch).mockReturnValue({ set, update, delete: vi.fn(), commit } as any);
 
-      await blockerService.resolveBlocker('blocker-1', 'task-1', 2, 'user-1', 4);
+      await blockerService.resolveBlocker('blocker-1', 'task-1', 2, 'user-1', 4, 'Risk Görevi');
 
       expect(firebase.runTransaction).not.toHaveBeenCalled();
       expect(update).toHaveBeenCalledWith(expect.anything(), { isResolved: true, resolvedAt: expect.any(Number) });
       const auditCall = set.mock.calls.find(([, data]: any) => data?.changedBy !== undefined);
-      expect(auditCall?.[1]).toMatchObject({ taskId: 'task-1', changedBy: 'user-1' });
+      // Çağıranın geçirdiği görev başlığı kayda donar (bkz. P1-14) — bu servis
+      // görevi kendisi okumaz, başlık opsiyoneldir.
+      // logType: risk unsurunun YAŞAM DÖNGÜSÜ olayı (aktif → çözüldü), bir
+      // içerik düzenlemesi değil (bkz. taskService.auditLogType).
+      expect(auditCall?.[1]).toMatchObject({ taskId: 'task-1', changedBy: 'user-1', taskTitle: 'Risk Görevi', logType: 'STATUS' });
       expect(commit).toHaveBeenCalledOnce();
     });
   });
@@ -163,12 +167,31 @@ describe('blockerService', () => {
       const commit = vi.fn().mockResolvedValue(undefined);
       vi.mocked(firebase.writeBatch).mockReturnValue({ set, update, delete: vi.fn(), commit } as any);
 
-      await blockerService.editBlocker('blocker-1', 'Yeni sebep', 'user-1', 'task-1');
+      await blockerService.editBlocker('blocker-1', 'Yeni sebep', 'user-1', 'task-1', 'Risk Görevi');
 
       expect(update).toHaveBeenCalledWith({ id: 'generated-ref-1' }, { reason: 'Yeni sebep' });
       const auditCall = set.mock.calls.find(([, data]: any) => data?.changedBy !== undefined);
-      expect(auditCall?.[1]).toMatchObject({ taskId: 'task-1', changedBy: 'user-1', newValue: 'Yeni sebep' });
+      // logType 'FIELD': bu bir gerekçe METNİ düzenlemesidir. Kayıt `changes`
+      // yazmadığı için ESKİ istemci-taraflı tahmin bunu "Durum Değişikliği"
+      // sayıyordu — tip artık şekilden türetilmiyor (bkz. auditLogType, P2-22).
+      expect(auditCall?.[1]).toMatchObject({ taskId: 'task-1', changedBy: 'user-1', newValue: 'Yeni sebep', taskTitle: 'Risk Görevi', logType: 'FIELD' });
       expect(commit).toHaveBeenCalledOnce();
+    });
+
+    it('görev başlığı geçilmezse audit kaydında taskTitle alanı HİÇ yazılmaz (undefined yazılmaz)', async () => {
+      // Firestore `undefined` değer kabul etmez — alan opsiyonel olduğu için
+      // yokluğunda anahtarın kendisi de payload'a girmemeli, aksi halde
+      // başlığı bilinmeyen her düzenleme yazma hatasıyla düşerdi.
+      const set = vi.fn();
+      const commit = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(firebase.writeBatch).mockReturnValue(
+        { set, update: vi.fn(), delete: vi.fn(), commit } as unknown as ReturnType<typeof firebase.writeBatch>
+      );
+
+      await blockerService.editBlocker('blocker-1', 'Yeni sebep', 'user-1', 'task-1');
+
+      const auditCall = set.mock.calls.find(call => 'changedBy' in (call[1] as object));
+      expect(auditCall?.[1]).not.toHaveProperty('taskTitle');
     });
 
     it('batch.commit her denemede reddederse runWithRetry tükendikten sonra hata fırlatılır', async () => {
@@ -202,12 +225,12 @@ describe('blockerService', () => {
       const commit = vi.fn().mockResolvedValue(undefined);
       vi.mocked(firebase.writeBatch).mockReturnValue({ set, update: vi.fn(), delete: del, commit } as any);
 
-      await blockerService.deleteBlocker('blocker-1', 'task-1', 2, 'user-1', 4);
+      await blockerService.deleteBlocker('blocker-1', 'task-1', 2, 'user-1', 4, 'Risk Görevi');
 
       expect(firebase.runTransaction).not.toHaveBeenCalled();
       expect(del).toHaveBeenCalledWith({ id: 'generated-ref-1' });
       const auditCall = set.mock.calls.find(([, data]: any) => data?.changedBy !== undefined);
-      expect(auditCall?.[1]).toMatchObject({ taskId: 'task-1', changedBy: 'user-1', newValue: 'Risk Unsuru Silindi' });
+      expect(auditCall?.[1]).toMatchObject({ taskId: 'task-1', changedBy: 'user-1', newValue: 'Risk Unsuru Silindi', taskTitle: 'Risk Görevi', logType: 'STATUS' });
       expect(commit).toHaveBeenCalledOnce();
     });
   });

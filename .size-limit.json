@@ -42,6 +42,12 @@
     "limit": "12 KB"
   },
   {
+    "name": "Router vendor paketi (react-router, acilista yuklenir)",
+    "path": "dist/assets/vendor-router-*.js",
+    "gzip": true,
+    "limit": "20 KB"
+  },
+  {
     "name": "CSS",
     "path": "dist/assets/*.css",
     "gzip": true,

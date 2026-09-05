@@ -14,6 +14,24 @@ export const UserSchema = z.object({
 });
 export type User = z.infer<typeof UserSchema>;
 
+/**
+ * departments/{departmentId} — departman/birim REFERANS varlığı.
+ *
+ * Doküman ID'si departmanın KENDİ string değeridir ("Operasyon") ve `name` ile
+ * birebir aynıdır (firestore.rules `isValidDepartment` bunu zorunlu kılar).
+ * Bu, mevcut `users.departmentId` / `tasks.departmentId` alanlarındaki string
+ * değerlerin hiçbirinin yeniden yazılmasını gerektirmeyen taşıma kararıdır:
+ * o değerlere karşılık gelen bir dokümanın yalnızca VAR OLMASI yeterlidir.
+ * `id` alanı Firestore'da tutulmaz, okuma sırasında doküman ID'sinden doldurulur.
+ */
+export const DepartmentSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1).max(100),
+  createdAt: z.number(),
+  createdBy: z.string(),
+});
+export type Department = z.infer<typeof DepartmentSchema>;
+
 export const NotificationSchema = z.object({
   id: z.string(),
   userId: z.string(),
@@ -124,9 +142,30 @@ export const GlobalStatsSchema = z.object({
   status_CRISIS: z.number().default(0),
 });
 
+/** Denetim kaydının işlem tipi — hem yazma noktalarının (taskService/
+ *  blockerService/userService/settingsService/offlineQueue) sınıflandırması
+ *  hem AuditLogList'in sunucu-taraflı filtresi bu TEK tanımı kullanır. */
+export const AuditLogTypeSchema = z.enum(['STATUS', 'FIELD']);
+export type AuditLogType = z.infer<typeof AuditLogTypeSchema>;
+
 export const AuditLogSchema = z.object({
   id: z.string(),
   taskId: z.string(),
+  /** Kaydın YAZILDIĞI andaki görev başlığının donmuş kopyası (bkz.
+   *  taskService.auditTaskTitle). Opsiyoneldir: bu alandan önce yazılmış
+   *  kayıtlarda yoktur ve geriye dönük backfill yapılmaz — AuditLogList o
+   *  eski kayıtlarda eskisi gibi yüklü görev listesine düşer. */
+  taskTitle: z.string().optional(),
+  /** Kaydın YAZIM ANINDA belirlenen işlem tipi: bir durum/yaşam-döngüsü olayı
+   *  mı ('STATUS'), yoksa bir alan/içerik güncellemesi mi ('FIELD') (bkz.
+   *  taskService.AUDIT_LOG_TYPE). AuditLogList'in "İşlem Tipi" filtresi bunu
+   *  SUNUCU tarafında (`where`) kullanır; eskiden tip, istemcide kaydın
+   *  şeklinden (`changes` var mı / `newValue` set mi) TAHMİN ediliyordu —
+   *  sayfalanmış bir sayfanın parçası elenince sayfalama tutarsızlaşıyordu ve
+   *  tahmin, `changes` de yazan durum geçişlerinde YANLIŞTI (bkz. kod
+   *  denetimi P2-22). Opsiyoneldir: bu alandan önce yazılmış kayıtlarda
+   *  yoktur ve geriye dönük backfill yapılmaz. */
+  logType: AuditLogTypeSchema.optional(),
   changedBy: z.string(),
   changes: z.record(z.string(), z.object({
     old: z.unknown(),

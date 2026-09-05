@@ -10,6 +10,7 @@ import {
 } from './firebase';
 import { User, Task, UserSchema } from './types';
 import { validateOrPassthrough } from './lib/validateOrPassthrough';
+import { humanizeError } from './lib/errorMessages';
 import { motion, MotionConfig } from 'motion/react';
 
 // UI Components
@@ -32,37 +33,15 @@ const AuthenticatedApp = lazy(() => import('./components/AuthenticatedApp').then
 import { conflictDetectionService } from './services/conflictDetectionService';
 import { logError } from './services/errorLoggingService';
 import { useOfflineQueue } from './hooks/useOfflineQueue';
-import { useUIStore, type ToastItem } from './store/uiStore';
+import { useUIStore } from './store/uiStore';
+import { useTaskNavigation } from './hooks/useTaskRoute';
 import { useShallow } from 'zustand/react/shallow';
-
-function getOperationalErrorToast(error: unknown): Omit<ToastItem, 'id'> {
-  const errorCode = typeof error === 'object' && error !== null && 'code' in error
-    ? String((error as { code?: unknown }).code)
-    : '';
-  const errorMsg = error instanceof Error ? error.message : String(error);
-  const normalized = `${errorCode} ${errorMsg}`.toLowerCase();
-
-  if (normalized.includes('auth/unauthorized-domain')) {
-    const currentDomain = typeof window !== 'undefined' ? window.location.hostname : 'bu domain';
-
-    return {
-      title: 'Giriş Domaini Yetkisiz',
-      body: `Firebase Authentication ayarlarında "${currentDomain}" yetkili domain olarak tanımlı olmalı. Console > Authentication > Settings > Authorized domains listesini kontrol edin.`,
-      type: 'warning'
-    };
-  }
-
-  return {
-    title: 'Dizge Hatası',
-    body: `Hata: ${errorMsg}`,
-    type: 'danger'
-  };
-}
 
 export default function App() {
   const resolvedTheme = useResolvedTheme();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const isLoggingOutRef = useRef(false);
   const tasksRef = useRef<Task[]>([]);
@@ -76,13 +55,17 @@ export default function App() {
   // seçimidir.
   const {
     toasts, addToast, removeToast,
-    setSelectedTaskId,
     theme,
   } = useUIStore(useShallow(s => ({
     toasts: s.toasts, addToast: s.addToast, removeToast: s.removeToast,
-    setSelectedTaskId: s.setSelectedTaskId,
     theme: s.theme,
   })));
+
+  // Toast'a tıklayınca ilgili talimata git. Eskiden uiStore'daki
+  // setSelectedTaskId'yi çağırıyordu; artık URL tek doğruluk kaynağı olduğundan
+  // (bkz. hooks/useTaskRoute.ts) doğrudan navigate edilir. Bu, App'in Router'ın
+  // ALTINDA kalmasını gerektirir — bkz. main.tsx'teki BrowserRouter notu.
+  const { openTask } = useTaskNavigation();
 
   // ─── Tema Uygulama ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -108,7 +91,7 @@ export default function App() {
   }, [theme]);
 
   // ─── Firestore hata yöneticisi ────────────────────────────────────────────
-  const handleFirestoreError = useCallback((error: unknown, operationType: string, path: string | null) => {
+  const handleFirestoreError = useCallback(async (error: unknown, operationType: string, path: string | null) => {
     const errorMsg = error instanceof Error ? error.message : String(error);
 
     const isPermissionError = errorMsg.toLowerCase().includes('permission') || errorMsg.toLowerCase().includes('yetki');
@@ -132,9 +115,12 @@ export default function App() {
     }
 
     console.error(`[Firestore] ${operationType} on "${path}" failed:`, errorMsg);
-    logError(error, 'firestore', { operationType, path: path ?? undefined });
+    // logError'ın döndürdüğü doküman ID'si "Destek Referansı" olarak toast'a
+    // yansıtılır — Admin bu referansla error_logs'taki kaydı anında bulabilir
+    // (bkz. kod denetimi: bu ID üretiliyordu ama kullanıcıya hiç gösterilmiyordu).
+    const supportReference = await logError(error, 'firestore', { operationType, path: path ?? undefined });
 
-    addToast(getOperationalErrorToast(error));
+    addToast(humanizeError(error, supportReference));
   }, [addToast]);
 
   // ─── Offline kuyruk ───────────────────────────────────────────────────────
@@ -255,8 +241,10 @@ export default function App() {
   }, [handleFirestoreError]);
 
   const handleLogin = useCallback(async () => {
+    setIsLoggingIn(true);
     try { await signInWithPopup(auth, googleProvider); }
     catch (err) { handleFirestoreError(err, 'auth', 'users'); }
+    finally { setIsLoggingIn(false); }
   }, [handleFirestoreError]);
 
   if (loading) {
@@ -309,14 +297,14 @@ export default function App() {
               key={toast.id}
               toast={toast}
               onClose={removeToast}
-              onClick={(taskId) => taskId && setSelectedTaskId(taskId)}
+              onClick={(taskId) => { if (taskId) openTask(taskId); }}
             />
           ))}
         </div>
 
         {!user ? (
           <main id="main-content">
-            <Login onLogin={handleLogin} />
+            <Login onLogin={handleLogin} isLoading={isLoggingIn} />
           </main>
         ) : (
           <Suspense fallback={

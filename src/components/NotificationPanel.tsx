@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useTaskNavigation } from '../hooks/useTaskRoute';
 import type { Notification } from '../types';
 
 interface Props {
@@ -8,8 +9,6 @@ interface Props {
   setIsNotificationsOpen: (show: boolean) => void;
   notifRef: React.RefObject<HTMLDivElement | null>;
   notifications: Notification[];
-  setSelectedTaskId: (id: string) => void;
-  setActiveTab: (tab: string) => void;
   /** useAppHandlers üzerinden — bu bileşen artık notificationService'i
    *  doğrudan çağırmıyor (bkz. kod denetimi: "okundu işaretleme" bir yazma
    *  işlemidir ve merkezi handler katmanını atlamamalıdır). */
@@ -26,11 +25,15 @@ export function NotificationPanel({
   setIsNotificationsOpen,
   notifRef,
   notifications,
-  setSelectedTaskId,
-  setActiveTab,
   markNotificationRead,
   markAllNotificationsRead,
 }: Props) {
+  // Bildirim tıklaması artık DERİN LİNK üretir: eskiden uiStore'a
+  // `setSelectedTaskId(id)` + `setActiveTab('tasks')` yazılıyordu, bu yüzden
+  // bildirimden açılan bir talimat paylaşılamıyor ve sayfa yenilenince
+  // kayboluyordu (bkz. kod denetimi P1-6).
+  const { openTask, goToTab } = useTaskNavigation();
+
   if (!isNotificationsOpen) return null;
 
   return (
@@ -113,8 +116,7 @@ export function NotificationPanel({
                     <button
                       onClick={async (e) => {
                         e.stopPropagation();
-                        setSelectedTaskId(n.taskId!);
-                        setActiveTab('tasks');
+                        openTask(n.taskId!);
                         await markNotificationRead(n.id);
                         setIsNotificationsOpen(false);
                       }}
@@ -125,7 +127,7 @@ export function NotificationPanel({
                   )}
                   {isCrisis && !hasTask && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); setActiveTab('tasks'); setIsNotificationsOpen(false); }}
+                      onClick={(e) => { e.stopPropagation(); goToTab('tasks'); setIsNotificationsOpen(false); }}
                       className="px-2.5 py-1 text-[8px] font-medium text-[color:var(--status-danger-text)] bg-status-danger rounded-lg uppercase tracking-[0.2em] hover:opacity-85 transition-opacity"
                     >
                       Talimatlara Git

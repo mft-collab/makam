@@ -21,18 +21,23 @@
  * ağırlığını erteler.
  */
 import { useState, useEffect, useCallback, useRef, lazy, Suspense, useMemo } from 'react';
-import type { RefObject } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task } from '../types';
 import { useUIStore } from '../store/uiStore';
 import { useShallow } from 'zustand/react/shallow';
+import { AppRoutes } from './AppRoutes';
+import { useActiveTab } from '../hooks/useActiveTab';
+import { useSelectedTaskId, useTaskNavigation } from '../hooks/useTaskRoute';
 
 import { Sidebar } from './Sidebar';
 import { AppHeader } from './AppHeader';
 import { NotificationPanel } from './NotificationPanel';
 import { NotificationPrompt } from './NotificationPrompt';
+import { WelcomeModal } from './WelcomeModal';
 import { MobileDock } from './MobileDock';
 import { Modal } from './ui/Modal';
+import { Button } from './ui/Button';
 import { TaskFormModal } from './TaskFormModal';
 import { CertificateModal } from './CertificateModal';
 import { WarningModal } from './WarningModal';
@@ -54,13 +59,16 @@ const TaskDetailsFooter = lazy(() => import('./taskDetails/Footer').then(m => ({
 
 import { useAppHandlers } from '../services/useAppHandlers';
 import { useFirestoreData, fetchTaskById } from '../hooks/useFirestoreData';
+import { useDepartments } from '../hooks/useDepartments';
+import { departmentService } from '../services/departmentService';
 import { useNotifications } from '../hooks/useNotifications';
 import { applyOfflineMutations, type OfflineMutation } from '../lib/offlineQueue';
 import { useSLASync } from '../hooks/useSLASync';
 import { useIdleTimer } from '../hooks/useIdleTimer';
+import { useSessionTimeout } from '../hooks/useSessionTimeout';
 import { useSelfHealing } from '../hooks/useSelfHealing';
 import { useIsAdmin } from '../hooks/useIsAdmin';
-import { TAB_ROLES, type AppTabId } from '../constants';
+import { type AppTabId } from '../constants';
 
 interface AuthenticatedAppProps {
   user: User;
@@ -81,24 +89,29 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
   const notifRef = useRef<HTMLDivElement>(null);
 
   const {
-    activeTab, setActiveTab,
     addToast,
     isCreateModalOpen, setIsCreateModalOpen,
     isEditModalOpen, setIsEditModalOpen,
     parentTaskId, setParentTaskId,
     initialTitle, setInitialTitle,
-    selectedTaskId, setSelectedTaskId,
     isNotificationsOpen, setIsNotificationsOpen,
   } = useUIStore(useShallow(s => ({
-    activeTab: s.activeTab, setActiveTab: s.setActiveTab,
     addToast: s.addToast,
     isCreateModalOpen: s.isCreateModalOpen, setIsCreateModalOpen: s.setIsCreateModalOpen,
     isEditModalOpen: s.isEditModalOpen, setIsEditModalOpen: s.setIsEditModalOpen,
     parentTaskId: s.parentTaskId, setParentTaskId: s.setParentTaskId,
     initialTitle: s.initialTitle, setInitialTitle: s.setInitialTitle,
-    selectedTaskId: s.selectedTaskId, setSelectedTaskId: s.setSelectedTaskId,
     isNotificationsOpen: s.isNotificationsOpen, setIsNotificationsOpen: s.setIsNotificationsOpen,
   })));
+
+  // ─── Navigasyon: URL tek doğruluk kaynağı ─────────────────────────────────
+  // `activeTab` ve `selectedTaskId` eskiden yukarıdaki uiStore seçiminin
+  // parçasıydı (bkz. kod denetimi P1-6). Artık ikisi de route'tan türetilir;
+  // sayfa yenileme, tarayıcı geri tuşu ve paylaşılan derin linkler bu sayede
+  // çalışır.
+  const activeTab = useActiveTab();
+  const selectedTaskId = useSelectedTaskId();
+  const { openTask, closeTask, goToTab } = useTaskNavigation();
 
   // Close notification panel when clicking outside
   useEffect(() => {
@@ -111,14 +124,8 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
     return () => document.removeEventListener('mousedown', handler);
   }, [isNotificationsOpen, setIsNotificationsOpen]);
 
-  // Tab yetki kontrolü (Güvenlik Duvarı)
-  useEffect(() => {
-    const allowed = TAB_ROLES[activeTab as AppTabId];
-    if (allowed && !allowed.includes(user.role)) {
-      console.warn(`[Security] Yetkisiz ekran erişimi engellendi (${activeTab}). Harekat Merkezi'ne yönlendiriliyor.`);
-      setActiveTab('dashboard');
-    }
-  }, [activeTab, user, setActiveTab]);
+  // Tab yetki kontrolü (Güvenlik Duvarı) artık burada bir useEffect değil,
+  // her route element'ini saran <RequireTabAccess> guard'ıdır (bkz. o dosya).
 
   // SLA konfigürasyon senkronizasyonu (Firestore → localStorage)
   useSLASync(user, onError);
@@ -156,6 +163,19 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
       setGlobalFocusDept(user.departmentId);
     }
   }, [user]);
+
+  // departments koleksiyonundaki KAYITLI birimler — departman ATAMA akışlarını
+  // (TeamList, TaskFormModal) besler. Aşağıdaki türetilmiş `departments`
+  // useMemo'su ile BİLİNÇLİ olarak ayrıdır ve onun yerini ALMAZ: o, mevcut
+  // kayıtlardaki (geçmişte yazılmış, artık kayıtlı olmayabilecek) departmanları
+  // da kapsayan salt-okunur bir odak filtresidir; atama ise yalnızca gerçek
+  // referans varlıklara yapılabilir (bkz. kod denetimi P0-2).
+  const registeredDepartments = useDepartments(user, onError);
+
+  const handleCreateDepartment = useCallback(
+    (name: string) => departmentService.createDepartment(name, user.uid, registeredDepartments),
+    [user.uid, registeredDepartments]
+  );
 
   const departments = useMemo(() => {
     const depts = new Set<string>();
@@ -203,16 +223,16 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
       .then((result) => {
         setFetchedTask(result);
         if (result === null) {
-          setSelectedTaskId(null);
+          closeTask();
           addToast({ title: '⚠️ Talimat Bulunamadı', body: 'Bu talimat silinmiş veya artık erişiminiz olmayabilir.', type: 'warning' });
         }
       })
       .catch(() => {
         setFetchedTask(null);
-        setSelectedTaskId(null);
+        closeTask();
         addToast({ title: '⚠️ Talimat Yüklenemedi', body: 'Talimat getirilirken bir hata oluştu. Lütfen tekrar deneyin.', type: 'danger' });
       });
-  }, [selectedTaskId, tasks, addToast, setSelectedTaskId]);
+  }, [selectedTaskId, tasks, addToast, closeTask]);
 
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || fetchedTask;
 
@@ -226,7 +246,11 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
 
   // ─── Self-Healing + Idle Timer ────────────────────────────────────────────
   useSelfHealing({ user, tasks, blockers });
-  useIdleTimer({ onIdle: onLogout, enabled: true });
+  // Oturum süresi Admin tarafından yapılandırılabilir (system/settings) —
+  // hook, ayar okunamazsa/geçersizse güvenli varsayılana (30 dk) düşer.
+  const sessionTimeoutMs = useSessionTimeout(user, onError);
+  const { isWarning: isSessionExpiring, remainingMs: sessionRemainingMs, continueSession } =
+    useIdleTimer({ onIdle: onLogout, enabled: true, timeoutMs: sessionTimeoutMs });
 
   // ─── Tüm CRUD handler'lar ─────────────────────────────────────────────────
   const {
@@ -237,14 +261,87 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
     markNotificationRead, markAllNotificationsRead,
   } = useAppHandlers({ user, tasks, blockers, onError });
 
+  // ─── Route ekranları ──────────────────────────────────────────────────────
+  // `Record<AppTabId, ReactNode>`: TypeScript her sekme için bir ekran
+  // zorunlu kılar, yani yeni bir AppTabId eklendiğinde route'u UNUTULAMAZ
+  // (derleme hatası). Elemanlar burada oluşturuluyor olsa da bileşenler hâlâ
+  // lazy() facade'leridir — yalnızca eşleşen route render edildiğinde chunk
+  // indirilir; React element'i oluşturmak modülü YÜKLEMEZ (bkz. vite.config.ts
+  // chunkFileNames notu — Dashboard/Reports'un lazy sınırı korunmalı).
+  const screens: Record<AppTabId, ReactNode> = {
+    dashboard: (
+      <Dashboard
+        tasks={filteredTasksByFocus} users={filteredUsersByFocus} user={user}
+        onViewTask={(t) => openTask(t.id)}
+        onNavigateTab={goToTab}
+        isLoading={isDataLoading}
+        isFiltered={globalFocusDept !== 'ALL'}
+      />
+    ),
+    tasks: (
+      <TaskBoard
+        tasks={filteredTasksByFocus} users={filteredUsersByFocus} currentUser={user}
+        onAddTask={() => { setParentTaskId(undefined); setIsCreateModalOpen(true); }}
+        onViewTask={(t) => openTask(t.id)}
+        isLoading={isDataLoading}
+        updateTaskStatus={updateTaskStatus}
+        updateTask={updateTask}
+      />
+    ),
+    blockers: (
+      <BlockerList
+        tasks={filteredTasksByFocus} blockers={filteredBlockersByFocus} resolvedBlockers={filteredResolvedBlockersByFocus} users={filteredUsersByFocus}
+        isAdmin={isAdmin || user.role === 'Manager'}
+        isSystemAdmin={isAdmin}
+        onResolve={resolveBlocker}
+        onEditBlocker={updateBlocker}
+        onDeleteBlocker={deleteBlocker}
+        onViewTask={(t) => openTask(t.id)}
+        isLoading={isDataLoading}
+      />
+    ),
+    team: (
+      <TeamList
+        users={filteredUsersByFocus} tasks={filteredTasksByFocus} currentUser={user}
+        departments={registeredDepartments}
+        onUpdateUser={updateUserRole}
+        onDeleteUser={deleteUser}
+        onAddUser={addUser}
+        onCreateDepartment={handleCreateDepartment}
+        isLoading={isDataLoading}
+      />
+    ),
+    reports: (
+      <Reports
+        tasks={filteredTasksByFocus} users={filteredUsersByFocus} blockers={filteredBlockersByFocus}
+        onNavigateTab={goToTab}
+        isLoading={isDataLoading}
+      />
+    ),
+    audit: (
+      // Denetim izi BİLEREK birim odak filtresini (globalFocusDept) yoksayar —
+      // bu sekme yalnızca Admin'e açık (TAB_ROLES.audit) ve denetim kaydı
+      // tanım gereği organizasyon geneli olmalı; filtrelenmiş tasks/users
+      // geçirmek, odağın dışındaki bir birimin geçmişini "Bilinmeyen Talimat"
+      // olarak göstererek kanıt izini eksik/yanıltıcı kılıyordu (bkz. kod
+      // denetimi P1-14).
+      <AuditLogList
+        tasks={tasks} users={users}
+      />
+    ),
+    settings: (
+      <Settings tasks={tasks} users={users} blockers={blockers} triggerToast={triggerToast} currentUser={user} isLoading={isDataLoading} sessionTimeoutMs={sessionTimeoutMs} />
+    ),
+  };
+
   return (
     <>
+      <WelcomeModal user={user} />
       <NotificationPrompt userId={user.uid} />
 
-      <Sidebar user={user} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={onLogout} />
+      <Sidebar user={user} onLogout={onLogout} />
       <AppHeader
         user={user}
-        activeTab={activeTab}
         notifications={notifications}
         isNotificationsOpen={isNotificationsOpen}
         setIsNotificationsOpen={setIsNotificationsOpen}
@@ -254,7 +351,7 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
         isOffline={isOffline}
         queueLength={offlineQueueLength}
       />
-      <NotificationPanel isNotificationsOpen={isNotificationsOpen} setIsNotificationsOpen={setIsNotificationsOpen} notifRef={notifRef} notifications={notifications} setSelectedTaskId={setSelectedTaskId} setActiveTab={setActiveTab} markNotificationRead={markNotificationRead} markAllNotificationsRead={markAllNotificationsRead} />
+      <NotificationPanel isNotificationsOpen={isNotificationsOpen} setIsNotificationsOpen={setIsNotificationsOpen} notifRef={notifRef} notifications={notifications} markNotificationRead={markNotificationRead} markAllNotificationsRead={markAllNotificationsRead} />
 
       <main id="main-content" className="lg:ml-64 min-h-screen relative z-10 scroll-smooth pb-24 lg:pb-0">
         <AnimatePresence mode="wait">
@@ -275,58 +372,39 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
                 </div>
               </div>
             }>
-              {activeTab === 'dashboard' && (
-                <Dashboard
-                  tasks={filteredTasksByFocus} users={filteredUsersByFocus} user={user}
-                  onViewTask={(t) => { setSelectedTaskId(t.id); setActiveTab('tasks'); }}
-                  setActiveTab={setActiveTab}
-                  isLoading={isDataLoading}
-                  isFiltered={globalFocusDept !== 'ALL'}
-                />
-              )}
-              {activeTab === 'tasks' && (
-                <TaskBoard
-                  tasks={filteredTasksByFocus} users={filteredUsersByFocus} currentUser={user}
-                  onAddTask={() => { setParentTaskId(undefined); setIsCreateModalOpen(true); }}
-                  onViewTask={(t) => setSelectedTaskId(t.id)}
-                  isLoading={isDataLoading}
-                />
-              )}
-              {activeTab === 'blockers' && (
-                <BlockerList
-                  tasks={filteredTasksByFocus} blockers={filteredBlockersByFocus} resolvedBlockers={filteredResolvedBlockersByFocus} users={filteredUsersByFocus}
-                  isAdmin={isAdmin || user.role === 'Manager'}
-                  isSystemAdmin={isAdmin}
-                  onResolve={resolveBlocker}
-                  onEditBlocker={updateBlocker}
-                  onDeleteBlocker={deleteBlocker}
-                  onViewTask={(t) => { setSelectedTaskId(t.id); setActiveTab('tasks'); }}
-                  isLoading={isDataLoading}
-                />
-              )}
-              {activeTab === 'team' && (
-                <TeamList
-                  users={filteredUsersByFocus} tasks={filteredTasksByFocus} currentUser={user}
-                  onUpdateUser={updateUserRole}
-                  onDeleteUser={deleteUser}
-                  onAddUser={addUser}
-                  isLoading={isDataLoading}
-                />
-              )}
-              {activeTab === 'reports' && <Reports tasks={filteredTasksByFocus} users={filteredUsersByFocus} blockers={filteredBlockersByFocus} setActiveTab={setActiveTab} isLoading={isDataLoading} />}
-              {activeTab === 'audit' && (
-                <AuditLogList
-                  tasks={filteredTasksByFocus} users={filteredUsersByFocus}
-                />
-              )}
-              {activeTab === 'settings' && (
-                <Settings tasks={tasks} users={users} blockers={blockers} triggerToast={triggerToast} currentUser={user} isLoading={isDataLoading} />
-              )}
+              <AppRoutes role={user.role} screens={screens} />
             </Suspense>
             </ErrorBoundary>
           </motion.div>
         </AnimatePresence>
       </main>
+
+      {/* Oturum Zaman Aşımı Uyarısı — kapanmadan ~60sn önce.
+          onClose olarak continueSession verilir: Escape/arka plan tıklaması da
+          AÇIK bir kullanıcı eylemidir, oturumu uzatmalıdır. Aksi halde modal
+          kapanır ama sayaç işlemeye devam eder ve kullanıcı hiçbir uyarı
+          görmeden saniyeler içinde dışarı atılırdı. */}
+      <Modal
+        isOpen={isSessionExpiring}
+        onClose={continueSession}
+        title="Oturum Sonlanmak Üzere"
+        size="sm"
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-[13px] text-text-muted font-light leading-relaxed">
+            Uzun süredir işlem yapılmadığı için oturumunuz{' '}
+            <strong className="text-status-danger font-medium" aria-live="polite">
+              {Math.ceil(sessionRemainingMs / 1000)} saniye
+            </strong>{' '}
+            içinde güvenlik gereği kapatılacaktır. Çalışmaya devam etmek için aşağıdaki
+            butonu kullanın.
+          </p>
+          <div className="flex justify-end gap-2.5 pt-4 border-t border-executive-blue/[0.04]">
+            <Button variant="secondary" onClick={() => { void onLogout(); }}>Şimdi Çıkış Yap</Button>
+            <Button variant="primary" onClick={continueSession}>Devam Et</Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Görev Form Modalı (Yeni / Düzenle) */}
       <Modal
@@ -338,6 +416,7 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
         <TaskFormModal
           users={users}
           currentUser={user}
+          departments={registeredDepartments}
           task={isEditModalOpen && selectedTask ? selectedTask : undefined}
           parentId={parentTaskId}
           initialTitle={initialTitle}
@@ -363,7 +442,7 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
       }>
         <Modal
           isOpen={!!selectedTaskId && !isEditModalOpen && !isCreateModalOpen}
-          onClose={() => setSelectedTaskId(null)}
+          onClose={closeTask}
           title="Talimat Detayı & İcra"
           size="xl"
           layoutId={selectedTask ? `task-card-${selectedTask.id}` : undefined}
@@ -386,7 +465,7 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
               onResolveBlocker={resolveBlocker}
               onAddSubTask={(parentId, title) => { setParentTaskId(parentId); setInitialTitle(title); setIsCreateModalOpen(true); }}
               onAddComment={(text) => selectedTask && addComment(selectedTask.id, text)}
-              onViewTask={(t) => setSelectedTaskId(t.id)}
+              onViewTask={(t) => openTask(t.id)}
               onEdit={() => setIsEditModalOpen(true)}
               onDelete={() => selectedTask && deleteTask(selectedTask.id)}
               onClearCoordinator={() => selectedTask && updateTask(selectedTask.id, { coordinatorId: undefined })}
@@ -416,7 +495,7 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
         />
       )}
 
-      <MobileDock user={user} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={onLogout} notificationCount={notifications.length} />
+      <MobileDock user={user} onLogout={onLogout} notificationCount={notifications.length} />
     </>
   );
 }

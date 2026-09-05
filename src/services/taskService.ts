@@ -13,10 +13,68 @@ import {
 } from '../firebase';
 import type { Transaction } from 'firebase/firestore';
 import { Task, TaskStatus, User } from '../types';
+import type { AuditLogType } from '../types';
 import { calculateDeadline, getSLAConfigForPriority } from '../lib/sla';
 import { cleanData } from '../lib/utils';
 import { runWithRetry } from '../lib/retry';
 import { isValidTaskTransition } from '../lib/taskStateMachine';
+
+/**
+ * Bir audit_logs kaydına, YAZILDIĞI andaki görev başlığını donduran
+ * denormalize `taskTitle` alanını ekler (başlık bilinmiyorsa hiçbir şey
+ * eklemez — alan opsiyoneldir, Firestore `undefined` değer kabul etmez).
+ *
+ * Neden denormalizasyon: denetim izi ekranı (`AuditLogList`) hedef başlığı
+ * yalnızca `useFirestoreData`'nın `taskLimit` penceresine giren görev
+ * listesinden çözüyordu; pencerenin DIŞINDA kalan eski/tamamlanmış görevlerin
+ * kayıtları "Bilinmeyen Talimat" olarak görünüyordu — oysa denetim izi tanım
+ * gereği eski olayları kapsar (bkz. kod denetimi P1-14). audit_logs zaten
+ * değişmezdir (firestore.rules: `allow update, delete: if false`), bu yüzden
+ * donmuş bir başlık kopyası burada DOĞRU desendir: kayıt, olayın gerçekleştiği
+ * andaki gerçeği taşır ve sonradan bayatlayamaz/sahte veri üretemez.
+ *
+ * Not: rules'taki `taskTitle` uzunluk sınırı (<=200), görev `title` sınırıyla
+ * (<=200) BİLEREK aynıdır — aksi halde uzun başlıklı bir görevin geçişi,
+ * audit yazımı reddedildiği için tümüyle başarısız olurdu.
+ */
+export function auditTaskTitle(title?: string): { taskTitle?: string } {
+  return title ? { taskTitle: title } : {};
+}
+
+/**
+ * Bir audit_logs kaydına, YAZILDIĞI anda bilinen işlem tipini donduran
+ * denormalize `logType` alanını ekler (tip bilinmiyorsa hiçbir şey eklemez —
+ * alan opsiyoneldir, Firestore `undefined` değer kabul etmez).
+ *
+ * SINIFLANDIRMA KURALI — yazma noktası hangisini anlatıyor:
+ *  - 'STATUS': bir varlığın YAŞAM DÖNGÜSÜ/durum olayı — görev durum geçişi,
+ *    görev oluşturma/silme, risk unsurunun çözülmesi/silinmesi, personel
+ *    ekleme/silme, dizge geri yükleme/dışa aktarma.
+ *  - 'FIELD': bir varlığın İÇERİK/alan değerlerinin düzenlenmesi — görev alan
+ *    güncellemesi (yorum/kanıt/başlık dahil), risk gerekçesi düzenleme,
+ *    personel bilgisi güncelleme, dizge yapılandırması.
+ *
+ * Neden denormalizasyon: AuditLogList'in "İşlem Tipi" filtresi bu tipi
+ * İSTEMCİDE, kaydın ŞEKLİNDEN tahmin ediyordu (`!log.changes &&
+ * log.newValue !== undefined` → 'STATUS'). İki ayrı sorun (bkz. kod denetimi
+ * P2-22):
+ *  1. Sayfalama: aktör/tarih filtreleri sunucuda uygulanırken tip filtresi
+ *     istemcide uygulandığı için, 15'lik bir sayfanın parçası elendiğinde
+ *     kullanıcı "Daha Fazla Yükle"ye tekrar tekrar basmak zorunda kalıyordu.
+ *  2. Doğruluk: tahmin, kaydın şekli semantiğiyle çelişen yazma noktalarında
+ *     YANLIŞ sonuç veriyordu — `transitionTaskInTransaction` (gerçek bir durum
+ *     geçişi) ve `deleteTask` de `changes` yazdığı için "İçerik Güncellemesi"
+ *     sayılıyordu; `editBlocker` (bir gerekçe METNİ düzenlemesi) ise `changes`
+ *     yazmadığı için "Durum Değişikliği" sayılıyordu. Tip artık şekilden
+ *     türetilmiyor, olayı yazan kodun ZATEN bildiği bilgi olarak kaydediliyor.
+ *
+ * audit_logs değişmezdir (firestore.rules: `allow update, delete: if false`) —
+ * bu yüzden buradaki değer sonradan düzeltilemez; sınıflandırma yazma anında
+ * doğru olmak ZORUNDADIR (bkz. auditTaskTitle'daki aynı değişmezlik gerekçesi).
+ */
+export function auditLogType(type?: AuditLogType): { logType?: AuditLogType } {
+  return type ? { logType: type } : {};
+}
 
 /**
  * Görev geçişinin tüm okuma+yazma mantığını mevcut bir transaction içinde
@@ -134,6 +192,12 @@ async function transitionTaskInTransaction(
   const auditRef = doc(collection(db, 'audit_logs'));
   transaction.set(auditRef, {
     taskId,
+    ...auditTaskTitle(task.title),
+    // Bu kayıt TANIM GEREĞİ bir durum geçişidir. Aşağıdaki `changes.status`
+    // diff'i yalnızca geçişin DETAYIdır, onu bir "içerik güncellemesi"
+    // yapmaz — istemci-taraflı eski tahmin (`!log.changes`) tam da burada
+    // yanılıyordu (bkz. auditLogType).
+    ...auditLogType('STATUS'),
     changedBy: userId,
     oldValue: task.status,
     newValue: newStatus,
@@ -219,6 +283,13 @@ async function updateTaskInTransaction(
   const auditRef = doc(collection(db, 'audit_logs'));
   transaction.set(auditRef, {
     taskId,
+    // Bu güncelleme başlığın KENDİSİNİ değiştiriyorsa yeni başlık donar —
+    // kayıt "bu değişiklikten sonra görevin adı buydu"yu anlatır; eski başlık
+    // zaten aşağıdaki `changes.title` diff'inde ayrıca korunur.
+    ...auditTaskTitle(data.title ?? task.title),
+    // Durum-DIŞI genel güncelleme yolu (yorum/kanıt/başlık/sorumlu vb.) —
+    // durum geçişleri her zaman transitionTaskInTransaction'dan gider.
+    ...auditLogType('FIELD'),
     changedBy: userId,
     oldValue: 'Kısmi Güncelleme',
     newValue: 'Kısmi Güncelleme',
@@ -296,6 +367,10 @@ export const taskService = {
 
       transaction.set(auditRef, {
         taskId: taskRef.id,
+        ...auditTaskTitle(taskData.title),
+        // Görevin yaşam döngüsünün BAŞLANGICI (→ ASSIGNED) — bir alan
+        // düzenlemesi değil.
+        ...auditLogType('STATUS'),
         changedBy: userId,
         oldValue: 'Yok',
         newValue: 'Talimat Oluşturuldu ve Atandı',
@@ -396,6 +471,15 @@ export const taskService = {
         const accountingBatch = writeBatch(db);
         accountingBatch.set(deletionAuditRef, {
           taskId,
+          // Silme kaydında başlık, görev SİLİNMEDEN ÖNCEKİ halidir — silinen
+          // bir görev için `tasksById` fallback'i zaten hiçbir zaman
+          // çözülemez, dolayısıyla denormalize başlık bu kayıtta tek başlık
+          // kaynağıdır.
+          ...auditTaskTitle(rootData?.title),
+          // Görevin yaşam döngüsünün SONU. transitionTaskInTransaction'la aynı
+          // gerekçe: aşağıdaki `changes` diff'i olayın detayıdır, tipi değil
+          // (bkz. auditLogType).
+          ...auditLogType('STATUS'),
           changedBy: userId,
           oldValue: rootData?.title ?? 'Silindi',
           newValue: 'Silindi',

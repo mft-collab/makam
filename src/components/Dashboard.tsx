@@ -7,7 +7,7 @@ import { Modal } from './ui/Modal';
 import { Badge } from './ui/Badge';
 import { EmptyState } from './ui/EmptyState';
 import { cn, formatTimeAgo, formatTime } from '../lib/utils';
-import { STATUS_LABELS, STATUS_BADGE_VARIANT } from '../constants';
+import { STATUS_LABELS, STATUS_BADGE_VARIANT, type AppTabId } from '../constants';
 import { DashboardSkeleton } from './ui/Skeleton';
 import { useDataStore } from '../store/dataStore';
 import { useIsAdmin } from '../hooks/useIsAdmin';
@@ -25,7 +25,12 @@ interface DashboardProps {
   users: User[];
   user: User | null;
   onViewTask?: (task: Task) => void;
-  setActiveTab?: (tab: string) => void;
+  /** Başka bir ekrana programatik geçiş. Eskiden `setActiveTab` idi ve
+   *  doğrudan uiStore aksiyonunu taşıyordu; navigasyonun tek doğruluk kaynağı
+   *  URL olduğundan (bkz. kod denetimi P1-6) artık AuthenticatedApp bunu
+   *  `useTaskNavigation().goToTab`'a bağlar. Bu bileşen router'dan habersiz
+   *  kalır — testleri Router sarmalayıcısı gerektirmez. */
+  onNavigateTab?: (tab: AppTabId) => void;
   /** Firestore verisi ilk yüklenene kadar skeleton gösterir */
   isLoading?: boolean;
   /** Odak filtresi aktif olduğunda globalStats bypass edilir */
@@ -33,7 +38,7 @@ interface DashboardProps {
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
-export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoading = false, isFiltered = false }: DashboardProps) => {
+export const Dashboard = ({ tasks, users, user, onViewTask, onNavigateTab, isLoading = false, isFiltered = false }: DashboardProps) => {
   const isAdmin = useIsAdmin(user);
   const [selectedStatCategory, setSelectedStatCategory] = useState<StatCategory | null>(null);
   // Müdahale kuyruğu sinyal filtresi (chip'e tıklayınca aç/kapa)
@@ -259,7 +264,7 @@ export const Dashboard = ({ tasks, users, user, onViewTask, setActiveTab, isLoad
           </div>
           {isAdmin && (
             <button
-              onClick={() => setActiveTab?.('reports')}
+              onClick={() => onNavigateTab?.('reports')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-executive-blue/[0.03] border border-executive-blue/[0.06] text-text-muted hover:bg-executive-blue hover:text-[color:var(--executive-blue-text)] transition-all duration-300 text-[9px] font-medium uppercase tracking-[0.2em]"
             >
               <TrendingUp className="w-3 h-3" />

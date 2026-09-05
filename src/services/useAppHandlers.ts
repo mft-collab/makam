@@ -15,6 +15,7 @@ import { notificationService } from './notificationService';
 import { offlineQueue } from '../lib/offlineQueue';
 import { getSLAConfigForPriority, calculateDeadline } from '../lib/sla';
 import { useUIStore } from '../store/uiStore';
+import { useSelectedTaskId, useTaskNavigation } from '../hooks/useTaskRoute';
 import { STATUS_LABELS } from '../constants';
 import type { Task, TaskStatus, TaskBlocker, TaskPriority, User, UserRole } from '../types';
 
@@ -48,14 +49,17 @@ export function useAppHandlers({
   blockers,
   onError,
 }: UseAppHandlersOptions) {
-  // Selector bazlı okuma — bu hook yalnızca selectedTaskId'nin değişmesiyle
-  // ilgileniyor; whole-store `useUIStore()` kullanmak toasts/filter/isOffline
+  // Açık görev detayı artık uiStore'da değil URL'dedir (bkz. kod denetimi
+  // P1-6) — silinen görev o an açıksa modalı kapatmak, `/tasks`'a
+  // yönlendirmek demektir.
+  const selectedTaskId = useSelectedTaskId();
+  const { closeTask } = useTaskNavigation();
+
+  // Selector bazlı okuma — whole-store `useUIStore()` kullanmak toasts/filter
   // gibi ilgisiz her alan değişiminde (ör. her toast eklenip 6sn sonra otomatik
   // kaldırıldığında) App.tsx'in gereksiz yere yeniden render olmasına yol
   // açıyordu. Action fonksiyonları zustand'da stabil referanslar olduğundan
   // selector ile alınmaları da re-render tetiklemez.
-  const selectedTaskId = useUIStore(s => s.selectedTaskId);
-  const setSelectedTaskId = useUIStore(s => s.setSelectedTaskId);
   const setIsCreateModalOpen = useUIStore(s => s.setIsCreateModalOpen);
   const setIsEditModalOpen = useUIStore(s => s.setIsEditModalOpen);
   const addToast = useUIStore(s => s.addToast);
@@ -71,11 +75,23 @@ export function useAppHandlers({
   }, [addToast]);
 
   // ─── updateTaskStatus ────────────────────────────────────────────────────
+  // `options.silent`: TaskBoard'un toplu durum değişikliği akışı (P2-18) bu
+  // fonksiyonu bir Promise.allSettled DÖNGÜSÜNDE, N görev için art arda
+  // çağırır — varsayılan davranış (her çağrıda ayrı bir başarı toast'ı VE
+  // hata durumunda onError'ın kendi toast'ı) 15 görevlik bir toplu işlemde
+  // 15 ayrı bildirime yol açardı. silent:true bu iki yan etkiyi bastırır VE
+  // (varsayılandan farklı olarak) hatayı YUTMAZ, olduğu gibi fırlatır ki
+  // çağıran Promise.allSettled ile gerçek başarı/başarısızlık sayısını
+  // (ör. kaçının VERSION_MISMATCH olduğunu) doğru raporlayabilsin — aksi
+  // halde bu fonksiyon hiçbir zaman reddetmediğinden toplu özet her zaman
+  // "hepsi başarılı" görünürdü. Var olan tüm çağıranlar (TaskDetailsFooter
+  // vb.) options geçmediği için mevcut davranış BİREBİR korunur.
   const updateTaskStatus = useCallback(async (
     taskId: string,
     newStatus: TaskStatus,
     evidence?: string,
-    evidenceType?: Task['evidenceType']
+    evidenceType?: Task['evidenceType'],
+    options?: { silent?: boolean }
   ) => {
     if (!user) return;
     const oldTask = tasks.find(t => t.id === taskId);
@@ -107,7 +123,9 @@ export function useAppHandlers({
           { newStatus, userId: user.uid, evidence, evidenceType, expectedVersion: oldTask?.lockVersion }
         );
       }
-      toast('🔄 Çevrimdışı Güncelleme', `Durum lokal kuyrukta güncellendi: ${newStatus}`, 'warning', taskId);
+      if (!options?.silent) {
+        toast('🔄 Çevrimdışı Güncelleme', `Durum lokal kuyrukta güncellendi: ${newStatus}`, 'warning', taskId);
+      }
       return;
     }
 
@@ -124,13 +142,16 @@ export function useAppHandlers({
       } else {
         await taskService.updateTaskStatus(taskId, newStatus, oldTask?.status, user.uid, evidence, evidenceType, oldTask?.lockVersion);
       }
-      addToast({
-        title: `${STATUS_EMOJI[newStatus] ?? '📋'} Talimat Durumu Güncellendi`,
-        body: `"${oldTask?.title?.slice(0, 40) ?? 'Talimat'}" → ${STATUS_LABELS[newStatus] ?? newStatus}`,
-        type: newStatus === 'COMPLETED' ? 'success' : (newStatus === 'BLOCKED' || newStatus === 'CRISIS') ? 'danger' : 'info',
-        taskId,
-      });
+      if (!options?.silent) {
+        addToast({
+          title: `${STATUS_EMOJI[newStatus] ?? '📋'} Talimat Durumu Güncellendi`,
+          body: `"${oldTask?.title?.slice(0, 40) ?? 'Talimat'}" → ${STATUS_LABELS[newStatus] ?? newStatus}`,
+          type: newStatus === 'COMPLETED' ? 'success' : (newStatus === 'BLOCKED' || newStatus === 'CRISIS') ? 'danger' : 'info',
+          taskId,
+        });
+      }
     } catch (err) {
+      if (options?.silent) throw err;
       onError(err, 'update', `tasks/${taskId}`);
     }
   }, [user, tasks, blockers, toast, addToast, onError]);
@@ -167,7 +188,14 @@ export function useAppHandlers({
   }, [user, setIsCreateModalOpen, toast, onError]);
 
   // ─── updateTask ──────────────────────────────────────────────────────────
-  const updateTask = useCallback(async (taskId: string, data: Partial<Task>) => {
+  // `options.silent`: updateTaskStatus'taki AYNI gerekçe (bkz. yukarısı) —
+  // TaskBoard'un toplu atama akışı bu fonksiyonu bir döngüde N kez çağırır;
+  // silent:true toast/onError yan etkilerini bastırıp hatayı fırlatır ki
+  // Promise.allSettled gerçek başarı/başarısızlık sayısını görebilsin.
+  // setIsEditModalOpen(false) de silent modda ATLANIR — bu çağrı Düzenle
+  // modalından gelmiyor, kapatacak bir modal yok (ve modal başka bir
+  // sebeple açıksa yanlışlıkla kapatılmamalı).
+  const updateTask = useCallback(async (taskId: string, data: Partial<Task>, options?: { silent?: boolean }) => {
     if (!user) return;
     const oldTask = tasks.find(t => t.id === taskId);
 
@@ -179,16 +207,19 @@ export function useAppHandlers({
         'tasks', 'update', { ...data, updatedAt: Date.now() }, taskId, oldTask?.lockVersion,
         undefined, undefined, user.uid, oldTask
       );
-      setIsEditModalOpen(false);
-      toast('🔄 Çevrimdışı Güncelleme', 'Talimat düzenlemesi lokal sıraya alındı.', 'warning', taskId);
+      if (!options?.silent) {
+        setIsEditModalOpen(false);
+        toast('🔄 Çevrimdışı Güncelleme', 'Talimat düzenlemesi lokal sıraya alındı.', 'warning', taskId);
+      }
       return;
     }
 
     try {
       if (!oldTask) throw new Error('Güncellenecek talimat bulunamadı.');
       await taskService.updateTask(taskId, data, oldTask, user.uid);
-      setIsEditModalOpen(false);
+      if (!options?.silent) setIsEditModalOpen(false);
     } catch (err) {
+      if (options?.silent) throw err;
       onError(err, 'update', `tasks/${taskId}`);
     }
   }, [user, tasks, setIsEditModalOpen, toast, onError]);
@@ -214,18 +245,18 @@ export function useAppHandlers({
       blockers.filter(b => allIds.includes(b.taskId)).forEach(b => offlineQueue.enqueue('blockers', 'delete', undefined, b.id));
       descendantIds.forEach(id => offlineQueue.enqueue('tasks', 'delete', undefined, id));
       offlineQueue.enqueue('tasks', 'delete', undefined, taskId);
-      if (selectedTaskId === taskId) setSelectedTaskId(null);
+      if (selectedTaskId === taskId) closeTask();
       toast('🗑 Çevrimdışı Silme', 'Talimat ve bağlı unsurları lokal kuyrukta silindi.', 'warning');
       return;
     }
 
     try {
       await taskService.deleteTask(taskId, user.uid);
-      if (selectedTaskId === taskId) setSelectedTaskId(null);
+      if (selectedTaskId === taskId) closeTask();
     } catch (err) {
       onError(err, 'delete', `tasks/${taskId}`);
     }
-  }, [user, tasks, blockers, selectedTaskId, setSelectedTaskId, toast, onError]);
+  }, [user, tasks, blockers, selectedTaskId, closeTask, toast, onError]);
 
   // ─── addBlocker ──────────────────────────────────────────────────────────
   const addBlocker = useCallback(async (taskId: string, reason: string, severity: TaskPriority = 'Medium') => {
@@ -290,7 +321,7 @@ export function useAppHandlers({
     try {
       const taskBlockers = blockers.filter(b => b.taskId === blocker.taskId && !b.isResolved);
       const task = tasks.find(t => t.id === blocker.taskId);
-      await blockerService.resolveBlocker(blockerId, blocker.taskId, taskBlockers.length - 1, user.uid, task?.lockVersion);
+      await blockerService.resolveBlocker(blockerId, blocker.taskId, taskBlockers.length - 1, user.uid, task?.lockVersion, task?.title);
     } catch (err) {
       // Son aktif engelse resolveBlocker de transitionTaskInTransaction
       // içerir (görevi IN_PROGRESS'e döndürme) — bkz. addBlocker'daki aynı
@@ -361,7 +392,10 @@ export function useAppHandlers({
       offlineQueue.enqueue(
         'users', 'set', { uid: emailId, ...data, email: emailId }, emailId,
         undefined, undefined, undefined, undefined, undefined,
-        { taskId: emailId, changedBy: user.uid, oldValue: 'Yok', newValue: `Personel Eklendi: ${data.fullName} (${data.role})` }
+        // logType: userService.addUser'daki online karşılığıyla BİREBİR aynı
+        // olmalı — aksi halde aynı işlem çevrimiçi/çevrimdışı yapıldığında
+        // denetim izinde farklı tipte görünürdü (bkz. taskService.auditLogType).
+        { taskId: emailId, logType: 'STATUS', changedBy: user.uid, oldValue: 'Yok', newValue: `Personel Eklendi: ${data.fullName} (${data.role})` }
       );
       toast('👤 Çevrimdışı Personel Ekleme', `"${data.fullName}" lokal sıraya alındı.`, 'warning');
       return;
@@ -379,7 +413,7 @@ export function useAppHandlers({
         'users', 'update', data, userId,
         undefined, undefined, undefined, undefined, undefined,
         {
-          taskId: userId, changedBy: user.uid,
+          taskId: userId, logType: 'FIELD', changedBy: user.uid,
           oldValue: 'Personel Bilgisi', newValue: 'Personel Bilgisi Güncellendi',
           // userService.updateUser ile AYNI gerekçe: bu katmanda eski değerler
           // bilinmiyor, yalnızca HANGİ alanların değiştiği ve yeni değerleri
@@ -405,7 +439,7 @@ export function useAppHandlers({
       offlineQueue.enqueue(
         'users', 'delete', undefined, userId,
         undefined, undefined, undefined, undefined, undefined,
-        { taskId: userId, changedBy: user.uid, oldValue: 'Aktif', newValue: 'Personel Silindi' }
+        { taskId: userId, logType: 'STATUS', changedBy: user.uid, oldValue: 'Aktif', newValue: 'Personel Silindi' }
       );
       toast('🗑 Çevrimdışı Personel Silme', 'Personel silme işlemi lokal sıraya alındı.', 'warning');
       return;
@@ -420,6 +454,11 @@ export function useAppHandlers({
     if (!user) return;
     const blocker = blockers.find(b => b.id === blockerId);
     if (!blocker) return;
+    // Denetim kaydına donacak görev başlığı (bkz. taskService.auditTaskTitle) —
+    // blockerService görevi kendisi okumadığı için başlığı, görev listesini
+    // zaten elinde tutan bu katman geçirir; hem online hem offline yolda AYNI
+    // kayıt yazılsın diye iki dalda da kullanılır.
+    const task = tasks.find(t => t.id === blocker.taskId);
 
     if (isOfflineNow()) {
       // blockerService.editBlocker ile AYNI atomiklik: offlineQueue.ts'teki
@@ -429,15 +468,15 @@ export function useAppHandlers({
       offlineQueue.enqueue(
         'blockers', 'update', { reason }, blockerId,
         undefined, undefined, undefined, undefined, undefined,
-        { taskId: blocker.taskId, changedBy: user.uid, oldValue: 'Risk Gerekçesi', newValue: reason }
+        { taskId: blocker.taskId, taskTitle: task?.title, logType: 'FIELD', changedBy: user.uid, oldValue: 'Risk Gerekçesi', newValue: reason }
       );
       toast('🔄 Çevrimdışı Risk Düzenleme', 'Risk gerekçesi lokal sıraya alındı.', 'warning', blocker.taskId);
       return;
     }
 
-    try { await blockerService.editBlocker(blockerId, reason, user.uid, blocker.taskId); }
+    try { await blockerService.editBlocker(blockerId, reason, user.uid, blocker.taskId, task?.title); }
     catch (err) { onError(err, 'update', `blockers/${blockerId}`); }
-  }, [user, blockers, toast, onError]);
+  }, [user, blockers, tasks, toast, onError]);
 
   const deleteBlocker = useCallback(async (blockerId: string) => {
     if (!user) return;
@@ -482,7 +521,7 @@ export function useAppHandlers({
       // transaction'a girmiyor, sadece audit_logs yazımı için bu bilgiye
       // ihtiyaç duyuyor (bkz. kod denetimi: eskiden son-engel-olmayan dalda
       // hiç audit log yazılmıyordu).
-      await blockerService.deleteBlocker(blockerId, blocker.taskId, others.length, user.uid, task?.lockVersion);
+      await blockerService.deleteBlocker(blockerId, blocker.taskId, others.length, user.uid, task?.lockVersion, task?.title);
     } catch (err) {
       // Son aktif engelse deleteBlocker de transitionTaskInTransaction içerir
       // (görevi IN_PROGRESS'e döndürme) — bkz. addBlocker'daki aynı path-seçim

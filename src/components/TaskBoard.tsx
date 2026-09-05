@@ -1,16 +1,20 @@
 import React, { useCallback, useState, useMemo, useEffect, useRef, type ReactElement } from 'react';
 import { Plus, Search, Layers, Clock, ArrowRight, CheckCircle2, AlertTriangle, AlertCircle, ShieldCheck, Zap, Info, Filter, X, Loader2 } from 'lucide-react';
 import { List, type RowComponentProps } from 'react-window';
-import { Task, User } from '../types';
+import { Task, User, TaskStatus } from '../types';
 import { cn, buildUsersById } from '../lib/utils';
 import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_BADGE_VARIANT, STATUS_BADGE_VARIANT } from '../constants';
+import { VALID_TRANSITIONS } from '../lib/taskStateMachine';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { motion } from 'motion/react';
 import { Avatar } from './ui/Avatar';
 import { TaskCardSkeleton } from './ui/Skeleton';
 import { Badge } from './ui/Badge';
+import { EmptyState } from './ui/EmptyState';
+import { Button } from './ui/Button';
 import { useDataStore } from '../store/dataStore';
+import { useUIStore } from '../store/uiStore';
 import { isTaskInCrisis } from '../lib/executiveMetrics';
 
 // Sanallaştırma (react-window) sabitleri — büyük görev listelerinde (ör.
@@ -23,7 +27,9 @@ const DESKTOP_LIST_MAX_HEIGHT = 640;
 // DEVRİ BEKLENİYOR" gibi uzun rozet etiketleri artık (Badge.tsx'teki
 // whitespace-nowrap ile birlikte) taşmadan tek satırda sığıyor (bkz. kod
 // denetimi).
-const DESKTOP_GRID_TEMPLATE = '180px minmax(0,1fr) 190px 130px 160px 64px';
+// 40px'lik ilk sütun toplu seçim checkbox'ı için (P2-18) — mevcut beş sütun +
+// sondaki boş ok sütunu aynen korunur, yalnızca başa eklenir.
+const DESKTOP_GRID_TEMPLATE = '40px 180px minmax(0,1fr) 190px 130px 160px 64px';
 const MOBILE_ROW_HEIGHT = 80;
 const MOBILE_LIST_MAX_HEIGHT = 560;
 
@@ -31,13 +37,17 @@ interface TaskRowData {
   tasks: Task[];
   usersById: Map<string, User>;
   onViewTask: (task: Task) => void;
+  /** Toplu seçim (P2-18) — seçili görev id'leri ve tekil satır toggle'ı. */
+  selectedIds: Set<string>;
+  onToggleSelect: (taskId: string) => void;
 }
 
-function MobileTaskRow({ index, style, ariaAttributes, tasks, usersById, onViewTask }: RowComponentProps<TaskRowData>): ReactElement | null {
+function MobileTaskRow({ index, style, ariaAttributes, tasks, usersById, onViewTask, selectedIds, onToggleSelect }: RowComponentProps<TaskRowData>): ReactElement | null {
   const task = tasks[index];
   if (!task) return null;
   const assignee = usersById.get(task.assigneeId);
   const isCrisis = isTaskInCrisis(task, Date.now());
+  const isSelected = selectedIds.has(task.id);
   return (
     <div style={style} {...ariaAttributes}>
       <div
@@ -56,6 +66,19 @@ function MobileTaskRow({ index, style, ariaAttributes, tasks, usersById, onViewT
           isCrisis && 'bg-status-danger/[0.04]'
         )}
       >
+        {/* Toplu seçim checkbox'ı (P2-18) — click/keydown durdurulur ki satırın
+            geri kalanına ait onClick/onKeyDown (onViewTask'ı tetikleyen) devreye
+            girmesin; gerçek <input type="checkbox"> kullanılır (jsx-a11y +
+            Lighthouse a11y gate'i div-tabanlı sahte checkbox'ları reddeder). */}
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          onChange={() => onToggleSelect(task.id)}
+          aria-label={isSelected ? `${task.title} seçildi` : `${task.title} seçilmedi`}
+          className="mt-1.5 w-3.5 h-3.5 flex-shrink-0 rounded border-surface-border accent-executive-blue cursor-pointer"
+        />
         {/* Status dot */}
         <div className={cn(
           'w-2 h-2 rounded-full mt-1.5 flex-shrink-0',
@@ -85,11 +108,12 @@ function MobileTaskRow({ index, style, ariaAttributes, tasks, usersById, onViewT
   );
 }
 
-function DesktopTaskRow({ index, style, ariaAttributes, tasks, usersById, onViewTask }: RowComponentProps<TaskRowData>): ReactElement | null {
+function DesktopTaskRow({ index, style, ariaAttributes, tasks, usersById, onViewTask, selectedIds, onToggleSelect }: RowComponentProps<TaskRowData>): ReactElement | null {
   const task = tasks[index];
   if (!task) return null;
   const assignee = usersById.get(task.assigneeId);
   const isCrisis = isTaskInCrisis(task, Date.now());
+  const isSelected = selectedIds.has(task.id);
   return (
     <div
       {...ariaAttributes}
@@ -114,6 +138,20 @@ function DesktopTaskRow({ index, style, ariaAttributes, tasks, usersById, onView
         isCrisis && 'bg-status-danger/[0.06] border-l-[3px] border-l-status-danger'
       )}
     >
+      {/* Toplu seçim checkbox'ı (P2-18) — MobileTaskRow'daki AYNI stopPropagation
+          gerekçesi: satırın kendi onClick/onKeyDown'ı (onViewTask) tetiklenmesin. */}
+      <div role="cell" className="px-2 py-3 flex items-center justify-center">
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          onChange={() => onToggleSelect(task.id)}
+          aria-label={isSelected ? `${task.title} seçildi` : `${task.title} seçilmedi`}
+          className="w-3.5 h-3.5 rounded border-surface-border accent-executive-blue cursor-pointer"
+        />
+      </div>
+
       {/* Status */}
       <div role="cell" className="px-4 py-3">
         <Badge
@@ -201,12 +239,24 @@ interface TaskBoardProps {
   onViewTask: (task: Task) => void;
   /** Firestore'dan ilk veri yüklenene kadar true */
   isLoading?: boolean;
+  /** Toplu durum değişikliği (P2-18) — useAppHandlers.updateTaskStatus, kendi
+   *  transaction/optimistic-locking/durum-makinesi mantığıyla AYNEN kullanılır. */
+  updateTaskStatus: (
+    taskId: string,
+    newStatus: TaskStatus,
+    evidence?: string,
+    evidenceType?: Task['evidenceType'],
+    options?: { silent?: boolean }
+  ) => Promise<void>;
+  /** Toplu yeniden atama (P2-18) — useAppHandlers.updateTask, AYNEN kullanılır. */
+  updateTask: (taskId: string, data: Partial<Task>, options?: { silent?: boolean }) => Promise<void>;
 }
 
 export const TaskBoard = ({
   tasks, users, currentUser,
   onAddTask, onViewTask,
   isLoading = false,
+  updateTaskStatus, updateTask,
 }: TaskBoardProps) => {
   const [search, setSearch] = useState('');
   const [showSubtasks, setShowSubtasks] = useState(true);
@@ -276,14 +326,191 @@ export const TaskBoard = ({
 
   const hasActiveFilter = priorityFilter !== 'All' || assigneeFilter !== 'All' || statusFilter !== 'All' || search !== '';
 
+  const resetFilters = useCallback(() => {
+    setPriorityFilter('All');
+    setAssigneeFilter('All');
+    setStatusFilter('All');
+    setSearch('');
+  }, []);
+
+  // ── Toplu Seçim / Toplu İşlem (P2-18) ─────────────────────────────────────
+  // NOT: Ek bir rol bazlı seçim kısıtlaması burada UYGULANMIYOR — yukarıdaki
+  // filteredTasks NOT'uyla AYNI gerekçe: `tasks` prop'u AuthenticatedApp.tsx'te
+  // zaten role göre önceden filtrelenmiş gelir (bkz. useFirestoreData.ts
+  // tasksQuery — Admin tümü, Staff yalnızca kendine atananlar, Manager kendi
+  // departmanı + kendine atananlar). Bu listede görünen HER görev,
+  // firestore.rules'taki canUpdateTask() ile kullanıcının en azından durum
+  // güncelleyebileceği bir görevdir — ikinci bir istemci-taraflı filtre burada
+  // YAGNI olurdu.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  const [bulkStatusTarget, setBulkStatusTarget] = useState<TaskStatus | ''>('');
+  const [bulkAssigneeTarget, setBulkAssigneeTarget] = useState<string>('');
+  const addToast = useUIStore(s => s.addToast);
+
+  const toggleSelect = useCallback((taskId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId); else next.add(taskId);
+      return next;
+    });
+  }, []);
+
+  const selectAllFiltered = useCallback(() => {
+    setSelectedIds(new Set(filteredTasks.map(t => t.id)));
+  }, [filteredTasks]);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  // selectedIds, filtre değiştirildikten SONRA görünümden çıkmış görevleri de
+  // (kullanıcı önce seçip sonra filtreyi değiştirdiyse) içerebilir — toplu
+  // işlem gerçek Task nesnelerini bu yüzden tam (rol bazlı) `tasks`
+  // listesinden çözer, yalnızca `filteredTasks`'tan değil.
+  const selectedTasks = useMemo(
+    () => tasks.filter(t => selectedIds.has(t.id)),
+    [tasks, selectedIds]
+  );
+
+  // Toplu durum değişikliği yalnızca seçili TÜM görevler AYNI mevcut durumdaysa
+  // etkin — karışık durumlu bir seçimde "hangi hedef durumlar geçerli"
+  // belirsizleşir (bkz. görev tanımı: karmaşık kesişim mantığı kurulmuyor,
+  // YAGNI).
+  const commonStatus = useMemo<TaskStatus | null>(() => {
+    if (selectedTasks.length === 0) return null;
+    const first = selectedTasks[0]!.status;
+    return selectedTasks.every(t => t.status === first) ? first : null;
+  }, [selectedTasks]);
+  const bulkStatusOptions = commonStatus ? VALID_TRANSITIONS[commonStatus] : [];
+
+  // Seçim (dolayısıyla commonStatus) değiştiğinde eski hedef durum artık
+  // geçerli bir seçenek olmayabilir — kullanıcı yeniden seçmeye zorlanır,
+  // aksi halde stale bir hedefle yanlışlıkla "Uygula"ya basılabilirdi.
+  useEffect(() => {
+    setBulkStatusTarget('');
+  }, [commonStatus]);
+
+  // Toplu yeniden atama yalnızca atama yetkisi olan rollere gösterilir —
+  // TaskFormModal.tsx'teki getAssignableRoles ile AYNI mantık (bkz. görev
+  // tanımı). Staff hiç görmez: firestore.rules'taki canUpdateTask() zaten
+  // Staff'ın assigneeId dışındaki alanları (assigneeId dahil) değiştirmesine
+  // izin vermiyor.
+  const canBulkReassign = currentUser?.role === 'Admin' || currentUser?.role === 'Manager';
+  const assignableRoles: string[] =
+    currentUser?.role === 'Admin' ? ['Admin', 'Manager', 'Staff'] :
+    currentUser?.role === 'Manager' ? ['Manager', 'Staff'] : [];
+  const assignableUsers = users.filter(u => assignableRoles.includes(u.role));
+
+  // Kısmi başarı raporlaması: Promise.allSettled sonuçlarını işleyip başarılı
+  // görevleri seçimden çıkarır (başarısızlar tekrar deneme için SEÇİLİ kalır)
+  // ve tek bir özet toast'ı gösterir — mevcut useUIStore addToast deseni.
+  // VERSION_MISMATCH ayrıca sayılır ki kullanıcı "başka biri değiştirmiş
+  // olabilir" nedenini görsün (bkz. görev tanımı).
+  const summarizeBulkResult = useCallback((label: string, targets: Task[], results: PromiseSettledResult<void>[]) => {
+    const succeededIds = new Set<string>();
+    let versionMismatchCount = 0;
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') {
+        succeededIds.add(targets[i]!.id);
+      } else {
+        const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+        if (msg.includes('VERSION_MISMATCH')) versionMismatchCount++;
+      }
+    });
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      succeededIds.forEach(id => next.delete(id));
+      return next;
+    });
+    const successCount = succeededIds.size;
+    const failCount = targets.length - successCount;
+    if (failCount === 0) {
+      addToast({ title: `✅ ${label}`, body: `${successCount}/${targets.length} talimat güncellendi.`, type: 'success' });
+    } else {
+      const versionNote = versionMismatchCount > 0
+        ? ` ${versionMismatchCount} talimat başka bir kullanıcı tarafından değiştirilmiş olabilir (VERSION_MISMATCH) — sayfayı yenileyip tekrar deneyin.`
+        : ' Kalan talimatlar tekrar deneyebilmeniz için seçili bırakıldı.';
+      addToast({
+        title: `⚠️ ${label} — Kısmi Başarı`,
+        body: `${successCount}/${targets.length} talimat güncellendi.${versionNote}`,
+        type: 'warning',
+      });
+    }
+  }, [addToast]);
+
+  const handleBulkStatusApply = useCallback(async () => {
+    if (!bulkStatusTarget || selectedTasks.length === 0) return;
+    const targets = selectedTasks;
+    const target = bulkStatusTarget;
+    setIsBulkProcessing(true);
+    try {
+      // Mevcut, zaten yetkilendirilmiş updateTaskStatus (kendi transaction'ı +
+      // optimistic locking + durum makinesi doğrulaması + audit log — bkz.
+      // taskService.transitionTaskInTransaction) bir DÖNGÜDE çağrılır; yeni
+      // bir Firestore batch-write yolu İCAT EDİLMEZ (bkz. görev tanımı).
+      const results = await Promise.allSettled(
+        targets.map(t => updateTaskStatus(t.id, target, undefined, undefined, { silent: true }))
+      );
+      summarizeBulkResult('Toplu Durum Güncellemesi', targets, results);
+    } finally {
+      setIsBulkProcessing(false);
+      setBulkStatusTarget('');
+    }
+  }, [bulkStatusTarget, selectedTasks, updateTaskStatus, summarizeBulkResult]);
+
+  const handleBulkReassignApply = useCallback(async () => {
+    if (!bulkAssigneeTarget || selectedTasks.length === 0) return;
+    const targets = selectedTasks;
+    const target = bulkAssigneeTarget;
+    setIsBulkProcessing(true);
+    try {
+      const results = await Promise.allSettled(
+        targets.map(t => updateTask(t.id, { assigneeId: target }, { silent: true }))
+      );
+      summarizeBulkResult('Toplu Yeniden Atama', targets, results);
+    } finally {
+      setIsBulkProcessing(false);
+      setBulkAssigneeTarget('');
+    }
+  }, [bulkAssigneeTarget, selectedTasks, updateTask, summarizeBulkResult]);
+
+  // "İlk Talimatı Oluştur" CTA'sı yalnızca gerçekten görev oluşturabilecek
+  // rollere gösterilir — firestore.rules'taki tasks create kuralı yalnızca
+  // Admin/Manager'a izin verir (Staff'a değil), bu yüzden burada Staff'a da
+  // gösterilseydi tıklandığında sunucu tarafında reddedilen, kullanıcıyı
+  // yanıltan bir buton yaratılırdı (bkz. görev tanımı P2-17).
+  const canCreateTask = currentUser?.role === 'Admin' || currentUser?.role === 'Manager';
+
+  // Boş durum yalnızca hiçbir filtre uygulanmamışken "gerçekten hiç görev yok"
+  // anlamına gelir — bir filtre sonucu boşsa aktivasyon CTA'sı (görev oluştur)
+  // yanlış olurdu, kullanıcının asıl ihtiyacı filtreyi temizlemektir.
+  const emptyStateNode = (
+    <EmptyState
+      icon={<Layers className="w-8 h-8" />}
+      message={hasActiveFilter ? 'Filtrelerinize uygun talimat bulunamadı' : 'Henüz talimat bulunmuyor'}
+      className="border-none"
+      action={
+        hasActiveFilter ? (
+          <Button variant="secondary" size="sm" onClick={resetFilters}>
+            Filtreyi Temizle
+          </Button>
+        ) : canCreateTask ? (
+          <Button variant="gold" size="sm" onClick={onAddTask}>
+            <Plus className="w-3.5 h-3.5 stroke-[2]" />
+            İlk Talimatı Oluştur
+          </Button>
+        ) : undefined
+      }
+    />
+  );
+
   const rowKey = useCallback((index: number, data: TaskRowData) => data.tasks[index]?.id ?? index, []);
   const mobileRowProps = useMemo<TaskRowData>(
-    () => ({ tasks: filteredTasks, usersById, onViewTask }),
-    [filteredTasks, usersById, onViewTask]
+    () => ({ tasks: filteredTasks, usersById, onViewTask, selectedIds, onToggleSelect: toggleSelect }),
+    [filteredTasks, usersById, onViewTask, selectedIds, toggleSelect]
   );
   const desktopRowProps = useMemo<TaskRowData>(
-    () => ({ tasks: filteredTasks, usersById, onViewTask }),
-    [filteredTasks, usersById, onViewTask]
+    () => ({ tasks: filteredTasks, usersById, onViewTask, selectedIds, onToggleSelect: toggleSelect }),
+    [filteredTasks, usersById, onViewTask, selectedIds, toggleSelect]
   );
   const mobileListHeight = Math.min(filteredTasks.length * MOBILE_ROW_HEIGHT, MOBILE_LIST_MAX_HEIGHT);
   const desktopListHeight = Math.min(filteredTasks.length * DESKTOP_ROW_HEIGHT, DESKTOP_LIST_MAX_HEIGHT);
@@ -415,11 +642,33 @@ export const TaskBoard = ({
 
         {hasActiveFilter && (
           <button
-            onClick={() => { setPriorityFilter('All'); setAssigneeFilter('All'); setStatusFilter('All'); setSearch(''); }}
+            onClick={resetFilters}
             className="text-[9px] font-medium text-status-danger/70 hover:text-status-danger px-3 uppercase tracking-[0.12em] sm:tracking-[0.25em] transition-colors h-8 flex items-center justify-center gap-1 flex-1 sm:flex-none"
           >
             <X className="w-3 h-3" /> Sıfırla
           </button>
+        )}
+
+        {/* Toplu seçim kısayolları (P2-18) — "Tümünü Seç" yalnızca o an
+            FİLTRELENMİŞ görünür listeyi seçer, filtre dışındaki görevleri DEĞİL
+            (bkz. görev tanımı). */}
+        {filteredTasks.length > 0 && (
+          <div className="flex items-center gap-1 flex-1 sm:flex-none justify-end sm:justify-start">
+            <button
+              onClick={selectAllFiltered}
+              disabled={filteredTasks.every(t => selectedIds.has(t.id))}
+              className="text-[9px] font-medium text-executive-blue/70 hover:text-executive-blue px-2.5 h-8 rounded-lg hover:bg-executive-blue/5 uppercase tracking-[0.12em] sm:tracking-[0.2em] transition-colors disabled:opacity-40 disabled:pointer-events-none whitespace-nowrap"
+            >
+              Tümünü Seç
+            </button>
+            <button
+              onClick={clearSelection}
+              disabled={selectedIds.size === 0}
+              className="text-[9px] font-medium text-text-tertiary hover:text-status-danger px-2.5 h-8 rounded-lg hover:bg-status-danger/5 uppercase tracking-[0.12em] sm:tracking-[0.2em] transition-colors disabled:opacity-40 disabled:pointer-events-none whitespace-nowrap"
+            >
+              Seçimi Temizle
+            </button>
+          </div>
         )}
       </div>
 
@@ -437,9 +686,7 @@ export const TaskBoard = ({
               {[...Array(5)].map((_, i) => <TaskCardSkeleton key={i} />)}
             </div>
           ) : filteredTasks.length === 0 ? (
-            <div className="py-16 text-center text-[10px] text-text-tertiary uppercase tracking-[0.4em]">
-              Kayıt bulunamadı
-            </div>
+            emptyStateNode
           ) : (
             <List
               rowComponent={MobileTaskRow}
@@ -462,10 +709,10 @@ export const TaskBoard = ({
             style={{ gridTemplateColumns: DESKTOP_GRID_TEMPLATE }}
             className="grid bg-surface-glass border-b border-executive-blue/[0.04]"
           >
-            {['Durum', 'Talimat Tanımı', 'Sorumlu', 'Önem', 'Mühlet', ''].map(h => (
-              <div key={h} role="columnheader" className={cn(
+            {['', 'Durum', 'Talimat Tanımı', 'Sorumlu', 'Önem', 'Mühlet', ''].map((h, i) => (
+              <div key={`${h}-${i}`} role="columnheader" className={cn(
                 'px-4 py-3 text-[8px] font-semibold text-text-tertiary uppercase tracking-[0.18em]',
-                h === '' && 'text-right'
+                h === '' && i > 0 && 'text-right'
               )}>
                 {h}
               </div>
@@ -475,17 +722,15 @@ export const TaskBoard = ({
             {isLoading ? (
               [...Array(7)].map((_, i) => (
                 <div key={i} style={{ gridTemplateColumns: DESKTOP_GRID_TEMPLATE }} className="grid animate-pulse">
-                  {[...Array(6)].map((__, j) => (
+                  {[...Array(7)].map((__, j) => (
                     <div key={j} className="px-4 py-3.5">
-                      <div className="h-3 bg-executive-blue/[0.04] rounded-lg" style={{ width: j === 1 ? '60%' : j === 5 ? '40px' : '80px' }} />
+                      <div className="h-3 bg-executive-blue/[0.04] rounded-lg" style={{ width: j === 2 ? '60%' : (j === 0 || j === 6) ? '16px' : '80px' }} />
                     </div>
                   ))}
                 </div>
               ))
             ) : filteredTasks.length === 0 ? (
-              <div className="px-4 py-16 text-center text-[10px] text-text-tertiary uppercase tracking-[0.22em]">
-                Kayıtlı veri bulunamadı.
-              </div>
+              emptyStateNode
             ) : (
               <List
                 rowComponent={DesktopTaskRow}
@@ -511,6 +756,93 @@ export const TaskBoard = ({
             {isLoadingMore && <Loader2 className="w-3 h-3 animate-spin" />}
             Daha Fazla Talimat Yükle
           </button>
+        </div>
+      )}
+
+      {/* ── Toplu İşlem Çubuğu (P2-18) ────────────────────────────────
+          MobileDock (bottom-4, z-[60], lg:hidden) ile çakışmasın diye mobilde
+          bottom-24 (dock'un üstünde), lg:'de dock hiç render edilmediği için
+          bottom-6 kullanılır. Toast bölgesi (top-12, z-[150]) zaten ayrı bir
+          köşede olduğundan onunla bir çakışma söz konusu değil. */}
+      {selectedIds.size > 0 && (
+        <div
+          role="region"
+          aria-label="Toplu İşlem Çubuğu"
+          className="fixed bottom-24 lg:bottom-6 left-1/2 -translate-x-1/2 z-[55] w-[calc(100%-2rem)] max-w-md px-0"
+        >
+          <div className="flex flex-col gap-3 bg-makam-glass backdrop-blur-[30px] backdrop-saturate-[180%] border border-surface-border rounded-2xl shadow-[0_12px_40px_-10px_rgba(22,21,19,0.14),0_0_0_0.5px_rgba(22,21,19,0.04)] p-4">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold text-executive-blue uppercase tracking-[0.14em]">
+                {selectedIds.size} Talimat Seçildi
+              </span>
+              <button
+                onClick={clearSelection}
+                disabled={isBulkProcessing}
+                aria-label="Seçimi temizle"
+                className="text-text-tertiary hover:text-status-danger transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Toplu durum değişikliği */}
+            {commonStatus ? (
+              <div className="flex items-center gap-2">
+                <select
+                  value={bulkStatusTarget}
+                  onChange={(e) => setBulkStatusTarget(e.target.value as TaskStatus | '')}
+                  disabled={isBulkProcessing || bulkStatusOptions.length === 0}
+                  aria-label="Toplu durum hedefi"
+                  className="flex-1 min-w-0 h-9 px-3 rounded-xl bg-makam-glass border border-executive-blue/[0.08] text-[11px] text-executive-blue outline-none disabled:opacity-50"
+                >
+                  <option value="">
+                    {bulkStatusOptions.length === 0 ? 'Bu durumdan geçiş yok' : 'Durum seçin…'}
+                  </option>
+                  {bulkStatusOptions.map(s => (
+                    <option key={s} value={s} className="bg-surface-base text-text-heading">{STATUS_LABELS[s]}</option>
+                  ))}
+                </select>
+                <Button
+                  size="sm" variant="secondary"
+                  isLoading={isBulkProcessing}
+                  disabled={!bulkStatusTarget}
+                  onClick={handleBulkStatusApply}
+                >
+                  Uygula
+                </Button>
+              </div>
+            ) : (
+              <p className="text-[10px] text-text-tertiary leading-relaxed">
+                Seçili talimatlar farklı durumlarda — toplu durum değişikliği yalnızca hepsi AYNI mevcut durumdayken kullanılabilir.
+              </p>
+            )}
+
+            {/* Toplu yeniden atama — yalnızca atama yetkisi olan roller (Admin/Manager) */}
+            {canBulkReassign && (
+              <div className="flex items-center gap-2">
+                <select
+                  value={bulkAssigneeTarget}
+                  onChange={(e) => setBulkAssigneeTarget(e.target.value)}
+                  disabled={isBulkProcessing}
+                  aria-label="Toplu yeniden atama hedefi"
+                  className="flex-1 min-w-0 h-9 px-3 rounded-xl bg-makam-glass border border-executive-blue/[0.08] text-[11px] text-executive-blue outline-none disabled:opacity-50"
+                >
+                  <option value="">Yeniden ata…</option>
+                  {assignableUsers.map(u => (
+                    <option key={u.uid} value={u.uid} className="bg-surface-base text-text-heading">{u.fullName}</option>
+                  ))}
+                </select>
+                <Button
+                  size="sm" variant="secondary"
+                  isLoading={isBulkProcessing}
+                  disabled={!bulkAssigneeTarget}
+                  onClick={handleBulkReassignApply}
+                >
+                  Ata
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -64,17 +64,25 @@ describe('useUIStore', () => {
       expect(state.initialTitle).toBeUndefined();
     });
 
-    it('closeAllModals selectedTaskId\'ye dokunmaz (bağımsız bir alan)', () => {
-      useUIStore.setState({ isCreateModalOpen: true, selectedTaskId: 'task-9' });
-      useUIStore.getState().closeAllModals();
-      expect(useUIStore.getState().selectedTaskId).toBe('task-9');
-    });
-
-    it('setSelectedTaskId ve setIsNotificationsOpen bağımsız çalışır', () => {
-      useUIStore.getState().setSelectedTaskId('task-42');
+    it('setIsNotificationsOpen diğer modal alanlarından bağımsız çalışır', () => {
+      useUIStore.getState().setIsCreateModalOpen(true);
       useUIStore.getState().setIsNotificationsOpen(true);
-      expect(useUIStore.getState().selectedTaskId).toBe('task-42');
+      expect(useUIStore.getState().isCreateModalOpen).toBe(true);
       expect(useUIStore.getState().isNotificationsOpen).toBe(true);
+    });
+  });
+
+  describe('navigasyon durumu (regresyon koruması)', () => {
+    // Bu store eskiden `activeTab` + `selectedTaskId` de tutuyordu; routing
+    // katmanıyla birlikte URL tek doğruluk kaynağı oldu (bkz. kod denetimi
+    // P1-6). Bu test, "kolay olduğu için" birinin bunları store'a geri
+    // eklemesini ve iki doğruluk kaynağının sessizce geri gelmesini engeller.
+    it('aktif sekme/seçili görev alanları store\'da TUTULMAZ (URL tek kaynak)', () => {
+      const state = useUIStore.getState() as Record<string, unknown>;
+      expect(state.activeTab).toBeUndefined();
+      expect(state.setActiveTab).toBeUndefined();
+      expect(state.selectedTaskId).toBeUndefined();
+      expect(state.setSelectedTaskId).toBeUndefined();
     });
   });
 

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ShieldCheck, ArrowRight, Loader2 } from 'lucide-react';
+import { ShieldCheck, ArrowRight, Loader2, Info } from 'lucide-react';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { AuditLog, Task, User, TaskStatus } from '../types';
+import type { AuditLogType } from '../types';
 import { Button } from './ui/Button';
 import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
@@ -34,13 +35,19 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
 
   // Filter States
   const [selectedUser, setSelectedUser] = useState<string>('ALL');
-  const [selectedType, setSelectedType] = useState<string>('ALL');
+  const [selectedType, setSelectedType] = useState<'ALL' | AuditLogType>('ALL');
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
 
-  // Aktör ve tarih aralığı filtreleri sunucu tarafında (Firestore sorgusu) uygulanır —
-  // yalnızca yüklenmiş sayfada arama yapmak, henüz getirilmemiş eski kayıtları
-  // yanlışlıkla "kayıt yok" gibi göstererek denetim aramalarını yanıltabilirdi.
+  // Aktör, İŞLEM TİPİ ve tarih aralığı filtrelerinin ÜÇÜ de sunucu tarafında
+  // (Firestore sorgusu) uygulanır — yalnızca yüklenmiş sayfada arama yapmak,
+  // henüz getirilmemiş eski kayıtları yanlışlıkla "kayıt yok" gibi göstererek
+  // denetim aramalarını yanıltabilirdi. Tip filtresi eskiden TEK BAŞINA
+  // istemcide kalmıştı: sunucudan gelen 15'lik sayfanın bir kısmı istemcide
+  // elendiği için sayfa çoğu zaman 15'ten az satır gösteriyor, kullanıcı da
+  // "Daha Fazla Yükle"ye tekrar tekrar basmak zorunda kalıyordu (bkz. kod
+  // denetimi P2-22). Artık `logType` yazım anında kaydın kendisine yazılıyor
+  // (bkz. taskService.auditLogType) ve burada `where` ile sorgulanıyor.
   const fetchLogs = async (isFirstLoad = false, cursor: QueryDocumentSnapshot<DocumentData> | null = null) => {
     if (loading) return;
     setLoading(true);
@@ -52,6 +59,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
       // AÇIKÇA yerel gece yarısı saati eklenir.
       const { logs: newLogs, lastDoc, hasMore: more } = await auditLogService.fetchFiltered({
         changedBy: selectedUser !== 'ALL' ? selectedUser : undefined,
+        logType: selectedType !== 'ALL' ? selectedType : undefined,
         fromMs: dateFrom ? new Date(dateFrom + 'T00:00:00').getTime() : undefined,
         toMs: dateTo ? new Date(dateTo + 'T23:59:59.999').getTime() : undefined,
         pageSize: 15,
@@ -74,30 +82,27 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
     }
   };
 
-  // Aktör veya tarih aralığı değiştiğinde sorguyu baştan başlat (sayfalama sıfırlanır)
+  // Aktör, işlem tipi veya tarih aralığı değiştiğinde sorguyu baştan başlat
+  // (sayfalama sıfırlanır) — üçü de sunucu tarafı sorgu parametresi olduğundan
+  // hepsi AYNI bağımlılık listesinde olmak zorunda.
   useEffect(() => {
     setLogsState([]);
     setLastVisibleDoc(null);
     setHasMore(true);
     fetchLogs(true, null);
-  }, [selectedUser, dateFrom, dateTo]);
+  }, [selectedUser, selectedType, dateFrom, dateTo]);
 
   // "Daha Fazla Yükle" ile büyüyebilen log listesinde her satır için tasks/users
   // dizisinde O(n) find() yapmak yerine, tek geçişte kurulan O(1) Map lookup.
   const tasksById = useMemo(() => new Map(tasks.map(t => [t.id, t])), [tasks]);
   const usersById = useMemo(() => new Map(users.map(u => [u.uid, u])), [users]);
 
-  // tasksById/usersById ile AYNI memoizasyon disiplini — sayfa büyüdükçe
-  // (Daha Fazla Yükle) her render'da tüm listenin yeniden filtrelenmesini
-  // önler (bkz. kod denetimi: eskiden yalnızca Map kurulumları memoize
-  // ediliyordu, bu filtre değildi).
-  const filteredLogs = useMemo(() => logsState.filter(log => {
-    const isStatusChange = !log.changes && log.newValue !== undefined;
-    const matchType = selectedType === 'ALL' ||
-      (selectedType === 'STATUS' && isStatusChange) ||
-      (selectedType === 'FIELD' && (log.changes !== undefined || (log.newValue === undefined && log.oldValue === undefined)));
-    return matchType;
-  }), [logsState, selectedType]);
+  // NOT: burada eskiden bir `filteredLogs` useMemo'su vardı — tip filtresini
+  // istemcide, kaydın ŞEKLİNDEN (`!log.changes && log.newValue !== undefined`)
+  // tahmin ederek uyguluyordu. Kaldırıldı: sunucu artık zaten filtrelenmiş veri
+  // döndürüyor (bkz. auditLogService.fetchFiltered), dolayısıyla `logsState`
+  // doğrudan gösterilir. Bu, hem sayfalama tutarsızlığını hem de tahminin
+  // kendi hatasını (bkz. taskService.auditLogType) ortadan kaldırır.
 
   // Diğer altı modülle AYNI disiplin: ilk yükleme genel bir spinner yerine
   // gerçek satır yapısını taklit eden bir iskelet gösterir (bkz. tasarım
@@ -115,8 +120,11 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
           </div>
           <div>
             <span className="text-[10px] font-medium text-executive-blue uppercase tracking-[0.4em] block leading-none">DENETİM İZLERİ</span>
+            {/* Eskiden "filtrelenen / yüklenen" biçiminde İKİ sayı vardı;
+                istemci tarafı eleme kalktığı için ikisi artık matematiksel
+                olarak hep eşit — tek sayı gösterilir. */}
             <span className="text-[9px] text-text-tertiary uppercase tracking-[0.3em]">
-              {filteredLogs.length} / {logsState.length} Kayıt
+              {logsState.length} Kayıt
             </span>
           </div>
         </div>
@@ -124,7 +132,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
         {/* Filter Controls */}
         <div className="flex flex-wrap items-center gap-2">
           {/* User Filter select */}
-          <div className="flex items-center gap-2 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl px-3 py-2">
+          <div className="flex items-center gap-2 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl px-3 py-2 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-executive-blue has-[:focus-visible]:ring-offset-1">
             <Avatar size="xs" name="Filter" />
             <select
               value={selectedUser}
@@ -142,11 +150,11 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
           </div>
 
           {/* Action Type filter select */}
-          <div className="flex items-center gap-2 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl px-3 py-2">
+          <div className="flex items-center gap-2 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl px-3 py-2 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-executive-blue has-[:focus-visible]:ring-offset-1">
             <ShieldCheck className="w-3.5 h-3.5 text-executive-blue stroke-[1.5] flex-shrink-0" />
             <select
               value={selectedType}
-              onChange={e => setSelectedType(e.target.value)}
+              onChange={e => setSelectedType(e.target.value as 'ALL' | AuditLogType)}
               className="text-[11px] text-text-heading bg-transparent outline-none border-none cursor-pointer pr-4 font-medium"
               aria-label="İşlem Tipi Filtresi"
             >
@@ -157,7 +165,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
           </div>
 
           {/* Date range filter */}
-          <div className="flex items-center gap-1.5 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl px-3 py-2">
+          <div className="flex items-center gap-1.5 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl px-3 py-2 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-executive-blue has-[:focus-visible]:ring-offset-1">
             <label htmlFor="audit-date-from" className="sr-only">Başlangıç Tarihi</label>
             <input
               id="audit-date-from"
@@ -191,10 +199,33 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
         </div>
       </div>
 
+      {/* Geriye dönük uyumluluk notu: `logType` yalnızca P2-22'den SONRA
+          yazılan kayıtlarda var ve Firestore `where` eşitliği, alanı hiç
+          taşımayan bir dokümanı asla eşleştirmez — bu yüzden tip filtresi
+          seçiliyken daha eski kayıtlar sonuçlara hiç girmez. Backfill bilinçli
+          olarak yapılmadı; bunu kullanıcıdan gizlemek, denetim izinde "kayıt
+          yok" izlenimi vererek tam da sunucu-taraflı filtrelemeyle önlemeye
+          çalıştığımız yanılgıyı üretirdi. */}
+      {selectedType !== 'ALL' && (
+        <div className="flex items-start gap-2 px-3 py-2 bg-executive-blue/[0.03] border border-executive-blue/[0.06] rounded-xl">
+          <Info className="w-3 h-3 text-text-tertiary stroke-[1.5] flex-shrink-0 mt-[1px]" />
+          <span className="text-[9px] text-text-tertiary tracking-[0.15em] uppercase leading-relaxed">
+            İşlem tipi filtresi yalnızca bu özelliğin eklenmesinden sonra yazılan kayıtları kapsar — daha eski kayıtlar için "Tüm İşlemler" seçin.
+          </span>
+        </div>
+      )}
+
       <div className="flex flex-col gap-5">
-        {filteredLogs.length > 0 ? (
-          filteredLogs.map((log) => {
-            const task = tasksById.get(log.taskId);
+        {logsState.length > 0 ? (
+          logsState.map((log) => {
+            // Öncelik sırası: (1) kaydın kendi donmuş `taskTitle`'ı — yeni
+            // kayıtların tamamında vardır ve `tasks` dizisinin taskLimit
+            // penceresinden BAĞIMSIZDIR, (2) bu alandan önce yazılmış eski
+            // kayıtlar için yüklü görev listesindeki başlık, (3) ikisi de
+            // yoksa "Bilinmeyen Talimat". Eskiden yalnızca (2) vardı, bu
+            // yüzden pencere dışındaki her eski görev "Bilinmeyen Talimat"
+            // görünüyordu (bkz. kod denetimi P1-14).
+            const taskTitle = log.taskTitle ?? tasksById.get(log.taskId)?.title ?? 'Bilinmeyen Talimat';
             const user = usersById.get(log.changedBy);
             // Rol/departman/e-posta gibi yetki-kritik bir alan değişmişse, satır
             // Dashboard'un kriz şeridiyle AYNI görsel ağırlıkta işaretlenir — bir
@@ -232,7 +263,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
 
                 <div className="flex flex-col gap-1 flex-[1.2] border-t sm:border-t-0 sm:border-l border-executive-blue/[0.04] pt-2.5 sm:pt-0 sm:pl-4">
                   <span className="text-[8px] text-text-tertiary font-medium uppercase tracking-[0.25em]">Operasyon Hedefi</span>
-                  <span className="text-[12px] font-medium text-executive-blue truncate max-w-[280px] font-serif">{task?.title || 'Bilinmeyen Talimat'}</span>
+                  <span className="text-[12px] font-medium text-executive-blue truncate max-w-[280px] font-serif">{taskTitle}</span>
                 </div>
 
                 <div className="flex flex-col gap-2 flex-[1.6] border-t sm:border-t-0 sm:border-l border-executive-blue/[0.04] pt-2.5 sm:pt-0 sm:pl-4">
@@ -289,19 +320,12 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
           !loading && (
             <div className="py-16 flex flex-col items-center justify-center bg-surface-glass border border-dashed border-executive-blue/[0.05] rounded-2xl gap-4">
               <ShieldCheck className="w-10 h-10 text-surface-border/50 stroke-[1]" />
-              {/* logsState (sunucudan çekilen ham sayfa) dolu ama filteredLogs
-                  (istemci tarafı tip filtresinden geçenler) boşsa, bu sayfada
-                  seçili türde kayıt olmadığı ama başka kayıtların var olduğu
-                  anlamına gelir — "Kayıt Bulunamadı" (hiç kayıt yok izlenimi)
-                  ile aynı anda "Daha Fazla Yükle" butonunun gösterilmesi
-                  çelişkiliydi (bkz. kod denetimi). */}
-              {logsState.length > 0 ? (
-                <span className="text-[9px] text-text-tertiary uppercase tracking-[0.4em] text-center px-4">
-                  Bu sayfada seçili türde kayıt yok — daha fazla yükleyin veya filtreleri değiştirin
-                </span>
-              ) : (
-                <span className="text-[9px] text-text-tertiary uppercase tracking-[0.4em]">Kayıt Bulunamadı</span>
-              )}
+              {/* Eskiden burada ikinci bir dal vardı: "sayfa dolu ama istemci
+                  filtresinden hiçbiri geçmedi" durumu. Tip filtresi sunucuya
+                  taşındığı için bu durum artık OLUŞAMAZ (boş liste = sunucuda
+                  gerçekten eşleşen kayıt yok), dal da kaldırıldı — ölü bir
+                  koşul, okuyucuya var olmayan bir durumu anlatırdı. */}
+              <span className="text-[9px] text-text-tertiary uppercase tracking-[0.4em]">Kayıt Bulunamadı</span>
             </div>
           )
         )}

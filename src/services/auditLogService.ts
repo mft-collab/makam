@@ -10,6 +10,7 @@ import {
 } from '../firebase';
 import type { QueryConstraint, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { AuditLog, AuditLogSchema } from '../types';
+import type { AuditLogType } from '../types';
 import { logger } from '../lib/logger';
 
 /**
@@ -56,12 +57,26 @@ export const auditLogService = {
     return snapshot.docs.map(toAuditLog);
   },
 
-  /** AuditLogList ekranının aktör/tarih aralığı filtreli, imleçli sayfalama
-   *  sorgusu. Filtreler sunucu tarafında uygulanır — yalnızca yüklenmiş sayfada
-   *  arama yapmak, henüz getirilmemiş eski kayıtları yanlışlıkla "kayıt yok"
-   *  gibi göstererek denetim aramalarını yanıltabilirdi. */
+  /** AuditLogList ekranının aktör/işlem-tipi/tarih aralığı filtreli, imleçli
+   *  sayfalama sorgusu. Filtreler sunucu tarafında uygulanır — yalnızca
+   *  yüklenmiş sayfada arama yapmak, henüz getirilmemiş eski kayıtları
+   *  yanlışlıkla "kayıt yok" gibi göstererek denetim aramalarını
+   *  yanıltabilirdi.
+   *
+   *  `logType` en son (P2-22) eklendi: aktör ve tarih filtreleri buradayken
+   *  tip filtresi TEK BAŞINA istemcide kalmıştı, bu yüzden 15'lik bir sayfanın
+   *  parçası istemcide elenince kullanıcı "Daha Fazla Yükle"ye tekrar tekrar
+   *  basmak zorunda kalıyordu (bkz. kod denetimi P2-22, AuditLogList).
+   *
+   *  UYARI — geriye dönük uyumluluk: `logType` alanı bu değişiklikten ÖNCE
+   *  yazılmış kayıtlarda YOKTUR ve Firestore `where` eşitliği, alanı hiç
+   *  taşımayan bir dokümanı asla eşleştirmez — dolayısıyla tip filtresi
+   *  seçildiğinde eski kayıtlar sonuçlara HİÇ girmez. Backfill bilinçli olarak
+   *  yapılmadı (taskTitle'daki aynı YAGNI kararı); ekran bunun yerine tip
+   *  filtresi seçiliyken kullanıcıya açık bir bilgi notu gösterir. */
   async fetchFiltered(opts: {
     changedBy?: string;
+    logType?: AuditLogType;
     fromMs?: number;
     toMs?: number;
     pageSize: number;
@@ -69,6 +84,7 @@ export const auditLogService = {
   }): Promise<{ logs: AuditLog[]; lastDoc: QueryDocumentSnapshot<DocumentData> | null; hasMore: boolean }> {
     const constraints: QueryConstraint[] = [];
     if (opts.changedBy) constraints.push(where('changedBy', '==', opts.changedBy));
+    if (opts.logType) constraints.push(where('logType', '==', opts.logType));
     if (opts.fromMs !== undefined) constraints.push(where('timestamp', '>=', opts.fromMs));
     if (opts.toMs !== undefined) constraints.push(where('timestamp', '<=', opts.toMs));
     constraints.push(orderBy('timestamp', 'desc'));

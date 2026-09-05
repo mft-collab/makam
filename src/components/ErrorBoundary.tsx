@@ -19,16 +19,22 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  /** logError'ın döndürdüğü error_logs doküman ID'si — kullanıcıya "Destek
+   *  Referansı" olarak gösterilir (bkz. kod denetimi: bu ID üretiliyordu ama
+   *  hiçbir zaman kullanıcıya yansıtılmıyordu). Log yazımı asenkron olduğundan
+   *  ayrı bir setState ile, ilk render'dan sonra doldurulur. */
+  supportReference: string | null;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
     error: null,
+    supportReference: null,
   };
 
   public static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+    return { hasError: true, error, supportReference: null };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
@@ -39,6 +45,8 @@ export class ErrorBoundary extends Component<Props, State> {
       context: {
         componentStack: errorInfo.componentStack?.slice(0, 1000),
       },
+    }).then((supportReference) => {
+      if (supportReference) this.setState({ supportReference });
     });
   }
 
@@ -49,8 +57,9 @@ export class ErrorBoundary extends Component<Props, State> {
 
   // 'inline' sınırlar için sayfayı YENİDEN YÜKLEMEDEN yalnızca yerel hata
   // durumunu temizler — diğer sekmeler zaten etkilenmediğinden tam sayfa
-  // reload burada gereksiz. Ayrıca activeTab değiştiğinde App.tsx bu
-  // bileşeni `key={activeTab}` ile zaten yeniden monte eder (bkz. App.tsx).
+  // reload burada gereksiz. Ayrıca aktif sekme değiştiğinde AuthenticatedApp
+  // bu bileşeni `key={activeTab}` ile zaten yeniden monte eder — o key artık
+  // uiStore'dan değil URL'den türetilir (bkz. hooks/useActiveTab.ts).
   private handleRetry = () => {
     this.setState({ hasError: false, error: null });
   };
@@ -91,6 +100,11 @@ export class ErrorBoundary extends Component<Props, State> {
                 </p>
               </div>
             )}
+            {this.state.supportReference && (
+              <p className="text-text-muted/60 text-[10px] font-mono mt-1">
+                Destek Referansı: {this.state.supportReference}
+              </p>
+            )}
           </div>
 
           <Button
@@ -127,6 +141,11 @@ export class ErrorBoundary extends Component<Props, State> {
                   Yetki Doğrulama Hatası (RBAC Protocol)
                 </p>
               </div>
+            )}
+            {this.state.supportReference && (
+              <p className="text-text-muted/60 text-[11px] font-mono mt-1">
+                Destek Referansı: {this.state.supportReference}
+              </p>
             )}
           </div>
 

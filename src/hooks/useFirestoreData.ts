@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   collection,
   doc,
@@ -32,8 +33,29 @@ export async function fetchTaskById(taskId: string): Promise<Task | null> {
 }
 
 export function useFirestoreData(user: User | null, onError: (err: unknown, type: string, path: string) => void) {
-  const { tasks, users, blockers, resolvedBlockers, isHydrated, taskLimit, setTasks, setUsers, setBlockers, setResolvedBlockers, setStats, reset } = useDataStore();
-  
+  // useShallow ile yalnızca burada tüketilen alanlar seçilir — `stats` bu
+  // hook'un dönüş değerinde hiç yer almaz (yalnızca setStats ile beslenir,
+  // computeStats() gibi tüketiciler store'dan ayrıca okur). Selector'sız tam
+  // store aboneliği, her system/stats increment/decrement'inde (her durum
+  // geçişinde) bu hook'u çağıran AuthenticatedApp'in TÜM ağacını gereksiz
+  // yere yeniden render ediyordu (bkz. kod denetimi).
+  const { tasks, users, blockers, resolvedBlockers, isHydrated, taskLimit, setTasks, setUsers, setBlockers, setResolvedBlockers, setStats, reset } = useDataStore(
+    useShallow((s) => ({
+      tasks: s.tasks,
+      users: s.users,
+      blockers: s.blockers,
+      resolvedBlockers: s.resolvedBlockers,
+      isHydrated: s.isHydrated,
+      taskLimit: s.taskLimit,
+      setTasks: s.setTasks,
+      setUsers: s.setUsers,
+      setBlockers: s.setBlockers,
+      setResolvedBlockers: s.setResolvedBlockers,
+      setStats: s.setStats,
+      reset: s.reset,
+    }))
+  );
+
   // Skeleton is shown if IDB is not yet hydrated and no data exists.
   // Once hydrated, it will use cached data immediately.
   const [isLoading, setIsLoading] = useState(!isHydrated && tasks.length === 0);
@@ -80,6 +102,7 @@ export function useFirestoreData(user: User | null, onError: (err: unknown, type
         ? query(
             collection(db, 'tasks'),
             where('assigneeId', 'in', assignees.length > 0 ? assignees : ['__none__']),
+            orderBy('updatedAt', 'desc'),
             limit(taskLimit)
           )
         : departmentId
@@ -89,11 +112,13 @@ export function useFirestoreData(user: User | null, onError: (err: unknown, type
                 where('departmentId', '==', departmentId),
                 where('assigneeId', 'in', assignees.length > 0 ? assignees : ['__none__'])
               ),
+              orderBy('updatedAt', 'desc'),
               limit(taskLimit)
             )
           : query(
               collection(db, 'tasks'),
               where('assigneeId', 'in', assignees.length > 0 ? assignees : ['__none__']),
+              orderBy('updatedAt', 'desc'),
               limit(taskLimit)
             );
 

@@ -7,14 +7,14 @@ import { LocalTime } from './LocalTime';
 import { Badge } from './ui/Badge';
 import { Tooltip } from './ui/Tooltip';
 import { GuideModal } from './GuideModal';
-import { ROLE_LABELS } from '../constants';
+import { ROLE_LABELS, TAB_TITLES } from '../constants';
+import { useActiveTab } from '../hooks/useActiveTab';
 import { useUIStore } from '../store/uiStore';
 import { cn } from '../lib/utils';
 import type { User, Notification } from '../types';
 
 interface Props {
   user: User;
-  activeTab: string;
   notifications: Notification[];
   isNotificationsOpen: boolean;
   setIsNotificationsOpen: (open: boolean) => void;
@@ -31,7 +31,6 @@ interface Props {
 
 export function AppHeader({
   user,
-  activeTab,
   notifications,
   isNotificationsOpen,
   setIsNotificationsOpen,
@@ -41,10 +40,13 @@ export function AppHeader({
   isOffline,
   queueLength
 }: Props) {
+  // Ekran başlığı artık `activeTab` prop'undan değil URL'den türetilir
+  // (bkz. hooks/useActiveTab.ts).
+  const activeTab = useActiveTab();
   // Selector bazlı okuma — bu bileşen sticky/her zaman görünür olduğundan
-  // whole-store `useUIStore()` toasts/filter/activeTab gibi ilgisiz her alan
-  // değişiminde (ör. her toast eklenip 6sn sonra otomatik kaldırıldığında)
-  // gereksiz yeniden render'a yol açıyordu.
+  // whole-store `useUIStore()` toasts/filter gibi ilgisiz her alan değişiminde
+  // (ör. her toast eklenip 6sn sonra otomatik kaldırıldığında) gereksiz
+  // yeniden render'a yol açıyordu.
   const theme = useUIStore(s => s.theme);
   const setTheme = useUIStore(s => s.setTheme);
   const resolvedTheme = useResolvedTheme();
@@ -82,13 +84,7 @@ export function AppHeader({
         <div className="flex items-center gap-8">
            <div className="flex flex-col gap-1.5 border-l-2 border-executive-gold/20 pl-6">
              <h1 className="text-[13px] font-medium text-text-heading uppercase tracking-[0.22em] font-display">
-               {Boolean(activeTab === 'dashboard') && 'Stratejik Harekat Merkezi'}
-               {Boolean(activeTab === 'tasks') && 'Talimatlar'}
-               {Boolean(activeTab === 'blockers') && 'Engeller'}
-               {Boolean(activeTab === 'team') && 'Kadro'}
-               {Boolean(activeTab === 'reports') && 'Raporlar'}
-               {Boolean(activeTab === 'audit') && 'Denetim İzleri'}
-               {Boolean(activeTab === 'settings') && 'Dizge Ayarları'}
+               {TAB_TITLES[activeTab]}
              </h1>
              <div className="flex items-center gap-3">
                <span className="w-1.5 h-1.5 rounded-full bg-status-success shadow-[0_0_10px_var(--color-status-success)]" />
@@ -290,7 +286,7 @@ export function AppHeader({
               <AlertCircle className="w-4 h-4 stroke-[1.5]" aria-hidden="true" />
               <span
                 aria-hidden="true"
-                className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 flex items-center justify-center rounded-full bg-status-danger text-white text-[9px] font-bold leading-none"
+                className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 flex items-center justify-center rounded-full bg-status-danger text-[color:var(--status-danger-text)] text-[9px] font-bold leading-none"
               >
                 {notifications.length > 9 ? '9+' : notifications.length}
               </span>

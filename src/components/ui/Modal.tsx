@@ -61,9 +61,16 @@ export const useModalBehavior = ({ isOpen, onClose, containerRef, initialFocusRe
 
       // Focus Trap: Tab tuşu modal içinde dolaşır, dışına çıkmaz
       if (e.key === 'Tab' && containerRef.current) {
-        const focusable = containerRef.current.querySelectorAll<HTMLElement>(
+        const candidates = containerRef.current.querySelectorAll<HTMLElement>(
           'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
         );
+        // Sekmeli modallarda (ör. TaskDetails) pasif sekmenin içeriği DOM'da
+        // kalıp yalnızca CSS ile gizlenebiliyor — offsetParent null kontrolü
+        // olmadan seçici bu görünmez elemanları da yakalayıp Tab döngüsünü
+        // ekranda hiç görünmeyen bir alana kilitleyebiliyordu (bkz. kod
+        // denetimi). aria-hidden olan (dekoratif ikon vb.) elemanlar zaten
+        // doğal olarak tabindex taşımadığından burada ayrıca elenmesi gerekmez.
+        const focusable = Array.from(candidates).filter(el => el.offsetParent !== null);
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
 

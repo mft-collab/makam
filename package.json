@@ -10,13 +10,14 @@
     "start": "node server.js",
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
     "lint": "tsc --noEmit",
-    "eslint": "eslint . --max-warnings=187",
+    "eslint": "eslint . --max-warnings=0",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "size": "size-limit",
     "lighthouse": "lhci autorun",
     "seed:e2e": "tsx scripts/seedE2E.ts",
+    "test:rules": "firebase emulators:exec --only firestore \"vitest run --config vitest.rules.config.ts\"",
     "test:e2e:emulator": "firebase emulators:exec --only auth,firestore \"npm run seed:e2e && npx playwright test --config=playwright.emulator.config.ts\""
   },
   "dependencies": {
@@ -32,6 +33,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.79.0",
+    "react-router-dom": "^7.18.3",
     "react-window": "^2.3.0",
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.5.0",
@@ -44,6 +46,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
     "@firebase/eslint-plugin-security-rules": "^0.0.2",
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.61.0",
     "@size-limit/file": "^12.1.0",
