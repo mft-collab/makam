@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { AuditLogList } from './AuditLogList';
 import { auditLogService } from '../services/auditLogService';
 import type { AuditLog, Task, User } from '../types';
@@ -71,5 +72,82 @@ describe('AuditLogList — operasyon hedefi (görev başlığı) çözümü', ()
 
     expect(await screen.findByText('Olay Anındaki Başlık')).toBeInTheDocument();
     expect(screen.queryByText('Sonradan Değiştirilen Başlık')).not.toBeInTheDocument();
+  });
+});
+
+describe('AuditLogList — işlem tipi filtresi SUNUCU tarafında uygulanır (P2-22)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // Aktör ve tarih filtreleri zaten sunucudaydı; tip filtresi TEK BAŞINA
+  // istemcide kalmıştı ve sunucudan gelen 15'lik sayfanın bir kısmını eliyordu
+  // — sayfa 15'ten az satır gösteriyor, kullanıcı "Daha Fazla Yükle"ye tekrar
+  // tekrar basmak zorunda kalıyordu (bkz. kod denetimi P2-22).
+
+  const selectType = async (label: string) => {
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText('İşlem Tipi Filtresi'), label);
+  };
+
+  it('"Tüm İşlemler" seçiliyken sorguya logType constraint\'i HİÇ geçilmez', async () => {
+    await renderWith([makeLog()], []);
+
+    expect(auditLogService.fetchFiltered).toHaveBeenCalledWith(
+      expect.objectContaining({ logType: undefined })
+    );
+  });
+
+  it('tip seçilince sorgu logType ile SIFIRDAN çekilir (istemcide elenmez)', async () => {
+    await renderWith([makeLog()], []);
+    expect(auditLogService.fetchFiltered).toHaveBeenCalledTimes(1);
+
+    await selectType('Durum Değişiklikleri');
+
+    // Yeni bir sorgu: filtre bir sorgu parametresi olduğundan sayfalama
+    // sıfırlanır (cursor null) — aktör/tarih filtreleriyle AYNI davranış.
+    await waitFor(() => expect(auditLogService.fetchFiltered).toHaveBeenCalledTimes(2));
+    expect(auditLogService.fetchFiltered).toHaveBeenLastCalledWith(
+      expect.objectContaining({ logType: 'STATUS', cursor: null })
+    );
+  });
+
+  it('"İçerik Güncellemeleri" FIELD constraint\'ine çevrilir', async () => {
+    await renderWith([makeLog()], []);
+
+    await selectType('İçerik Güncellemeleri');
+
+    await waitFor(() => expect(auditLogService.fetchFiltered).toHaveBeenLastCalledWith(
+      expect.objectContaining({ logType: 'FIELD' })
+    ));
+  });
+
+  it('sunucunun döndürdüğü her kayıt gösterilir — `changes` taşıyan bir STATUS kaydı ELENMEZ', async () => {
+    // Eski istemci-taraflı tahmin (`!log.changes && log.newValue !== undefined`)
+    // tam da bu kaydı yanlış sınıflandırıyordu: transitionTaskInTransaction hem
+    // newValue hem changes yazar. Artık istemcide hiç eleme yok — bu testin
+    // kırılması, elemenin geri geldiği anlamına gelir.
+    await renderWith(
+      [makeLog({ taskTitle: 'Geçiş Kaydı', logType: 'STATUS', changes: { status: { old: 'ASSIGNED', new: 'IN_PROGRESS' } } })],
+      []
+    );
+
+    await selectType('Durum Değişiklikleri');
+
+    expect(await screen.findByText('Geçiş Kaydı')).toBeInTheDocument();
+    expect(screen.queryByText('Kayıt Bulunamadı')).not.toBeInTheDocument();
+  });
+
+  it('tip filtresi seçiliyken geriye dönük uyumluluk notu gösterilir, "Tüm İşlemler"de gösterilmez', async () => {
+    // logType alanı bu değişiklikten önce yazılmış kayıtlarda YOK ve Firestore
+    // `where` eşitliği alanı olmayan dokümanı asla eşleştirmez — backfill
+    // yapılmadığı için eski kayıtlar tip filtresinde sessizce kaybolur. Bunu
+    // kullanıcıdan gizlemek, sunucu-taraflı filtrelemeyle önlemeye
+    // çalıştığımız "hiç kayıt yok" yanılgısını üretirdi.
+    const notMatcher = /yalnızca bu özelliğin eklenmesinden sonra yazılan kayıtları kapsar/i;
+    await renderWith([makeLog()], []);
+    expect(screen.queryByText(notMatcher)).not.toBeInTheDocument();
+
+    await selectType('Durum Değişiklikleri');
+
+    expect(await screen.findByText(notMatcher)).toBeInTheDocument();
   });
 });

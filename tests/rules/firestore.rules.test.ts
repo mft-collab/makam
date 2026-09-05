@@ -1062,6 +1062,51 @@ describe('audit_logs kanıt bütünlüğü', () => {
     }));
   });
 
+  // logType: kaydın yazım anında belirlenen işlem tipi (bkz.
+  // taskService.auditLogType, P2-22). taskTitle ile AYNI sözleşme — şema
+  // açısından opsiyoneldir — ama ek olarak DEĞER KÜMESİ de kısıtlanır:
+  // audit_logs silinemediği için şemaya uymayan bir değer sonsuza dek kalır ve
+  // `where` eşitliğiyle hiçbir tip filtresine düşmeyen "görünmez" bir kayıt
+  // üretirdi.
+  it('denetim kaydı logType: STATUS ile yazılabilir', async () => {
+    await assertSucceeds(setDoc(doc(staffA(), 'audit_logs', 'log-tip-status'), {
+      taskId: 'task-a', logType: 'STATUS', changedBy: 'staff-a',
+      oldValue: 'ASSIGNED', newValue: 'IN_PROGRESS', timestamp: NOW + 1,
+    }));
+  });
+
+  it('denetim kaydı logType: FIELD ile yazılabilir', async () => {
+    await assertSucceeds(setDoc(doc(staffA(), 'audit_logs', 'log-tip-field'), {
+      taskId: 'task-a', logType: 'FIELD', changedBy: 'staff-a',
+      oldValue: 'Kısmi Güncelleme', newValue: 'Kısmi Güncelleme', timestamp: NOW + 1,
+      changes: { description: { old: 'a', new: 'b' } },
+    }));
+  });
+
+  it('logType OLMADAN da yazılabilir (geriye dönük uyumluluk — backfill yok)', async () => {
+    // Alanı zorunlu kılmak, bu alandan önce kuyruğa alınmış bekleyen offline
+    // mutasyonların senkronunu da sunucudan reddettirirdi (bkz.
+    // offlineQueue.writeWithAuditLog'daki opsiyonel logType).
+    await assertSucceeds(setDoc(doc(staffA(), 'audit_logs', 'log-tipsiz'), {
+      taskId: 'task-a', changedBy: 'staff-a',
+      oldValue: 'ASSIGNED', newValue: 'IN_PROGRESS', timestamp: NOW + 1,
+    }));
+  });
+
+  it('logType yalnızca STATUS/FIELD olabilir — keyfi değer veya yanlış tip reddedilir', async () => {
+    await assertFails(setDoc(doc(staffA(), 'audit_logs', 'log-tip-keyfi'), {
+      taskId: 'task-a', logType: 'KEYFI', changedBy: 'staff-a', timestamp: NOW + 1,
+    }));
+    await assertFails(setDoc(doc(staffA(), 'audit_logs', 'log-tip-sayi'), {
+      taskId: 'task-a', logType: 7, changedBy: 'staff-a', timestamp: NOW + 1,
+    }));
+    // Küçük/büyük harf duyarlıdır: istemcinin yazdığı değer, sorgunun
+    // aradığı değerle BİREBİR aynı olmalı, aksi halde kayıt filtreye düşmez.
+    await assertFails(setDoc(doc(staffA(), 'audit_logs', 'log-tip-kucuk'), {
+      taskId: 'task-a', logType: 'status', changedBy: 'staff-a', timestamp: NOW + 1,
+    }));
+  });
+
   it('BAŞKA bir kullanıcı adına sahte denetim kaydı yazamaz', async () => {
     await assertFails(setDoc(doc(staffA(), 'audit_logs', 'log-sahte'), {
       taskId: 'task-a', changedBy: 'mgr-a', timestamp: NOW + 1,
