@@ -1028,6 +1028,40 @@ describe('audit_logs kanıt bütünlüğü', () => {
     }));
   });
 
+  // taskTitle: kaydın yazıldığı andaki görev başlığının donmuş kopyası
+  // (bkz. taskService.auditTaskTitle, P1-14). ŞEMA AÇISINDAN OPSİYONELDİR —
+  // alanı taşıyan yeni kayıtlar da, taşımayan eski kayıtlar/yollar da
+  // yazılabilmelidir; aşağıdaki üç test bu sözleşmenin üç kenarını tutar.
+  it('denetim kaydı denormalize taskTitle alanıyla yazılabilir', async () => {
+    await assertSucceeds(setDoc(doc(staffA(), 'audit_logs', 'log-baslikli'), {
+      taskId: 'task-a', taskTitle: 'A Görevi', changedBy: 'staff-a',
+      oldValue: 'ASSIGNED', newValue: 'IN_PROGRESS', timestamp: NOW + 1,
+    }));
+  });
+
+  it('taskTitle OLMADAN da yazılabilir (geriye dönük uyumluluk — backfill yok)', async () => {
+    // Bu alan yalnızca bundan sonra yazılan kayıtlarda dolu olacak; eski
+    // kayıtlara geriye dönük backfill YAPILMADI. Kural bu yüzden alanı zorunlu
+    // kılmamalı, aksi halde başlığı bilinmeyen her yol (ör. görev başlığını
+    // elinde tutmayan bir çağıran) sunucudan reddedilirdi.
+    await assertSucceeds(setDoc(doc(staffA(), 'audit_logs', 'log-basliksiz'), {
+      taskId: 'task-a', changedBy: 'staff-a',
+      oldValue: 'ASSIGNED', newValue: 'IN_PROGRESS', timestamp: NOW + 1,
+    }));
+  });
+
+  it('taskTitle 200 karakter sınırını aşamaz / string olmalı', async () => {
+    // Sınır, isValidTask'taki title sınırıyla (<=200) BİLEREK aynıdır —
+    // meşru hiçbir görev başlığı bu kapıya takılamaz, yalnızca şişirme
+    // denemeleri takılır (audit_logs silinemediği için kalıcı yük olurdu).
+    await assertFails(setDoc(doc(staffA(), 'audit_logs', 'log-uzun-baslik'), {
+      taskId: 'task-a', taskTitle: 'x'.repeat(201), changedBy: 'staff-a', timestamp: NOW + 1,
+    }));
+    await assertFails(setDoc(doc(staffA(), 'audit_logs', 'log-sayi-baslik'), {
+      taskId: 'task-a', taskTitle: 42, changedBy: 'staff-a', timestamp: NOW + 1,
+    }));
+  });
+
   it('BAŞKA bir kullanıcı adına sahte denetim kaydı yazamaz', async () => {
     await assertFails(setDoc(doc(staffA(), 'audit_logs', 'log-sahte'), {
       taskId: 'task-a', changedBy: 'mgr-a', timestamp: NOW + 1,
