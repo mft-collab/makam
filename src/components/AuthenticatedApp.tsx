@@ -22,12 +22,11 @@
  */
 import { useState, useEffect, useCallback, useRef, lazy, Suspense, useMemo } from 'react';
 import type { ReactNode, RefObject } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task } from '../types';
 import { useUIStore } from '../store/uiStore';
 import { useShallow } from 'zustand/react/shallow';
-import { RequireTabAccess } from './RequireTabAccess';
+import { AppRoutes } from './AppRoutes';
 import { useActiveTab } from '../hooks/useActiveTab';
 import { useSelectedTaskId, useTaskNavigation } from '../hooks/useTaskRoute';
 
@@ -68,7 +67,7 @@ import { useIdleTimer } from '../hooks/useIdleTimer';
 import { useSessionTimeout } from '../hooks/useSessionTimeout';
 import { useSelfHealing } from '../hooks/useSelfHealing';
 import { useIsAdmin } from '../hooks/useIsAdmin';
-import { APP_TAB_IDS, DEFAULT_TAB, tabPath, type AppTabId } from '../constants';
+import { type AppTabId } from '../constants';
 
 interface AuthenticatedAppProps {
   user: User;
@@ -363,36 +362,7 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
                 </div>
               </div>
             }>
-              <Routes>
-                {/* Kök → varsayılan ekran. `replace`: geri tuşu kullanıcıyı
-                    tekrar buraya (ve anında ileri) göndermesin. */}
-                <Route path="/" element={<Navigate to={tabPath(DEFAULT_TAB)} replace />} />
-
-                {APP_TAB_IDS.map((tabId) => (
-                  <Route
-                    key={tabId}
-                    path={tabId}
-                    element={
-                      <RequireTabAccess tab={tabId} role={user.role}>
-                        {screens[tabId]}
-                      </RequireTabAccess>
-                    }
-                  >
-                    {/* /tasks/:taskId — TaskBoard'un ÜZERİNDE görev detay
-                        modalını URL'den açık tutan alt-route. Üst route
-                        <Outlet/> render ETMEZ; bu alt route yalnızca EŞLEŞME
-                        için vardır (modalın kendisi bu ağacın dışında, tüm
-                        sekmelerin üstünde durur — bkz. useSelectedTaskId).
-                        Alt route olması, /tasks ↔ /tasks/:taskId geçişinde
-                        TaskBoard'un yeniden monte edilmemesini de sağlar. */}
-                    {tabId === 'tasks' && <Route path=":taskId" />}
-                  </Route>
-                ))}
-
-                {/* Bilinmeyen yol (eski yer imi, yanlış yazım) — sessizce
-                    varsayılan ekrana düşer. */}
-                <Route path="*" element={<Navigate to={tabPath(DEFAULT_TAB)} replace />} />
-              </Routes>
+              <AppRoutes role={user.role} screens={screens} />
             </Suspense>
             </ErrorBoundary>
           </motion.div>
