@@ -15,15 +15,26 @@ import { readFileSync } from 'fs';
 
 let e2eToken: string;
 let seededTaskTitle: string;
+let seededUid: string;
 
 test.beforeAll(() => {
   const data = JSON.parse(readFileSync('.e2e-token.json', 'utf-8'));
   e2eToken = data.token;
   seededTaskTitle = data.taskTitle;
+  seededUid = data.uid;
 });
 
 test.describe('MAKAM E2E — Kimlik Doğrulamalı Akışlar', () => {
   test.beforeEach(async ({ page }) => {
+    // WelcomeModal (P2-17) taze bir tarayıcı context'inde (localStorage boş)
+    // ilk girişte tam ekran bir overlay olarak açılıp alttaki nav linklerinin
+    // tıklanmasını engeller — bu paket NAVİGASYON/a11y akışlarını test ediyor,
+    // onboarding'i değil, bu yüzden karşılamayı "zaten görülmüş" işaretleyerek
+    // baştan atlanır (bkz. src/components/WelcomeModal.tsx onboardingSeenKey).
+    await page.addInitScript((uid) => {
+      window.localStorage.setItem(`makam-onboarding-seen-${uid}`, '1');
+    }, seededUid);
+
     await page.goto(`/?e2e_token=${e2eToken}`);
     // Harekat Merkezi (Dashboard) sekmesinin görünmesini bekle — giriş başarılı demektir
     await expect(page.getByText('Stratejik Sağlık Endeksi')).toBeVisible({ timeout: 15000 });
