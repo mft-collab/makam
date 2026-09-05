@@ -124,7 +124,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
         {/* Filter Controls */}
         <div className="flex flex-wrap items-center gap-2">
           {/* User Filter select */}
-          <div className="flex items-center gap-2 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl px-3 py-2">
+          <div className="flex items-center gap-2 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl px-3 py-2 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-executive-blue has-[:focus-visible]:ring-offset-1">
             <Avatar size="xs" name="Filter" />
             <select
               value={selectedUser}
@@ -142,7 +142,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
           </div>
 
           {/* Action Type filter select */}
-          <div className="flex items-center gap-2 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl px-3 py-2">
+          <div className="flex items-center gap-2 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl px-3 py-2 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-executive-blue has-[:focus-visible]:ring-offset-1">
             <ShieldCheck className="w-3.5 h-3.5 text-executive-blue stroke-[1.5] flex-shrink-0" />
             <select
               value={selectedType}
@@ -157,7 +157,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
           </div>
 
           {/* Date range filter */}
-          <div className="flex items-center gap-1.5 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl px-3 py-2">
+          <div className="flex items-center gap-1.5 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl px-3 py-2 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-executive-blue has-[:focus-visible]:ring-offset-1">
             <label htmlFor="audit-date-from" className="sr-only">Başlangıç Tarihi</label>
             <input
               id="audit-date-from"

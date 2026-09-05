@@ -63,6 +63,7 @@ export default function App() {
   const resolvedTheme = useResolvedTheme();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const isLoggingOutRef = useRef(false);
   const tasksRef = useRef<Task[]>([]);
@@ -255,8 +256,10 @@ export default function App() {
   }, [handleFirestoreError]);
 
   const handleLogin = useCallback(async () => {
+    setIsLoggingIn(true);
     try { await signInWithPopup(auth, googleProvider); }
     catch (err) { handleFirestoreError(err, 'auth', 'users'); }
+    finally { setIsLoggingIn(false); }
   }, [handleFirestoreError]);
 
   if (loading) {
@@ -316,7 +319,7 @@ export default function App() {
 
         {!user ? (
           <main id="main-content">
-            <Login onLogin={handleLogin} />
+            <Login onLogin={handleLogin} isLoading={isLoggingIn} />
           </main>
         ) : (
           <Suspense fallback={

@@ -14,7 +14,7 @@ export const TAB_ROLES: Record<AppTabId, UserRole[]> = {
   team: ['Admin', 'Manager'],
   reports: ['Admin'],
   audit: ['Admin'],
-  settings: ['Admin'],
+  settings: ['Admin', 'Manager', 'Staff'],
 };
 
 export const STATUS_LABELS: Record<TaskStatus, string> = {

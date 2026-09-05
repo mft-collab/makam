@@ -264,6 +264,16 @@
     font-weight: 500; /* Slightly stronger contrast for headings */
     letter-spacing: var(--heading-tracking);
   }
+
+  /* Güvenlik ağı (WCAG 2.4.7): tekil bileşenler kendi focus-visible ring'ini
+     tanımlamayı unutursa (ör. outline-none kullanılıp karşılığı konmamışsa,
+     bkz. kod denetimi), klavye odağı yine de görünür kalsın. Bileşen bazlı
+     ring'ler (Button, ActionButton, Modal vb.) bu kuraldan daha spesifik
+     olduğu için normal cascade sırasıyla üzerine yazar. */
+  :focus-visible {
+    outline: 2px solid var(--color-executive-gold);
+    outline-offset: 2px;
+  }
 }
 
 @layer components {

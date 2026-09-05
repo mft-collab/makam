@@ -155,7 +155,7 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout, notificati
                     {Boolean(badgeCount) && (
                       <span
                         aria-hidden="true"
-                        className="flex-shrink-0 min-w-[16px] h-[16px] px-1 flex items-center justify-center rounded-full bg-status-danger text-white text-[9px] font-bold leading-none"
+                        className="flex-shrink-0 min-w-[16px] h-[16px] px-1 flex items-center justify-center rounded-full bg-status-danger text-[color:var(--status-danger-text)] text-[9px] font-bold leading-none"
                       >
                         {badgeCount! > 9 ? '9+' : badgeCount}
                       </span>
@@ -264,7 +264,7 @@ export const MobileDock = ({ user, activeTab, setActiveTab, onLogout, notificati
                       aria-hidden="true"
                       className="absolute -top-1 -left-1.5 min-w-[15px] h-[15px] px-[3px]
                                  flex items-center justify-center rounded-full
-                                 bg-status-danger text-white text-[8.5px] font-bold leading-none"
+                                 bg-status-danger text-[color:var(--status-danger-text)] text-[8.5px] font-bold leading-none"
                     >
                       {badgeCount! > 9 ? '9+' : badgeCount}
                     </span>

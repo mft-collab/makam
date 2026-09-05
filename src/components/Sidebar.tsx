@@ -99,7 +99,7 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
             triggerHaptic('medium');
             setIsAboutModalOpen(true);
           }}
-          className="relative z-10 w-full flex items-center justify-center outline-none transition-transform hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+          className="relative z-10 w-full flex items-center justify-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-executive-blue focus-visible:ring-offset-2 transition-transform hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
           aria-label="Dizge Hakkında"
         >
           {/* variant sabit 'dark' idi — light temada bg-surface-glass açık bir

@@ -290,7 +290,7 @@ export function AppHeader({
               <AlertCircle className="w-4 h-4 stroke-[1.5]" aria-hidden="true" />
               <span
                 aria-hidden="true"
-                className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 flex items-center justify-center rounded-full bg-status-danger text-white text-[9px] font-bold leading-none"
+                className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 flex items-center justify-center rounded-full bg-status-danger text-[color:var(--status-danger-text)] text-[9px] font-bold leading-none"
               >
                 {notifications.length > 9 ? '9+' : notifications.length}
               </span>

@@ -197,7 +197,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
         {/* Tarih Aralığı + Birim Filtresi + Export */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Birim Filtresi */}
-          <div className="flex items-center gap-2 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl px-3 py-2">
+          <div className="flex items-center gap-2 bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl px-3 py-2 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-executive-blue has-[:focus-visible]:ring-offset-1">
             <Users className="w-3.5 h-3.5 text-executive-blue stroke-[1.5] flex-shrink-0" aria-hidden="true" />
             <select
               value={selectedDept}
