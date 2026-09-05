@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, type ReactElement } from 'react';
 import { UserPlus, Shield, Mail, Building, Trash2, Edit2, Target, CheckCircle2, AlertTriangle, Activity, ArrowRight, History, Loader2 } from 'lucide-react';
+import { List, type RowComponentProps } from 'react-window';
 import { User, UserRole, Task, AuditLog, TaskStatus, Department } from '../types';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -18,6 +19,127 @@ import { roleConfig, OrgNodeCard, DepartmentPicker } from './teamList/subcompone
 import { Skeleton } from './ui/Skeleton';
 import { useIsAdmin } from '../hooks/useIsAdmin';
 import { logger } from '../lib/logger';
+
+// Sanallaştırma (react-window) — P2-19: `useFirestoreData.ts` kullanıcıları
+// `limit(1000)` ile çekiyor ve bu ekran öncesinde TÜM kadroyu tek seferde
+// DOM'a basıyordu (bkz. kod denetimi). Desen `TaskBoard.tsx`'teki ile
+// AYNIDIR: `react-window`'un `List` (rowComponent/rowCount/rowHeight/rowProps)
+// API'si + konteyner yüksekliği `Math.min(satır × yükseklik, ÜST_SINIR)`.
+//
+// react-window'un satır bazlı virtualizasyonu TEK SÜTUNLU bir liste
+// gerektirir — kadro ızgarası ise 1/2/3 sütunlu responsive bir CSS Grid'dir.
+// Bu iki deseni uzlaştırmak yerine (ör. ekran genişliğini JS'te izleyip
+// "satır başına kart sayısı"nı hesaplamak), küçük kadrolarda (P2-19'un
+// örneklediği 20-30 kişilik ölçek) MEVCUT ızgara aynen korunur — sanallaştırma
+// yalnızca eşiğin ÜZERİNDE (ör. 1000 kişilik bir organizasyon) devreye girip
+// tek sütunlu bir satır listesine geçer. Bu, görev talimatındaki "küçük
+// listelerde gereksiz karmaşıklık/kötü UX yaratmasın" kısıtını karşılar.
+const VIRTUALIZE_THRESHOLD = 30;
+const ROW_HEIGHT = 68;
+const LIST_MAX_HEIGHT = 640;
+
+interface UserRowData {
+  users: User[];
+  currentUser: User | null;
+  isAdmin: boolean;
+  getActiveTaskCount: (u: { uid: string; email: string }) => number;
+  onSelect: (user: User) => void;
+  onEdit: (user: User) => void;
+  onDelete: (user: User) => void;
+}
+
+function VirtualizedUserRow({
+  index, style, ariaAttributes, users, currentUser, isAdmin, getActiveTaskCount, onSelect, onEdit, onDelete,
+}: RowComponentProps<UserRowData>): ReactElement | null {
+  const user = users[index];
+  if (!user) return null;
+  const canEdit = isAdmin || user.uid === currentUser?.uid;
+  const userTaskCount = getActiveTaskCount(user);
+  const rc = roleConfig[user.role];
+
+  return (
+    <div style={style} {...ariaAttributes}>
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={user.fullName}
+        onClick={() => onSelect(user)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onSelect(user);
+          }
+        }}
+        className={cn(
+          'group flex items-center gap-3 h-full px-3.5 box-border cursor-pointer border-b border-l-2 border-l-transparent border-b-surface-border/60 hover:bg-makam-glass transition-colors',
+          userTaskCount >= 5 && 'border-l-status-danger'
+        )}
+      >
+        <Avatar name={user.fullName} photoURL={user.photoURL} size="md" className="flex-shrink-0" />
+
+        <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+          <span className="text-[12.5px] font-medium text-executive-blue truncate tracking-tight font-serif">
+            {user.fullName}
+          </span>
+          <div className="flex items-center gap-1.5 text-[9px] text-text-tertiary min-w-0">
+            <Mail className="w-2.5 h-2.5 flex-shrink-0 opacity-60" />
+            <span className="truncate">{user.email}</span>
+          </div>
+        </div>
+
+        <span className={cn(
+          'hidden sm:inline-flex items-center gap-1 text-[8px] font-medium uppercase tracking-[0.2em] px-2 py-0.5 rounded-full border flex-shrink-0',
+          rc.bg, rc.text, rc.border
+        )}>
+          <Shield className="w-2.5 h-2.5 stroke-[1.5]" />
+          {ROLE_LABELS[user.role]}
+        </span>
+
+        {user.departmentId && (
+          <span className="hidden md:inline-flex items-center gap-1 text-[8px] font-medium uppercase tracking-[0.2em] px-2 py-0.5 rounded-full bg-transparent text-text-tertiary border border-surface-border flex-shrink-0 max-w-[130px]">
+            <Building className="w-2.5 h-2.5 flex-shrink-0" />
+            <span className="truncate">{user.departmentId}</span>
+          </span>
+        )}
+
+        {userTaskCount > 0 && (
+          <span className={cn(
+            'hidden lg:inline-flex items-center gap-1 text-[8px] font-medium uppercase tracking-[0.2em] px-2 py-0.5 rounded-full border flex-shrink-0',
+            userTaskCount >= 5 ? 'bg-status-danger/[0.08] text-status-danger border-status-danger/25' :
+            userTaskCount >= 3 ? 'bg-status-warning/[0.08] text-status-warning border-status-warning/25' :
+            'bg-status-success/[0.08] text-status-success border-status-success/25'
+          )}>
+            <Activity className="w-2.5 h-2.5" />
+            {userTaskCount}
+          </span>
+        )}
+
+        {canEdit && (
+          <div className="flex items-center gap-1.5 flex-shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+            <button
+              className="w-7 h-7 flex items-center justify-center bg-makam-glass border border-executive-blue/[0.06] rounded-lg text-text-tertiary hover:text-executive-blue hover:bg-surface-elevated transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-blue"
+              onClick={(e) => { e.stopPropagation(); onEdit(user); }}
+              title="Düzenle"
+              aria-label={`${user.fullName} kaydını düzenle`}
+            >
+              <Edit2 className="w-3 h-3 stroke-[1.5]" />
+            </button>
+            {isAdmin && user.uid !== currentUser?.uid && (
+              <button
+                className="w-7 h-7 flex items-center justify-center bg-makam-glass border border-executive-blue/[0.06] rounded-lg text-text-tertiary hover:text-status-danger hover:bg-status-danger/10 transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger"
+                onClick={(e) => { e.stopPropagation(); onDelete(user); }}
+                title="Sil"
+                aria-label={`${user.fullName} kaydını sil`}
+              >
+                <Trash2 className="w-3 h-3 stroke-[1.5]" />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 interface TeamListProps {
   users: User[];
@@ -120,14 +242,19 @@ export const TeamList = ({ users, tasks, currentUser, departments, onUpdateUser,
     // denetimi).
   }, [selectedUser, currentUser?.uid]);
 
-  const handleEdit = (user: User) => {
+  // useCallback: sanallaştırılmış liste açıkken (bkz. userRowProps altta) her
+  // satıra geçirilen rowProps nesnesinin kimliği bu fonksiyonların referansına
+  // bağlı — sabit bir referans olmadan her TeamList render'ında yeni bir
+  // rowProps nesnesi (ve dolayısıyla react-window'un gereksiz yeniden ölçümü)
+  // üretilirdi.
+  const handleEdit = useCallback((user: User) => {
     setEditingUser(user);
     setEditRole(user.role);
     setEditName(user.fullName);
     setEditEmail(user.email);
     setEditDept(user.departmentId || '');
     setIsEditModalOpen(true);
-  };
+  }, []);
 
   const handleSave = () => {
     // Edit User modalı gerçek bir <form> değil (bkz. altındaki JSX), bu yüzden
@@ -160,10 +287,10 @@ export const TeamList = ({ users, tasks, currentUser, departments, onUpdateUser,
     }
   };
 
-  const handleDeleteClick = (user: User) => {
+  const handleDeleteClick = useCallback((user: User) => {
     setUserToDelete(user);
     setIsDeleteModalOpen(true);
-  };
+  }, []);
 
   const confirmDelete = () => {
     if (userToDelete) {
@@ -213,8 +340,9 @@ export const TeamList = ({ users, tasks, currentUser, departments, onUpdateUser,
     return map;
   }, [tasks]);
 
-  const getActiveTaskCount = (u: { uid: string; email: string }) =>
-    (activeTaskCountByUser.get(u.uid) ?? 0) + (u.email !== u.uid ? (activeTaskCountByUser.get(u.email) ?? 0) : 0);
+  const getActiveTaskCount = useCallback((u: { uid: string; email: string }) =>
+    (activeTaskCountByUser.get(u.uid) ?? 0) + (u.email !== u.uid ? (activeTaskCountByUser.get(u.email) ?? 0) : 0),
+  [activeTaskCountByUser]);
 
   const staffUsers = useMemo(() => users.filter(u => u.role === 'Staff'), [users]);
 
@@ -281,6 +409,18 @@ export const TeamList = ({ users, tasks, currentUser, departments, onUpdateUser,
     }
     return rows.sort((a, b) => b.percent - a.percent);
   }, [staffByDepartment, activeTaskCountByUser]);
+
+  const userRowKey = useCallback((index: number, data: UserRowData) => data.users[index]?.uid ?? index, []);
+  const userRowProps = useMemo<UserRowData>(() => ({
+    users,
+    currentUser,
+    isAdmin,
+    getActiveTaskCount,
+    onSelect: setSelectedUser,
+    onEdit: handleEdit,
+    onDelete: handleDeleteClick,
+  }), [users, currentUser, isAdmin, getActiveTaskCount, handleEdit, handleDeleteClick]);
+  const userListHeight = Math.min(users.length * ROW_HEIGHT, LIST_MAX_HEIGHT);
 
   if (isLoading) return <TeamListSkeleton />;
 
@@ -392,6 +532,20 @@ export const TeamList = ({ users, tasks, currentUser, departments, onUpdateUser,
 
       {/* ── Personnel Cards Grid / Org Tree ─────────────────────── */}
       {viewMode === 'grid' ? (
+        users.length > VIRTUALIZE_THRESHOLD ? (
+          // Sanallaştırılmış tek sütunlu liste (bkz. yukarıdaki VIRTUALIZE_THRESHOLD
+          // yorumu) — yalnızca büyük kadrolarda (P2-19) devreye girer.
+          <div className="bg-makam-glass backdrop-blur-xl border border-surface-border rounded-2xl overflow-hidden shadow-[0_1px_8px_rgba(22,21,19,0.02)]">
+            <List
+              rowComponent={VirtualizedUserRow}
+              rowCount={users.length}
+              rowHeight={ROW_HEIGHT}
+              rowProps={userRowProps}
+              rowKey={userRowKey}
+              style={{ height: userListHeight }}
+            />
+          </div>
+        ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {users.map((user, i) => {
             const canEdit = isAdmin || user.uid === currentUser?.uid;
@@ -494,6 +648,7 @@ export const TeamList = ({ users, tasks, currentUser, departments, onUpdateUser,
             );
           })}
         </div>
+        )
       ) : (
         <div className="flex flex-col items-center gap-12 py-8 overflow-x-auto w-full no-scrollbar select-none bg-makam-glass border border-surface-border rounded-3xl p-6">
           {/* Level 1: Admins */}

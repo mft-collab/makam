@@ -150,3 +150,77 @@ describe('TeamList — departman atama (P0-2)', () => {
     expect(screen.getByText(/departman kayıtlarında yok/i)).toBeInTheDocument();
   });
 });
+
+/**
+ * TeamList — sanallaştırma eşiği (P2-19).
+ *
+ * `useFirestoreData.ts` kadroyu `limit(1000)` ile çekiyor; TeamList eskiden
+ * bunu sayfalama/sanallaştırma olmadan tek seferde DOM'a basıyordu. Kadro
+ * ızgarası artık `VIRTUALIZE_THRESHOLD`'un (30) ALTINDA aynı 1/2/3 sütunlu
+ * ızgarayı korurken, ÜZERİNDE `react-window`'un `List`'ine (TaskBoard.tsx'teki
+ * aynı desen) geçiyor. Bu blok her iki tarafı da doğrular.
+ *
+ * DİKKAT (react-window + jsdom tuzağı): `List` görünür satır aralığını
+ * konteynerin GERÇEK layout'undan (offsetHeight/ResizeObserver) değil,
+ * `style.height`'e verilen SAYISAL değerden hesaplıyor (bkz.
+ * node_modules/react-window/dist/react-window.js — `we()` fonksiyonu,
+ * `styleHeight` tanımlıysa ResizeObserver hiç kurulmuyor). TeamList.tsx bu
+ * yüzden `style={{ height: userListHeight }}` gibi SAYISAL bir yükseklik
+ * geçiyor (TaskBoard.tsx'teki desenle birebir aynı) — aksi halde jsdom'da
+ * (gerçek layout hesaplamadığından) yükseklik 0 kalır ve hiçbir satır render
+ * edilmezdi.
+ */
+describe('TeamList — sanallaştırma eşiği (P2-19)', () => {
+  const makeStaff = (count: number): User[] =>
+    Array.from({ length: count }, (_, i) => ({
+      uid: `staff-${i}`,
+      fullName: `Personel ${String(i).padStart(3, '0')}`,
+      email: `personel${i}@makam.com`,
+      role: 'Staff' as const,
+      departmentId: 'Operasyon',
+    }));
+
+  it('eşiğin ALTINDAKİ (30) kadro sanallaştırılmadan, tamamı DOM\'da olacak şekilde render edilir', () => {
+    const users = [admin, ...makeStaff(29)]; // toplam 30 — eşiğe eşit, hâlâ ızgara
+    renderList({ users });
+
+    // Sanallaştırılmamış ızgarada TÜM personel aynı anda DOM'dadır.
+    expect(screen.getByText('Personel 000')).toBeInTheDocument();
+    expect(screen.getByText('Personel 028')).toBeInTheDocument();
+  });
+
+  it('eşiğin ÜZERİNDEKİ (31) kadro react-window ile sanallaştırılır — yalnızca görünür pencere DOM\'a basılır', () => {
+    const users = [admin, ...makeStaff(60)]; // toplam 61 — eşiğin üzerinde
+    renderList({ users });
+
+    // Listenin başındaki bir personel görünür pencerede olmalı.
+    expect(screen.getByText('Personel 000')).toBeInTheDocument();
+    // Listenin sonundaki bir personel, virtualization sayesinde DOM'a hiç
+    // basılmamış olmalı (viewport dışı) — bu, sanallaştırmanın gerçekten
+    // devrede olduğunun kanıtı.
+    expect(screen.queryByText('Personel 059')).not.toBeInTheDocument();
+  });
+
+  it('sanallaştırılmış listede görünür bir satıra tıklamak Kadro Profili modalını açar', async () => {
+    const user = userEvent.setup();
+    const users = [admin, ...makeStaff(60)];
+    renderList({ users });
+
+    await user.click(screen.getByRole('button', { name: 'Personel 000' }));
+
+    expect(await screen.findByRole('heading', { name: 'Kadro Profili' })).toBeInTheDocument();
+    // Modal içeriği ilgili personelin adını göstermeli.
+    expect(within(screen.getByRole('dialog')).getByText('Personel 000')).toBeInTheDocument();
+  });
+
+  it('sanallaştırılmış listede görünür bir satırın Düzenle butonu düzenleme modalını açar', async () => {
+    const user = userEvent.setup();
+    const users = [admin, ...makeStaff(60)];
+    renderList({ users });
+
+    await user.click(screen.getByRole('button', { name: 'Personel 000 kaydını düzenle' }));
+
+    expect(await screen.findByRole('heading', { name: 'Kadro Revizyonu' })).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Personel 000')).toBeInTheDocument();
+  });
+});
