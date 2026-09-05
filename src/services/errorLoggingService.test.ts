@@ -90,13 +90,19 @@ describe('errorLoggingService.logError', () => {
     expect(firebase.addDoc).toHaveBeenCalledWith({ __name: 'error_logs' }, expect.anything());
   });
 
-  it('addDoc reddedilirse hata yutulur, fonksiyon fırlatmadan (resolve ile) tamamlanır', async () => {
+  it('addDoc reddedilirse hata yutulur, fonksiyon fırlatmadan (null ile) tamamlanır', async () => {
     vi.mocked(firebase.addDoc).mockRejectedValueOnce(new Error('network'));
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    await expect(logError(new Error('x'), 'manual')).resolves.toBeUndefined();
+    await expect(logError(new Error('x'), 'manual')).resolves.toBeNull();
     expect(warnSpy).toHaveBeenCalledOnce();
 
     warnSpy.mockRestore();
+  });
+
+  it('yazım başarılıysa oluşturulan dokümanın ID\'sini döndürür (Destek Referansı için)', async () => {
+    vi.mocked(firebase.addDoc).mockResolvedValueOnce({ id: 'log-abc123' } as any);
+
+    await expect(logError(new Error('x'), 'manual')).resolves.toBe('log-abc123');
   });
 });
