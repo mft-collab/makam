@@ -14,7 +14,7 @@ import {
 import { logger } from './logger';
 import { conflictDetectionService } from '../services/conflictDetectionService';
 import { useUIStore } from '../store/uiStore';
-import { transitionTaskInTransaction, updateTaskInTransaction, taskService } from '../services/taskService';
+import { auditTaskTitle, transitionTaskInTransaction, updateTaskInTransaction, taskService } from '../services/taskService';
 import type { Task, TaskBlocker, TaskStatus, User } from '../types';
 
 // Sunucu bu hata kodlarıyla reddettiğinde yeniden deneme sonucu asla değişmez
@@ -116,6 +116,11 @@ export interface OfflineMutation {
    */
   withAuditLog?: {
     taskId: string;
+    /** Kaydın yazıldığı andaki görev başlığının donmuş kopyası — online
+     *  yoldaki blockerService.editBlocker ile PARİTE (bkz.
+     *  taskService.auditTaskTitle). Görev-dışı senaryolarda (kullanıcı
+     *  yönetimi) verilmez ve alan hiç yazılmaz. */
+    taskTitle?: string;
     changedBy: string;
     oldValue: string;
     newValue: string;
@@ -202,6 +207,7 @@ async function writeWithAuditLog(
   mainWrite(batch);
   batch.set(doc(collection(db, 'audit_logs')), {
     taskId: auditLog.taskId,
+    ...auditTaskTitle(auditLog.taskTitle),
     changedBy: auditLog.changedBy,
     oldValue: auditLog.oldValue,
     newValue: auditLog.newValue,

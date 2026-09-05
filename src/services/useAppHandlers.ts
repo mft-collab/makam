@@ -294,7 +294,7 @@ export function useAppHandlers({
     try {
       const taskBlockers = blockers.filter(b => b.taskId === blocker.taskId && !b.isResolved);
       const task = tasks.find(t => t.id === blocker.taskId);
-      await blockerService.resolveBlocker(blockerId, blocker.taskId, taskBlockers.length - 1, user.uid, task?.lockVersion);
+      await blockerService.resolveBlocker(blockerId, blocker.taskId, taskBlockers.length - 1, user.uid, task?.lockVersion, task?.title);
     } catch (err) {
       // Son aktif engelse resolveBlocker de transitionTaskInTransaction
       // içerir (görevi IN_PROGRESS'e döndürme) — bkz. addBlocker'daki aynı
@@ -424,6 +424,11 @@ export function useAppHandlers({
     if (!user) return;
     const blocker = blockers.find(b => b.id === blockerId);
     if (!blocker) return;
+    // Denetim kaydına donacak görev başlığı (bkz. taskService.auditTaskTitle) —
+    // blockerService görevi kendisi okumadığı için başlığı, görev listesini
+    // zaten elinde tutan bu katman geçirir; hem online hem offline yolda AYNI
+    // kayıt yazılsın diye iki dalda da kullanılır.
+    const task = tasks.find(t => t.id === blocker.taskId);
 
     if (isOfflineNow()) {
       // blockerService.editBlocker ile AYNI atomiklik: offlineQueue.ts'teki
@@ -433,15 +438,15 @@ export function useAppHandlers({
       offlineQueue.enqueue(
         'blockers', 'update', { reason }, blockerId,
         undefined, undefined, undefined, undefined, undefined,
-        { taskId: blocker.taskId, changedBy: user.uid, oldValue: 'Risk Gerekçesi', newValue: reason }
+        { taskId: blocker.taskId, taskTitle: task?.title, changedBy: user.uid, oldValue: 'Risk Gerekçesi', newValue: reason }
       );
       toast('🔄 Çevrimdışı Risk Düzenleme', 'Risk gerekçesi lokal sıraya alındı.', 'warning', blocker.taskId);
       return;
     }
 
-    try { await blockerService.editBlocker(blockerId, reason, user.uid, blocker.taskId); }
+    try { await blockerService.editBlocker(blockerId, reason, user.uid, blocker.taskId, task?.title); }
     catch (err) { onError(err, 'update', `blockers/${blockerId}`); }
-  }, [user, blockers, toast, onError]);
+  }, [user, blockers, tasks, toast, onError]);
 
   const deleteBlocker = useCallback(async (blockerId: string) => {
     if (!user) return;
@@ -486,7 +491,7 @@ export function useAppHandlers({
       // transaction'a girmiyor, sadece audit_logs yazımı için bu bilgiye
       // ihtiyaç duyuyor (bkz. kod denetimi: eskiden son-engel-olmayan dalda
       // hiç audit log yazılmıyordu).
-      await blockerService.deleteBlocker(blockerId, blocker.taskId, others.length, user.uid, task?.lockVersion);
+      await blockerService.deleteBlocker(blockerId, blocker.taskId, others.length, user.uid, task?.lockVersion, task?.title);
     } catch (err) {
       // Son aktif engelse deleteBlocker de transitionTaskInTransaction içerir
       // (görevi IN_PROGRESS'e döndürme) — bkz. addBlocker'daki aynı path-seçim

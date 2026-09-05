@@ -145,6 +145,11 @@ export const GlobalStatsSchema = z.object({
 export const AuditLogSchema = z.object({
   id: z.string(),
   taskId: z.string(),
+  /** Kaydın YAZILDIĞI andaki görev başlığının donmuş kopyası (bkz.
+   *  taskService.auditTaskTitle). Opsiyoneldir: bu alandan önce yazılmış
+   *  kayıtlarda yoktur ve geriye dönük backfill yapılmaz — AuditLogList o
+   *  eski kayıtlarda eskisi gibi yüklü görev listesine düşer. */
+  taskTitle: z.string().optional(),
   changedBy: z.string(),
   changes: z.record(z.string(), z.object({
     old: z.unknown(),

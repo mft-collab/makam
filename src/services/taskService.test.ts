@@ -29,7 +29,7 @@ describe('taskService', () => {
   describe('transitionTaskInTransaction (görev geçişi çekirdek mantığı)', () => {
     it('lockVersion artırılır, audit log ve stats aynı transaction içinde yazılır', async () => {
       const { transaction, update, set } = makeTransactionMock({
-        status: 'IN_PROGRESS', lockVersion: 2, totalPausedTime: 0, deadline: Date.now() + 100_000,
+        status: 'IN_PROGRESS', title: 'Denetim Hedefi', lockVersion: 2, totalPausedTime: 0, deadline: Date.now() + 100_000,
       });
 
       await transitionTaskInTransaction(transaction, 'task-1', 'COMPLETED', 'user-1', {});
@@ -42,6 +42,9 @@ describe('taskService', () => {
       const auditCall = set.mock.calls.find(([, data]: any) => data?.changedBy === 'user-1');
       expect(auditCall?.[1]).toMatchObject({
         taskId: 'task-1', oldValue: 'IN_PROGRESS', newValue: 'COMPLETED',
+        // Başlık kayda DONDURULARAK yazılır: denetim izi ekranı, görevin hâlâ
+        // yüklü görev penceresinde olmasına bağlı kalmasın (bkz. P1-14).
+        taskTitle: 'Denetim Hedefi',
         changes: { status: { old: 'IN_PROGRESS', new: 'COMPLETED' } },
       });
 
@@ -50,6 +53,21 @@ describe('taskService', () => {
         status_IN_PROGRESS: { __increment: -1 },
         status_COMPLETED: { __increment: 1 },
       });
+    });
+
+    it('başlıksız (eski/bozuk) bir görev dokümanında audit kaydına taskTitle anahtarı HİÇ eklenmez', async () => {
+      // Firestore `undefined` alan değeri kabul etmez — denormalize başlık
+      // opsiyonel olduğundan, başlık yoksa anahtarın kendisi de payload'a
+      // girmemeli; aksi halde başlıksız bir görevin HER geçişi yazma
+      // hatasıyla tümden başarısız olurdu.
+      const { transaction, set } = makeTransactionMock({
+        status: 'IN_PROGRESS', lockVersion: 0, totalPausedTime: 0, deadline: Date.now() + 100_000,
+      });
+
+      await transitionTaskInTransaction(transaction, 'task-1', 'COMPLETED', 'user-1', {});
+
+      const auditCall = set.mock.calls.find(call => 'changedBy' in (call[1] as object));
+      expect(auditCall?.[1]).not.toHaveProperty('taskTitle');
     });
 
     it('BLOCKED durumuna geçişte pausedAt şimdiki zamana ayarlanır (SLA duraklatılır)', async () => {
@@ -265,7 +283,7 @@ describe('taskService', () => {
       expect(taskSetCall?.[1]).toMatchObject({ id: 'ref-1', status: 'ASSIGNED', lockVersion: 0, totalPausedTime: 0 });
 
       const auditSetCall = capturedTransaction.set.mock.calls.find(([, data]: any) => data?.newValue === 'Talimat Oluşturuldu ve Atandı');
-      expect(auditSetCall?.[1]).toMatchObject({ taskId: 'ref-1', changedBy: 'user-1' });
+      expect(auditSetCall?.[1]).toMatchObject({ taskId: 'ref-1', changedBy: 'user-1', taskTitle: 'Yeni Görev' });
 
       const statsSetCall = capturedTransaction.set.mock.calls.find(([, data]: any) => 'status_ASSIGNED' in (data ?? {}));
       expect(statsSetCall?.[1]).toMatchObject({ totalTasks: { __increment: 1 }, status_ASSIGNED: { __increment: 1 } });
@@ -357,6 +375,20 @@ describe('taskService', () => {
 
       const auditCall = set.mock.calls.find(([, data]: any) => data?.changes?.title);
       expect(auditCall?.[1].changes.title).toEqual({ old: 'Eski Başlık', new: 'Yeni Başlık' });
+      // Başlığın KENDİSİ değiştiğinde donan denormalize başlık YENİ başlıktır —
+      // eski başlık zaten yukarıdaki diff'te korunuyor.
+      expect(auditCall?.[1].taskTitle).toBe('Yeni Başlık');
+    });
+
+    it('başlık değişmeyen bir güncellemede audit kaydına sunucudaki mevcut başlık donar', async () => {
+      const { transaction, set } = makeTransactionMock({ status: 'IN_PROGRESS', title: 'Mevcut Başlık', lockVersion: 3 });
+      vi.mocked(firebase.runTransaction).mockImplementationOnce((_db, fn) => fn(transaction));
+      const oldTask = { id: 'task-1', status: 'IN_PROGRESS', lockVersion: 3, description: 'eski' } as Task;
+
+      await taskService.updateTask('task-1', { description: 'yeni' }, oldTask, 'user-1');
+
+      const auditCall = set.mock.calls.find(call => 'changes' in (call[1] as object));
+      expect(auditCall?.[1].taskTitle).toBe('Mevcut Başlık');
     });
 
     it('durum değişikliği varsa stats deltası aynı transaction\'da yazılır, yoksa yazılmaz', async () => {
@@ -438,6 +470,10 @@ describe('taskService', () => {
       // "accounting" batch'te, silme işlemlerinden ÖNCE commit edilir)
       const auditSetCall = batchSet.mock.calls.find(([, data]: any) => data?.newValue === 'Silindi');
       expect(auditSetCall).toBeTruthy();
+      // Silme kaydında başlık, görev SİLİNMEDEN ÖNCEKİ halidir — silinmiş bir
+      // görev için görev listesi fallback'i zaten hiçbir zaman çözülemez, bu
+      // yüzden denormalize başlık burada tek başlık kaynağıdır (bkz. P1-14).
+      expect(auditSetCall?.[1]).toMatchObject({ taskTitle: 'Silinecek Görev', oldValue: 'Silinecek Görev' });
       // Stats: bu görevin durumu (IN_PROGRESS) için -1
       const statsSetCall = batchSet.mock.calls.find(([, data]: any) => 'status_IN_PROGRESS' in (data ?? {}));
       expect(statsSetCall?.[1]).toMatchObject({

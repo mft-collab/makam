@@ -300,6 +300,10 @@ describe('OfflineQueue', () => {
       expect(batch.set).toHaveBeenCalledTimes(2);
       const auditCallArgs = batch.set.mock.calls[1]!;
       expect(auditCallArgs[1]).toMatchObject({ taskId: 'a@b.com', changedBy: 'admin-1', newValue: 'Personel Eklendi: X (Staff)' });
+      // Kullanıcı-yönetimi kayıtlarında "taskId" bir görev değil bir kullanıcı
+      // id'sidir — denormalize görev başlığı BİLEREK yazılmaz (uydurma veri
+      // olurdu, bkz. userService.ts'teki aynı gerekçe).
+      expect(auditCallArgs[1]).not.toHaveProperty('taskTitle');
       expect(batch.commit).toHaveBeenCalledOnce();
     });
 
@@ -310,14 +314,16 @@ describe('OfflineQueue', () => {
       offlineQueue.enqueue(
         'blockers', 'update', { reason: 'Yeni sebep' }, 'blocker-1',
         undefined, undefined, undefined, undefined, undefined,
-        { taskId: 'task-1', changedBy: 'user-1', oldValue: 'Risk Gerekçesi', newValue: 'Yeni sebep' }
+        { taskId: 'task-1', taskTitle: 'Risk Görevi', changedBy: 'user-1', oldValue: 'Risk Gerekçesi', newValue: 'Yeni sebep' }
       );
       const result = await offlineQueue.sync();
 
       expect(result).toBe(true);
       expect(offlineQueue.getQueue()).toHaveLength(0);
       expect(batch.update).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ reason: 'Yeni sebep' }));
-      expect(batch.set).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ taskId: 'task-1', newValue: 'Yeni sebep' }));
+      // taskTitle, online blockerService.editBlocker yoluyla PARİTE için
+      // offline senkronda da yazılır (bkz. P1-14 denormalizasyonu).
+      expect(batch.set).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ taskId: 'task-1', taskTitle: 'Risk Görevi', newValue: 'Yeni sebep' }));
       expect(batch.commit).toHaveBeenCalledOnce();
     });
 

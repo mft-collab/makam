@@ -15,6 +15,10 @@ import { User, UserRole } from '../types';
 // hiçbir gerçek görevle eşleşmeyeceğinden, bu kayıtlar otomatik olarak
 // yalnızca Admin/kaydı yazan kişiyle sınırlı kalır — hassas kullanıcı-yönetimi
 // logları için doğru görünürlük sınırı budur.
+// Aynı nedenle bu kayıtlara denormalize `taskTitle` alanı BİLEREK yazılmaz
+// (bkz. taskService.auditTaskTitle): buradaki "taskId" bir görev değil bir
+// kullanıcı id'sidir, dolayısıyla yazılacak her başlık uydurma olurdu.
+// Etkilenen personelin adı zaten `newValue` metninde taşınıyor.
 function userAuditLogRef() {
   return doc(collection(db, 'audit_logs'));
 }

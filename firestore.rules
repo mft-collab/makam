@@ -318,10 +318,18 @@ service cloud.firestore {
       // alan kilidi eksikliği burada ÖZELLİKLE kalıcı bir risk: hasOnly()
       // olmadan yazılmış keyfi/aşırı büyük bir alan sonsuza dek koleksiyonda
       // kalır (bkz. kod denetimi).
-      let allowedFields = ['taskId', 'changedBy', 'oldValue', 'newValue', 'timestamp', 'changes'];
+      // 'taskTitle': kaydın yazıldığı andaki görev başlığının donmuş kopyası
+      // (bkz. taskService.auditTaskTitle) — denetim izi ekranı, yüklü görev
+      // penceresinin DIŞINDA kalan eski görevlerin başlığını artık buradan
+      // okur. Opsiyoneldir: bu alandan önce yazılmış kayıtlarda yoktur.
+      // Uzunluk sınırı, isValidTask'taki title sınırıyla (<=200) BİLEREK
+      // aynıdır — daha dar bir sınır, uzun başlıklı bir görevin geçişini
+      // audit yazımı reddedildiği için tümüyle başarısız kılardı.
+      let allowedFields = ['taskId', 'taskTitle', 'changedBy', 'oldValue', 'newValue', 'timestamp', 'changes'];
       return data.keys().hasAll(['taskId', 'changedBy', 'timestamp']) &&
              data.keys().hasOnly(allowedFields) &&
              data.taskId is string && data.taskId.size() <= 200 &&
+             (!('taskTitle' in data) || (data.taskTitle is string && data.taskTitle.size() <= 200)) &&
              data.changedBy is string &&
              // Kaydı oluşturan istemci, başka bir kullanıcı adına sahte kayıt
              // yazamaz — "kim yaptı" bilgisi request.auth.uid'e bağlanır.

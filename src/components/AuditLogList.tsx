@@ -194,7 +194,14 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
       <div className="flex flex-col gap-5">
         {filteredLogs.length > 0 ? (
           filteredLogs.map((log) => {
-            const task = tasksById.get(log.taskId);
+            // Öncelik sırası: (1) kaydın kendi donmuş `taskTitle`'ı — yeni
+            // kayıtların tamamında vardır ve `tasks` dizisinin taskLimit
+            // penceresinden BAĞIMSIZDIR, (2) bu alandan önce yazılmış eski
+            // kayıtlar için yüklü görev listesindeki başlık, (3) ikisi de
+            // yoksa "Bilinmeyen Talimat". Eskiden yalnızca (2) vardı, bu
+            // yüzden pencere dışındaki her eski görev "Bilinmeyen Talimat"
+            // görünüyordu (bkz. kod denetimi P1-14).
+            const taskTitle = log.taskTitle ?? tasksById.get(log.taskId)?.title ?? 'Bilinmeyen Talimat';
             const user = usersById.get(log.changedBy);
             // Rol/departman/e-posta gibi yetki-kritik bir alan değişmişse, satır
             // Dashboard'un kriz şeridiyle AYNI görsel ağırlıkta işaretlenir — bir
@@ -232,7 +239,7 @@ export const AuditLogList = ({ tasks, users }: AuditLogListProps) => {
 
                 <div className="flex flex-col gap-1 flex-[1.2] border-t sm:border-t-0 sm:border-l border-executive-blue/[0.04] pt-2.5 sm:pt-0 sm:pl-4">
                   <span className="text-[8px] text-text-tertiary font-medium uppercase tracking-[0.25em]">Operasyon Hedefi</span>
-                  <span className="text-[12px] font-medium text-executive-blue truncate max-w-[280px] font-serif">{task?.title || 'Bilinmeyen Talimat'}</span>
+                  <span className="text-[12px] font-medium text-executive-blue truncate max-w-[280px] font-serif">{taskTitle}</span>
                 </div>
 
                 <div className="flex flex-col gap-2 flex-[1.6] border-t sm:border-t-0 sm:border-l border-executive-blue/[0.04] pt-2.5 sm:pt-0 sm:pl-4">

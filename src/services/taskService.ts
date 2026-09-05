@@ -19,6 +19,28 @@ import { runWithRetry } from '../lib/retry';
 import { isValidTaskTransition } from '../lib/taskStateMachine';
 
 /**
+ * Bir audit_logs kaydına, YAZILDIĞI andaki görev başlığını donduran
+ * denormalize `taskTitle` alanını ekler (başlık bilinmiyorsa hiçbir şey
+ * eklemez — alan opsiyoneldir, Firestore `undefined` değer kabul etmez).
+ *
+ * Neden denormalizasyon: denetim izi ekranı (`AuditLogList`) hedef başlığı
+ * yalnızca `useFirestoreData`'nın `taskLimit` penceresine giren görev
+ * listesinden çözüyordu; pencerenin DIŞINDA kalan eski/tamamlanmış görevlerin
+ * kayıtları "Bilinmeyen Talimat" olarak görünüyordu — oysa denetim izi tanım
+ * gereği eski olayları kapsar (bkz. kod denetimi P1-14). audit_logs zaten
+ * değişmezdir (firestore.rules: `allow update, delete: if false`), bu yüzden
+ * donmuş bir başlık kopyası burada DOĞRU desendir: kayıt, olayın gerçekleştiği
+ * andaki gerçeği taşır ve sonradan bayatlayamaz/sahte veri üretemez.
+ *
+ * Not: rules'taki `taskTitle` uzunluk sınırı (<=200), görev `title` sınırıyla
+ * (<=200) BİLEREK aynıdır — aksi halde uzun başlıklı bir görevin geçişi,
+ * audit yazımı reddedildiği için tümüyle başarısız olurdu.
+ */
+export function auditTaskTitle(title?: string): { taskTitle?: string } {
+  return title ? { taskTitle: title } : {};
+}
+
+/**
  * Görev geçişinin tüm okuma+yazma mantığını mevcut bir transaction içinde
  * uygular — blockerService gibi çağıranlar, engel dokümanı yazımını görev
  * geçişiyle AYNI transaction'a katarak (ör. engel oluşturma + görev BLOCKED'a
@@ -134,6 +156,7 @@ async function transitionTaskInTransaction(
   const auditRef = doc(collection(db, 'audit_logs'));
   transaction.set(auditRef, {
     taskId,
+    ...auditTaskTitle(task.title),
     changedBy: userId,
     oldValue: task.status,
     newValue: newStatus,
@@ -219,6 +242,10 @@ async function updateTaskInTransaction(
   const auditRef = doc(collection(db, 'audit_logs'));
   transaction.set(auditRef, {
     taskId,
+    // Bu güncelleme başlığın KENDİSİNİ değiştiriyorsa yeni başlık donar —
+    // kayıt "bu değişiklikten sonra görevin adı buydu"yu anlatır; eski başlık
+    // zaten aşağıdaki `changes.title` diff'inde ayrıca korunur.
+    ...auditTaskTitle(data.title ?? task.title),
     changedBy: userId,
     oldValue: 'Kısmi Güncelleme',
     newValue: 'Kısmi Güncelleme',
@@ -296,6 +323,7 @@ export const taskService = {
 
       transaction.set(auditRef, {
         taskId: taskRef.id,
+        ...auditTaskTitle(taskData.title),
         changedBy: userId,
         oldValue: 'Yok',
         newValue: 'Talimat Oluşturuldu ve Atandı',
@@ -396,6 +424,11 @@ export const taskService = {
         const accountingBatch = writeBatch(db);
         accountingBatch.set(deletionAuditRef, {
           taskId,
+          // Silme kaydında başlık, görev SİLİNMEDEN ÖNCEKİ halidir — silinen
+          // bir görev için `tasksById` fallback'i zaten hiçbir zaman
+          // çözülemez, dolayısıyla denormalize başlık bu kayıtta tek başlık
+          // kaynağıdır.
+          ...auditTaskTitle(rootData?.title),
           changedBy: userId,
           oldValue: rootData?.title ?? 'Silindi',
           newValue: 'Silindi',
