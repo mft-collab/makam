@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
+import { NavLink } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { CheckSquare, AlertTriangle, LogOut, Users, BarChart3, ShieldCheck, Settings as SettingsIcon, Database } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { triggerHaptic } from '../lib/haptics';
 import { cn } from '../lib/utils';
 import { User } from '../types';
-import { ROLE_LABELS, TAB_ROLES } from '../constants';
+import { ROLE_LABELS, TAB_ROLES, tabPath, type AppTabId } from '../constants';
 import { Logo } from './Logo';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import { PremiumIcon } from './ui/PremiumIcon';
@@ -14,19 +15,17 @@ import { AboutModal } from './AboutModal';
 
 interface SidebarProps {
   user: User | null;
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
   onLogout: () => void;
 }
 
 interface MenuItem {
-  id: string;
+  id: AppTabId;
   label: string;
   icon: LucideIcon;
   roles: string[];
 }
 
-export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProps) => {
+export const Sidebar = ({ user, onLogout }: SidebarProps) => {
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const resolvedTheme = useResolvedTheme();
 
@@ -46,47 +45,53 @@ export const Sidebar = ({ user, activeTab, setActiveTab, onLogout }: SidebarProp
   const filteredPrimaryItems = primaryItems.filter(item => user && item.roles.includes(user.role));
   const filteredSystemItems = systemItems.filter(item => user && item.roles.includes(user.role));
 
+  // Menü öğeleri <button> + setActiveTab yerine gerçek <NavLink> (yani <a href>):
+  // orta tıkla yeni sekmede açma, bağlantıyı kopyalama ve tarayıcı geri tuşu
+  // ücretsiz gelir (bkz. kod denetimi P1-6). Aktiflik uiStore'dan değil URL'den
+  // türetilir; NavLink `aria-current="page"`'i de kendisi yönetir.
+  // `end` verilmez — /tasks/:taskId açıkken "Talimatlar" aktif kalmalı.
   const renderMenuItem = (item: MenuItem) => (
-    <button
+    <NavLink
       key={item.id}
-      onClick={() => {
-        triggerHaptic('light');
-        setActiveTab(item.id);
-      }}
-      aria-current={activeTab === item.id ? 'page' : undefined}
+      to={tabPath(item.id)}
+      onClick={() => triggerHaptic('light')}
       aria-label={item.label}
-      className={cn(
+      className={({ isActive }) => cn(
         'flex items-center gap-4 px-3.5 py-2.5 rounded-xl transition-all duration-500 group relative border border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-executive-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
-        activeTab === item.id
+        isActive
           ? 'bg-executive-gold/[0.08] border-executive-gold/15 shadow-[0_8px_32px_rgba(197,160,89,0.05)] translate-x-1'
           : 'hover:bg-surface-glass hover:translate-x-0.5'
       )}
     >
-      <PremiumIcon
-        icon={item.icon}
-        active={activeTab === item.id}
-        size="sm"
-        variant={activeTab === item.id ? 'gold' : 'glass'}
-        aria-hidden
-      />
-      <span className={cn(
-        'font-normal text-[13px] tracking-wide transition-colors duration-300',
-        // text-executive-gold (#C5A059) düz metin olarak açık zeminlerde
-        // ~2.2:1 kontrast veriyor (axe-core authenticated e2e testi bulgusu)
-        // — tema-duyarlı --gold-text token'ı kullanılıyor (bkz. index.css).
-        activeTab === item.id ? 'text-[color:var(--gold-text)] font-medium' : 'text-text-muted group-hover:text-text-body'
-      )}>
-        {item.label}
-      </span>
-      {activeTab === item.id && (
-        <motion.div
-          layoutId="active-pill"
-          className="absolute -left-8 w-1.5 h-6 bg-executive-gold rounded-r-full"
-          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          aria-hidden="true"
-        />
+      {({ isActive }) => (
+        <>
+          <PremiumIcon
+            icon={item.icon}
+            active={isActive}
+            size="sm"
+            variant={isActive ? 'gold' : 'glass'}
+            aria-hidden
+          />
+          <span className={cn(
+            'font-normal text-[13px] tracking-wide transition-colors duration-300',
+            // text-executive-gold (#C5A059) düz metin olarak açık zeminlerde
+            // ~2.2:1 kontrast veriyor (axe-core authenticated e2e testi bulgusu)
+            // — tema-duyarlı --gold-text token'ı kullanılıyor (bkz. index.css).
+            isActive ? 'text-[color:var(--gold-text)] font-medium' : 'text-text-muted group-hover:text-text-body'
+          )}>
+            {item.label}
+          </span>
+          {isActive && (
+            <motion.div
+              layoutId="active-pill"
+              className="absolute -left-8 w-1.5 h-6 bg-executive-gold rounded-r-full"
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              aria-hidden="true"
+            />
+          )}
+        </>
       )}
-    </button>
+    </NavLink>
   );
 
   const SidebarContent = (

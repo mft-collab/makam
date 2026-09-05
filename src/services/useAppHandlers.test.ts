@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { createElement, type ReactNode } from 'react';
 import { renderHook, act } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { useAppHandlers } from './useAppHandlers';
 import { taskService } from './taskService';
 import { userService } from './userService';
@@ -27,6 +29,16 @@ vi.mock('./notificationService', () => ({
 vi.mock('../lib/offlineQueue', () => ({ offlineQueue: { enqueue: vi.fn() } }));
 vi.mock('../store/uiStore', () => ({ useUIStore: vi.fn() }));
 
+// Açık görev detayı artık uiStore'da değil URL'de tutuluyor (bkz. kod denetimi
+// P1-6). Hook gerçek bir <MemoryRouter> içinde koşar — böylece useMatch
+// başlangıç route'undan `selectedTaskId`'yi GERÇEKTEN çözer; yalnızca
+// `useNavigate` casuslanır ki yönlendirmenin olup olmadığı doğrulanabilsin.
+const navigateMock = vi.fn();
+vi.mock('react-router-dom', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('react-router-dom')>()),
+  useNavigate: () => navigateMock,
+}));
+
 const goOffline = () => Object.defineProperty(window.navigator, 'onLine', { value: false, writable: true });
 const goOnline = () => Object.defineProperty(window.navigator, 'onLine', { value: true, writable: true });
 
@@ -46,8 +58,6 @@ const makeBlocker = (overrides: Partial<TaskBlocker> = {}): TaskBlocker => ({
 
 describe('useAppHandlers', () => {
   let uiState: {
-    selectedTaskId: string | null;
-    setSelectedTaskId: ReturnType<typeof vi.fn>;
     setIsCreateModalOpen: ReturnType<typeof vi.fn>;
     setIsEditModalOpen: ReturnType<typeof vi.fn>;
     addToast: ReturnType<typeof vi.fn>;
@@ -57,22 +67,26 @@ describe('useAppHandlers', () => {
     vi.clearAllMocks();
     goOnline();
     uiState = {
-      selectedTaskId: null, setSelectedTaskId: vi.fn(), setIsCreateModalOpen: vi.fn(),
-      setIsEditModalOpen: vi.fn(), addToast: vi.fn(),
+      setIsCreateModalOpen: vi.fn(), setIsEditModalOpen: vi.fn(), addToast: vi.fn(),
     };
     vi.mocked(useUIStore).mockImplementation((selector: any) => selector(uiState));
   });
 
   afterEach(() => { goOnline(); });
 
-  const setup = (opts: { user?: User | null; tasks?: Task[]; blockers?: TaskBlocker[] } = {}) => {
+  /** `route`: hook'un içinde koşacağı URL. `/tasks/task-1` verildiğinde
+   *  useSelectedTaskId 'task-1' döner, yani "o görevin detayı açık" demektir. */
+  const setup = (opts: { user?: User | null; tasks?: Task[]; blockers?: TaskBlocker[]; route?: string } = {}) => {
     const onError = vi.fn();
     const { result } = renderHook(() => useAppHandlers({
       user: opts.user === undefined ? makeUser() : opts.user,
       tasks: opts.tasks ?? [],
       blockers: opts.blockers ?? [],
       onError,
-    }));
+    }), {
+      wrapper: ({ children }: { children: ReactNode }) =>
+        createElement(MemoryRouter, { initialEntries: [opts.route ?? '/tasks'] }, children),
+    });
     return { handlers: result.current, onError };
   };
 
@@ -253,23 +267,21 @@ describe('useAppHandlers', () => {
   });
 
   describe('deleteTask', () => {
-    it('online: taskService.deleteTask çağrılır; silinen görev seçiliyse seçim temizlenir', async () => {
-      uiState.selectedTaskId = 'task-1';
-      const { handlers } = setup();
+    it('online: taskService.deleteTask çağrılır; silinen görev detayı AÇIKSA /tasks\'a dönülür', async () => {
+      const { handlers } = setup({ route: '/tasks/task-1' });
 
       await act(async () => { await handlers.deleteTask('task-1'); });
 
       expect(taskService.deleteTask).toHaveBeenCalledWith('task-1', 'user-1');
-      expect(uiState.setSelectedTaskId).toHaveBeenCalledWith(null);
+      expect(navigateMock).toHaveBeenCalledWith('/tasks');
     });
 
-    it('online: silinen görev seçili değilse seçim state\'ine dokunulmaz', async () => {
-      uiState.selectedTaskId = 'baska-gorev';
-      const { handlers } = setup();
+    it('online: silinen görev detayı açık DEĞİLSE yönlendirme yapılmaz', async () => {
+      const { handlers } = setup({ route: '/tasks/baska-gorev' });
 
       await act(async () => { await handlers.deleteTask('task-1'); });
 
-      expect(uiState.setSelectedTaskId).not.toHaveBeenCalled();
+      expect(navigateMock).not.toHaveBeenCalled();
     });
 
     it('servis reddederse onError(err, \'delete\', \'tasks/{id}\') çağrılır', async () => {

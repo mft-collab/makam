@@ -21,11 +21,15 @@
  * ağırlığını erteler.
  */
 import { useState, useEffect, useCallback, useRef, lazy, Suspense, useMemo } from 'react';
-import type { RefObject } from 'react';
+import type { ReactNode, RefObject } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task } from '../types';
 import { useUIStore } from '../store/uiStore';
 import { useShallow } from 'zustand/react/shallow';
+import { RequireTabAccess } from './RequireTabAccess';
+import { useActiveTab } from '../hooks/useActiveTab';
+import { useSelectedTaskId, useTaskNavigation } from '../hooks/useTaskRoute';
 
 import { Sidebar } from './Sidebar';
 import { AppHeader } from './AppHeader';
@@ -64,7 +68,7 @@ import { useIdleTimer } from '../hooks/useIdleTimer';
 import { useSessionTimeout } from '../hooks/useSessionTimeout';
 import { useSelfHealing } from '../hooks/useSelfHealing';
 import { useIsAdmin } from '../hooks/useIsAdmin';
-import { TAB_ROLES, type AppTabId } from '../constants';
+import { APP_TAB_IDS, DEFAULT_TAB, tabPath, type AppTabId } from '../constants';
 
 interface AuthenticatedAppProps {
   user: User;
@@ -85,24 +89,29 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
   const notifRef = useRef<HTMLDivElement>(null);
 
   const {
-    activeTab, setActiveTab,
     addToast,
     isCreateModalOpen, setIsCreateModalOpen,
     isEditModalOpen, setIsEditModalOpen,
     parentTaskId, setParentTaskId,
     initialTitle, setInitialTitle,
-    selectedTaskId, setSelectedTaskId,
     isNotificationsOpen, setIsNotificationsOpen,
   } = useUIStore(useShallow(s => ({
-    activeTab: s.activeTab, setActiveTab: s.setActiveTab,
     addToast: s.addToast,
     isCreateModalOpen: s.isCreateModalOpen, setIsCreateModalOpen: s.setIsCreateModalOpen,
     isEditModalOpen: s.isEditModalOpen, setIsEditModalOpen: s.setIsEditModalOpen,
     parentTaskId: s.parentTaskId, setParentTaskId: s.setParentTaskId,
     initialTitle: s.initialTitle, setInitialTitle: s.setInitialTitle,
-    selectedTaskId: s.selectedTaskId, setSelectedTaskId: s.setSelectedTaskId,
     isNotificationsOpen: s.isNotificationsOpen, setIsNotificationsOpen: s.setIsNotificationsOpen,
   })));
+
+  // ─── Navigasyon: URL tek doğruluk kaynağı ─────────────────────────────────
+  // `activeTab` ve `selectedTaskId` eskiden yukarıdaki uiStore seçiminin
+  // parçasıydı (bkz. kod denetimi P1-6). Artık ikisi de route'tan türetilir;
+  // sayfa yenileme, tarayıcı geri tuşu ve paylaşılan derin linkler bu sayede
+  // çalışır.
+  const activeTab = useActiveTab();
+  const selectedTaskId = useSelectedTaskId();
+  const { openTask, closeTask, goToTab } = useTaskNavigation();
 
   // Close notification panel when clicking outside
   useEffect(() => {
@@ -115,14 +124,8 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
     return () => document.removeEventListener('mousedown', handler);
   }, [isNotificationsOpen, setIsNotificationsOpen]);
 
-  // Tab yetki kontrolü (Güvenlik Duvarı)
-  useEffect(() => {
-    const allowed = TAB_ROLES[activeTab as AppTabId];
-    if (allowed && !allowed.includes(user.role)) {
-      console.warn(`[Security] Yetkisiz ekran erişimi engellendi (${activeTab}). Harekat Merkezi'ne yönlendiriliyor.`);
-      setActiveTab('dashboard');
-    }
-  }, [activeTab, user, setActiveTab]);
+  // Tab yetki kontrolü (Güvenlik Duvarı) artık burada bir useEffect değil,
+  // her route element'ini saran <RequireTabAccess> guard'ıdır (bkz. o dosya).
 
   // SLA konfigürasyon senkronizasyonu (Firestore → localStorage)
   useSLASync(user, onError);
@@ -220,16 +223,16 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
       .then((result) => {
         setFetchedTask(result);
         if (result === null) {
-          setSelectedTaskId(null);
+          closeTask();
           addToast({ title: '⚠️ Talimat Bulunamadı', body: 'Bu talimat silinmiş veya artık erişiminiz olmayabilir.', type: 'warning' });
         }
       })
       .catch(() => {
         setFetchedTask(null);
-        setSelectedTaskId(null);
+        closeTask();
         addToast({ title: '⚠️ Talimat Yüklenemedi', body: 'Talimat getirilirken bir hata oluştu. Lütfen tekrar deneyin.', type: 'danger' });
       });
-  }, [selectedTaskId, tasks, addToast, setSelectedTaskId]);
+  }, [selectedTaskId, tasks, addToast, closeTask]);
 
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || fetchedTask;
 
@@ -258,14 +261,78 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
     markNotificationRead, markAllNotificationsRead,
   } = useAppHandlers({ user, tasks, blockers, onError });
 
+  // ─── Route ekranları ──────────────────────────────────────────────────────
+  // `Record<AppTabId, ReactNode>`: TypeScript her sekme için bir ekran
+  // zorunlu kılar, yani yeni bir AppTabId eklendiğinde route'u UNUTULAMAZ
+  // (derleme hatası). Elemanlar burada oluşturuluyor olsa da bileşenler hâlâ
+  // lazy() facade'leridir — yalnızca eşleşen route render edildiğinde chunk
+  // indirilir; React element'i oluşturmak modülü YÜKLEMEZ (bkz. vite.config.ts
+  // chunkFileNames notu — Dashboard/Reports'un lazy sınırı korunmalı).
+  const screens: Record<AppTabId, ReactNode> = {
+    dashboard: (
+      <Dashboard
+        tasks={filteredTasksByFocus} users={filteredUsersByFocus} user={user}
+        onViewTask={(t) => openTask(t.id)}
+        onNavigateTab={goToTab}
+        isLoading={isDataLoading}
+        isFiltered={globalFocusDept !== 'ALL'}
+      />
+    ),
+    tasks: (
+      <TaskBoard
+        tasks={filteredTasksByFocus} users={filteredUsersByFocus} currentUser={user}
+        onAddTask={() => { setParentTaskId(undefined); setIsCreateModalOpen(true); }}
+        onViewTask={(t) => openTask(t.id)}
+        isLoading={isDataLoading}
+      />
+    ),
+    blockers: (
+      <BlockerList
+        tasks={filteredTasksByFocus} blockers={filteredBlockersByFocus} resolvedBlockers={filteredResolvedBlockersByFocus} users={filteredUsersByFocus}
+        isAdmin={isAdmin || user.role === 'Manager'}
+        isSystemAdmin={isAdmin}
+        onResolve={resolveBlocker}
+        onEditBlocker={updateBlocker}
+        onDeleteBlocker={deleteBlocker}
+        onViewTask={(t) => openTask(t.id)}
+        isLoading={isDataLoading}
+      />
+    ),
+    team: (
+      <TeamList
+        users={filteredUsersByFocus} tasks={filteredTasksByFocus} currentUser={user}
+        departments={registeredDepartments}
+        onUpdateUser={updateUserRole}
+        onDeleteUser={deleteUser}
+        onAddUser={addUser}
+        onCreateDepartment={handleCreateDepartment}
+        isLoading={isDataLoading}
+      />
+    ),
+    reports: (
+      <Reports
+        tasks={filteredTasksByFocus} users={filteredUsersByFocus} blockers={filteredBlockersByFocus}
+        onNavigateTab={goToTab}
+        isLoading={isDataLoading}
+      />
+    ),
+    audit: (
+      <AuditLogList
+        tasks={filteredTasksByFocus} users={filteredUsersByFocus}
+      />
+    ),
+    settings: (
+      <Settings tasks={tasks} users={users} blockers={blockers} triggerToast={triggerToast} currentUser={user} isLoading={isDataLoading} sessionTimeoutMs={sessionTimeoutMs} />
+    ),
+  };
+
   return (
     <>
       <NotificationPrompt userId={user.uid} />
 
-      <Sidebar user={user} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={onLogout} />
+      <Sidebar user={user} onLogout={onLogout} />
       <AppHeader
         user={user}
-        activeTab={activeTab}
         notifications={notifications}
         isNotificationsOpen={isNotificationsOpen}
         setIsNotificationsOpen={setIsNotificationsOpen}
@@ -275,7 +342,7 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
         isOffline={isOffline}
         queueLength={offlineQueueLength}
       />
-      <NotificationPanel isNotificationsOpen={isNotificationsOpen} setIsNotificationsOpen={setIsNotificationsOpen} notifRef={notifRef} notifications={notifications} setSelectedTaskId={setSelectedTaskId} setActiveTab={setActiveTab} markNotificationRead={markNotificationRead} markAllNotificationsRead={markAllNotificationsRead} />
+      <NotificationPanel isNotificationsOpen={isNotificationsOpen} setIsNotificationsOpen={setIsNotificationsOpen} notifRef={notifRef} notifications={notifications} markNotificationRead={markNotificationRead} markAllNotificationsRead={markAllNotificationsRead} />
 
       <main id="main-content" className="lg:ml-64 min-h-screen relative z-10 scroll-smooth pb-24 lg:pb-0">
         <AnimatePresence mode="wait">
@@ -296,55 +363,36 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
                 </div>
               </div>
             }>
-              {activeTab === 'dashboard' && (
-                <Dashboard
-                  tasks={filteredTasksByFocus} users={filteredUsersByFocus} user={user}
-                  onViewTask={(t) => { setSelectedTaskId(t.id); setActiveTab('tasks'); }}
-                  setActiveTab={setActiveTab}
-                  isLoading={isDataLoading}
-                  isFiltered={globalFocusDept !== 'ALL'}
-                />
-              )}
-              {activeTab === 'tasks' && (
-                <TaskBoard
-                  tasks={filteredTasksByFocus} users={filteredUsersByFocus} currentUser={user}
-                  onAddTask={() => { setParentTaskId(undefined); setIsCreateModalOpen(true); }}
-                  onViewTask={(t) => setSelectedTaskId(t.id)}
-                  isLoading={isDataLoading}
-                />
-              )}
-              {activeTab === 'blockers' && (
-                <BlockerList
-                  tasks={filteredTasksByFocus} blockers={filteredBlockersByFocus} resolvedBlockers={filteredResolvedBlockersByFocus} users={filteredUsersByFocus}
-                  isAdmin={isAdmin || user.role === 'Manager'}
-                  isSystemAdmin={isAdmin}
-                  onResolve={resolveBlocker}
-                  onEditBlocker={updateBlocker}
-                  onDeleteBlocker={deleteBlocker}
-                  onViewTask={(t) => { setSelectedTaskId(t.id); setActiveTab('tasks'); }}
-                  isLoading={isDataLoading}
-                />
-              )}
-              {activeTab === 'team' && (
-                <TeamList
-                  users={filteredUsersByFocus} tasks={filteredTasksByFocus} currentUser={user}
-                  departments={registeredDepartments}
-                  onUpdateUser={updateUserRole}
-                  onDeleteUser={deleteUser}
-                  onAddUser={addUser}
-                  onCreateDepartment={handleCreateDepartment}
-                  isLoading={isDataLoading}
-                />
-              )}
-              {activeTab === 'reports' && <Reports tasks={filteredTasksByFocus} users={filteredUsersByFocus} blockers={filteredBlockersByFocus} setActiveTab={setActiveTab} isLoading={isDataLoading} />}
-              {activeTab === 'audit' && (
-                <AuditLogList
-                  tasks={filteredTasksByFocus} users={filteredUsersByFocus}
-                />
-              )}
-              {activeTab === 'settings' && (
-                <Settings tasks={tasks} users={users} blockers={blockers} triggerToast={triggerToast} currentUser={user} isLoading={isDataLoading} sessionTimeoutMs={sessionTimeoutMs} />
-              )}
+              <Routes>
+                {/* Kök → varsayılan ekran. `replace`: geri tuşu kullanıcıyı
+                    tekrar buraya (ve anında ileri) göndermesin. */}
+                <Route path="/" element={<Navigate to={tabPath(DEFAULT_TAB)} replace />} />
+
+                {APP_TAB_IDS.map((tabId) => (
+                  <Route
+                    key={tabId}
+                    path={tabId}
+                    element={
+                      <RequireTabAccess tab={tabId} role={user.role}>
+                        {screens[tabId]}
+                      </RequireTabAccess>
+                    }
+                  >
+                    {/* /tasks/:taskId — TaskBoard'un ÜZERİNDE görev detay
+                        modalını URL'den açık tutan alt-route. Üst route
+                        <Outlet/> render ETMEZ; bu alt route yalnızca EŞLEŞME
+                        için vardır (modalın kendisi bu ağacın dışında, tüm
+                        sekmelerin üstünde durur — bkz. useSelectedTaskId).
+                        Alt route olması, /tasks ↔ /tasks/:taskId geçişinde
+                        TaskBoard'un yeniden monte edilmemesini de sağlar. */}
+                    {tabId === 'tasks' && <Route path=":taskId" />}
+                  </Route>
+                ))}
+
+                {/* Bilinmeyen yol (eski yer imi, yanlış yazım) — sessizce
+                    varsayılan ekrana düşer. */}
+                <Route path="*" element={<Navigate to={tabPath(DEFAULT_TAB)} replace />} />
+              </Routes>
             </Suspense>
             </ErrorBoundary>
           </motion.div>
@@ -414,7 +462,7 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
       }>
         <Modal
           isOpen={!!selectedTaskId && !isEditModalOpen && !isCreateModalOpen}
-          onClose={() => setSelectedTaskId(null)}
+          onClose={closeTask}
           title="Talimat Detayı & İcra"
           size="xl"
           layoutId={selectedTask ? `task-card-${selectedTask.id}` : undefined}
@@ -437,7 +485,7 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
               onResolveBlocker={resolveBlocker}
               onAddSubTask={(parentId, title) => { setParentTaskId(parentId); setInitialTitle(title); setIsCreateModalOpen(true); }}
               onAddComment={(text) => selectedTask && addComment(selectedTask.id, text)}
-              onViewTask={(t) => setSelectedTaskId(t.id)}
+              onViewTask={(t) => openTask(t.id)}
               onEdit={() => setIsEditModalOpen(true)}
               onDelete={() => selectedTask && deleteTask(selectedTask.id)}
               onClearCoordinator={() => selectedTask && updateTask(selectedTask.id, { coordinatorId: undefined })}
@@ -467,7 +515,7 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
         />
       )}
 
-      <MobileDock user={user} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={onLogout} notificationCount={notifications.length} />
+      <MobileDock user={user} onLogout={onLogout} notificationCount={notifications.length} />
     </>
   );
 }

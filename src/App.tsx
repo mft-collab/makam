@@ -34,6 +34,7 @@ import { conflictDetectionService } from './services/conflictDetectionService';
 import { logError } from './services/errorLoggingService';
 import { useOfflineQueue } from './hooks/useOfflineQueue';
 import { useUIStore } from './store/uiStore';
+import { useTaskNavigation } from './hooks/useTaskRoute';
 import { useShallow } from 'zustand/react/shallow';
 
 export default function App() {
@@ -54,13 +55,17 @@ export default function App() {
   // seçimidir.
   const {
     toasts, addToast, removeToast,
-    setSelectedTaskId,
     theme,
   } = useUIStore(useShallow(s => ({
     toasts: s.toasts, addToast: s.addToast, removeToast: s.removeToast,
-    setSelectedTaskId: s.setSelectedTaskId,
     theme: s.theme,
   })));
+
+  // Toast'a tıklayınca ilgili talimata git. Eskiden uiStore'daki
+  // setSelectedTaskId'yi çağırıyordu; artık URL tek doğruluk kaynağı olduğundan
+  // (bkz. hooks/useTaskRoute.ts) doğrudan navigate edilir. Bu, App'in Router'ın
+  // ALTINDA kalmasını gerektirir — bkz. main.tsx'teki BrowserRouter notu.
+  const { openTask } = useTaskNavigation();
 
   // ─── Tema Uygulama ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -292,7 +297,7 @@ export default function App() {
               key={toast.id}
               toast={toast}
               onClose={removeToast}
-              onClick={(taskId) => taskId && setSelectedTaskId(taskId)}
+              onClick={(taskId) => { if (taskId) openTask(taskId); }}
             />
           ))}
         </div>

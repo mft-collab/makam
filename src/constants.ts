@@ -17,6 +17,35 @@ export const TAB_ROLES: Record<AppTabId, UserRole[]> = {
   settings: ['Admin', 'Manager', 'Staff'],
 };
 
+/** URL route'larının türetildiği sekme listesi — TAB_ROLES'un anahtarlarından
+ *  ÜRETİLİR, elle yazılmış ikinci bir liste DEĞİLDİR. Bir sekme eklendiğinde
+ *  route'u, RBAC guard'ı ve `AppTabId` tipi tek hamlede birlikte güncellenir
+ *  (bkz. kod denetimi P1-6: routing katmanı eklenirken buraya paralel bir
+ *  "route tanımları" dizisi konulsaydı, TAB_ROLES ile sessizce sapabilirdi). */
+export const APP_TAB_IDS = Object.keys(TAB_ROLES) as AppTabId[];
+
+/** URL yolu = sekme kimliği. Ayrı bir eşleme tablosu bilinçli olarak YOKTUR:
+ *  `/dashboard` ↔ `'dashboard'` birebir aynı string olduğundan senkronizasyonu
+ *  unutulabilecek bir ara katman oluşmaz. */
+export const tabPath = (tab: AppTabId) => `/${tab}`;
+
+/** Yetkisiz/eşleşmeyen her route'un düştüğü varsayılan ekran — TAB_ROLES'ta
+ *  TÜM rollere açık olduğu için yönlendirme döngüsü oluşturamaz. */
+export const DEFAULT_TAB: AppTabId = 'dashboard';
+
+/** AppHeader'ın ekran başlığı — eskiden AppHeader içinde yedi ayrı satırlık
+ *  `activeTab === 'x' && '...'` koşul zinciriydi; route katmanıyla birlikte
+ *  sekme kimliğinden türetilebilir tek bir tabloya taşındı. */
+export const TAB_TITLES: Record<AppTabId, string> = {
+  dashboard: 'Stratejik Harekat Merkezi',
+  tasks: 'Talimatlar',
+  blockers: 'Engeller',
+  team: 'Kadro',
+  reports: 'Raporlar',
+  audit: 'Denetim İzleri',
+  settings: 'Dizge Ayarları',
+};
+
 export const STATUS_LABELS: Record<TaskStatus, string> = {
   ASSIGNED: 'Talimat Verildi',
   PENDING_DELEGATION: 'Yetki Devri Bekleniyor',

@@ -57,8 +57,9 @@ export class ErrorBoundary extends Component<Props, State> {
 
   // 'inline' sınırlar için sayfayı YENİDEN YÜKLEMEDEN yalnızca yerel hata
   // durumunu temizler — diğer sekmeler zaten etkilenmediğinden tam sayfa
-  // reload burada gereksiz. Ayrıca activeTab değiştiğinde App.tsx bu
-  // bileşeni `key={activeTab}` ile zaten yeniden monte eder (bkz. App.tsx).
+  // reload burada gereksiz. Ayrıca aktif sekme değiştiğinde AuthenticatedApp
+  // bu bileşeni `key={activeTab}` ile zaten yeniden monte eder — o key artık
+  // uiStore'dan değil URL'den türetilir (bkz. hooks/useActiveTab.ts).
   private handleRetry = () => {
     this.setState({ hasError: false, error: null });
   };

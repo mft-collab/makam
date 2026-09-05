@@ -16,6 +16,7 @@ import {
 import { format, subDays } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { useUIStore } from '../store/uiStore';
+import type { AppTabId } from '../constants';
 import { DatePicker } from './ui/DatePicker';
 import { Avatar } from './ui/Avatar';
 import { Skeleton, TableRowSkeleton } from './ui/Skeleton';
@@ -24,7 +25,9 @@ interface ReportsProps {
   tasks: Task[];
   users: User[];
   blockers: TaskBlocker[];
-  setActiveTab?: (tab: string) => void;
+  /** Bkz. Dashboard'daki aynı prop — router bağımlılığı bilinçli olarak
+   *  AuthenticatedApp'te kalır, bu bileşen router'dan habersizdir. */
+  onNavigateTab?: (tab: AppTabId) => void;
   isLoading?: boolean;
 }
 
@@ -88,7 +91,7 @@ const KpiCard = ({ label, value, icon: Icon, color, index = 0 }: KpiCardProps) =
 };
 
 // ─── Reports ──────────────────────────────────────────────────────────────────
-export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, setActiveTab, isLoading = false }: ReportsProps) => {
+export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, onNavigateTab, isLoading = false }: ReportsProps) => {
   const addToast = useUIStore(state => state.addToast);
   const tasks = propsTasks;
   const blockers = propsBlockers;
@@ -548,7 +551,7 @@ export const Reports = ({ tasks: propsTasks, users, blockers: propsBlockers, set
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: i * 0.04 }}
-                    onClick={() => setActiveTab?.('tasks')}
+                    onClick={() => onNavigateTab?.('tasks')}
                     title="Bu yöneticinin talimatlarını görmek için tıklayın"
                     className="hover:bg-makam-glass transition-all duration-300 group cursor-pointer"
                   >

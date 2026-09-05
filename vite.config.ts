@@ -98,10 +98,23 @@ export default defineConfig(({ mode }) => {
           // Rollup'ın otomatik chunk bölme mantığı dynamic import sınırına saygı
           // gösteriyor; bu ikisi artık yalnızca Dashboard/Reports chunk'ı içine
           // veya ona özel otomatik bir chunk'a gömülüyor.
+          // Buradaki dört paketin ORTAK özelliği: dördü de AÇILIŞTA (entry'den
+          // statik olarak) gerekiyor, dolayısıyla adlandırılmış bir chunk'a
+          // almak erişim grafiğini değiştirmez — yalnızca maliyeti görünür
+          // kılar ve .size-limit.json'da ayrı bir bütçeye bağlar. recharts/
+          // jspdf'in bu listede OLMAMA gerekçesi (yukarıdaki uzun not) tam da
+          // bunun tersidir: onlar yalnızca lazy() sınırının ardından gerekli.
+          //
+          // vendor-router: react-router BrowserRouter'ı main.tsx'te, yani
+          // Login ekranı dahil ilk yüklemede kuruluyor (bkz. main.tsx'teki
+          // gerekçe — derin link giriş sırasında kaybolmasın). Ayrı chunk
+          // olmasaydı ~14 kB gzip sessizce `index` paketine eklenecek ve
+          // "uygulama kodumuz ne kadar büyüdü" ölçümünü bulanıklaştıracaktı.
           manualChunks: {
             'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/messaging'],
             'vendor-motion':   ['motion'],
             'vendor-date':     ['date-fns'],
+            'vendor-router':   ['react-router-dom'],
           },
           // recharts/jspdf'i manualChunks'a koymuyoruz (yukarıdaki not), ama
           // Rollup'ın bu iki paketi taşıyan otomatik chunk'a verdiği isim

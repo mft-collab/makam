@@ -15,6 +15,7 @@ import { notificationService } from './notificationService';
 import { offlineQueue } from '../lib/offlineQueue';
 import { getSLAConfigForPriority, calculateDeadline } from '../lib/sla';
 import { useUIStore } from '../store/uiStore';
+import { useSelectedTaskId, useTaskNavigation } from '../hooks/useTaskRoute';
 import { STATUS_LABELS } from '../constants';
 import type { Task, TaskStatus, TaskBlocker, TaskPriority, User, UserRole } from '../types';
 
@@ -48,14 +49,17 @@ export function useAppHandlers({
   blockers,
   onError,
 }: UseAppHandlersOptions) {
-  // Selector bazlı okuma — bu hook yalnızca selectedTaskId'nin değişmesiyle
-  // ilgileniyor; whole-store `useUIStore()` kullanmak toasts/filter/isOffline
+  // Açık görev detayı artık uiStore'da değil URL'dedir (bkz. kod denetimi
+  // P1-6) — silinen görev o an açıksa modalı kapatmak, `/tasks`'a
+  // yönlendirmek demektir.
+  const selectedTaskId = useSelectedTaskId();
+  const { closeTask } = useTaskNavigation();
+
+  // Selector bazlı okuma — whole-store `useUIStore()` kullanmak toasts/filter
   // gibi ilgisiz her alan değişiminde (ör. her toast eklenip 6sn sonra otomatik
   // kaldırıldığında) App.tsx'in gereksiz yere yeniden render olmasına yol
   // açıyordu. Action fonksiyonları zustand'da stabil referanslar olduğundan
   // selector ile alınmaları da re-render tetiklemez.
-  const selectedTaskId = useUIStore(s => s.selectedTaskId);
-  const setSelectedTaskId = useUIStore(s => s.setSelectedTaskId);
   const setIsCreateModalOpen = useUIStore(s => s.setIsCreateModalOpen);
   const setIsEditModalOpen = useUIStore(s => s.setIsEditModalOpen);
   const addToast = useUIStore(s => s.addToast);
@@ -214,18 +218,18 @@ export function useAppHandlers({
       blockers.filter(b => allIds.includes(b.taskId)).forEach(b => offlineQueue.enqueue('blockers', 'delete', undefined, b.id));
       descendantIds.forEach(id => offlineQueue.enqueue('tasks', 'delete', undefined, id));
       offlineQueue.enqueue('tasks', 'delete', undefined, taskId);
-      if (selectedTaskId === taskId) setSelectedTaskId(null);
+      if (selectedTaskId === taskId) closeTask();
       toast('🗑 Çevrimdışı Silme', 'Talimat ve bağlı unsurları lokal kuyrukta silindi.', 'warning');
       return;
     }
 
     try {
       await taskService.deleteTask(taskId, user.uid);
-      if (selectedTaskId === taskId) setSelectedTaskId(null);
+      if (selectedTaskId === taskId) closeTask();
     } catch (err) {
       onError(err, 'delete', `tasks/${taskId}`);
     }
-  }, [user, tasks, blockers, selectedTaskId, setSelectedTaskId, toast, onError]);
+  }, [user, tasks, blockers, selectedTaskId, closeTask, toast, onError]);
 
   // ─── addBlocker ──────────────────────────────────────────────────────────
   const addBlocker = useCallback(async (taskId: string, reason: string, severity: TaskPriority = 'Medium') => {

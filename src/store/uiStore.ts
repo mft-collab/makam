@@ -16,13 +16,19 @@ export interface ToastItem {
   taskId?: string;
 }
 
+/**
+ * NAVİGASYON DURUMU BURADA TUTULMAZ. Aktif sekme (`activeTab`) ve açık görev
+ * detayı (`selectedTaskId`) eskiden bu store'daydı; artık TEK doğruluk kaynağı
+ * URL'dir (react-router). Bkz. kod denetimi P1-6: ikisi birlikte tutulduğunda
+ * derin link, tarayıcı geri tuşu ve sayfa yenileme sessizce bozuluyordu.
+ * Karşılıkları: `useActiveTab()`, `useSelectedTaskId()`, `useTaskNavigation()`.
+ */
 interface UIStore {
   // Görev form modalı (App seviyesi)
   isCreateModalOpen: boolean;
   isEditModalOpen: boolean;
   parentTaskId: string | undefined;
   initialTitle: string | undefined;
-  selectedTaskId: string | null;
 
   // Bildirim paneli — isX adlandırma kuralına uyum için showNotifications'tan
   // yeniden adlandırıldı (bkz. kod denetimi: isCreateModalOpen/isEditModalOpen
@@ -32,9 +38,6 @@ interface UIStore {
   // Tema
   theme: 'light' | 'dark' | 'system';
 
-  // Tab durumu
-  activeTab: string;
-
   // Filtreleme
   filter: TaskFilter;
 
@@ -43,7 +46,6 @@ interface UIStore {
 
   // Aksiyonlar — mevcut
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
-  setActiveTab: (tab: string) => void;
   setFilter: (partial: Partial<TaskFilter>) => void;
   resetFilter: () => void;
   addToast: (toast: Omit<ToastItem, 'id'>) => void;
@@ -54,7 +56,6 @@ interface UIStore {
   setIsEditModalOpen: (open: boolean) => void;
   setParentTaskId: (id: string | undefined) => void;
   setInitialTitle: (title: string | undefined) => void;
-  setSelectedTaskId: (id: string | null) => void;
   setIsNotificationsOpen: (open: boolean) => void;
   closeAllModals: () => void;
 }
@@ -73,13 +74,9 @@ export const useUIStore = create<UIStore>()(
       isEditModalOpen: false,
       parentTaskId: undefined,
       initialTitle: undefined,
-      selectedTaskId: null,
 
       // Bildirim paneli
       isNotificationsOpen: false,
-
-      // Tab
-      activeTab: 'dashboard',
 
       // Filtreleme
       filter: DEFAULT_FILTER,
@@ -93,10 +90,6 @@ export const useUIStore = create<UIStore>()(
       // ─── Tema ───────────────────────────────────────────────────────────────
 
       setTheme: (theme) => set({ theme }),
-
-    // ─── Tab ────────────────────────────────────────────────────────────────
-
-    setActiveTab: (tab) => set({ activeTab: tab }),
 
     // ─── Filtreleme ──────────────────────────────────────────────────────────
 
@@ -127,7 +120,6 @@ export const useUIStore = create<UIStore>()(
     setIsEditModalOpen: (open) => set({ isEditModalOpen: open }),
     setParentTaskId: (id) => set({ parentTaskId: id }),
     setInitialTitle: (title) => set({ initialTitle: title }),
-    setSelectedTaskId: (id) => set({ selectedTaskId: id }),
     setIsNotificationsOpen: (open) => set({ isNotificationsOpen: open }),
 
     closeAllModals: () => set({
