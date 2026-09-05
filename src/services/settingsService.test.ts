@@ -15,8 +15,6 @@ import {
   DEFAULT_SESSION_TIMEOUT_MS, SESSION_TIMEOUT_MIN_MS, SESSION_TIMEOUT_MAX_MS,
 } from '../constants';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 interface FakeBatch {
   set: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
