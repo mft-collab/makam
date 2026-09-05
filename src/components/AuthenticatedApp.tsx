@@ -34,6 +34,7 @@ import { Sidebar } from './Sidebar';
 import { AppHeader } from './AppHeader';
 import { NotificationPanel } from './NotificationPanel';
 import { NotificationPrompt } from './NotificationPrompt';
+import { WelcomeModal } from './WelcomeModal';
 import { MobileDock } from './MobileDock';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
@@ -333,6 +334,7 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
 
   return (
     <>
+      <WelcomeModal user={user} />
       <NotificationPrompt userId={user.uid} />
 
       <Sidebar user={user} onLogout={onLogout} />
