@@ -14,6 +14,24 @@ export const UserSchema = z.object({
 });
 export type User = z.infer<typeof UserSchema>;
 
+/**
+ * departments/{departmentId} — departman/birim REFERANS varlığı.
+ *
+ * Doküman ID'si departmanın KENDİ string değeridir ("Operasyon") ve `name` ile
+ * birebir aynıdır (firestore.rules `isValidDepartment` bunu zorunlu kılar).
+ * Bu, mevcut `users.departmentId` / `tasks.departmentId` alanlarındaki string
+ * değerlerin hiçbirinin yeniden yazılmasını gerektirmeyen taşıma kararıdır:
+ * o değerlere karşılık gelen bir dokümanın yalnızca VAR OLMASI yeterlidir.
+ * `id` alanı Firestore'da tutulmaz, okuma sırasında doküman ID'sinden doldurulur.
+ */
+export const DepartmentSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1).max(100),
+  createdAt: z.number(),
+  createdBy: z.string(),
+});
+export type Department = z.infer<typeof DepartmentSchema>;
+
 export const NotificationSchema = z.object({
   id: z.string(),
   userId: z.string(),
