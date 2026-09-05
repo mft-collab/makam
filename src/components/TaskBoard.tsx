@@ -10,6 +10,8 @@ import { motion } from 'motion/react';
 import { Avatar } from './ui/Avatar';
 import { TaskCardSkeleton } from './ui/Skeleton';
 import { Badge } from './ui/Badge';
+import { EmptyState } from './ui/EmptyState';
+import { Button } from './ui/Button';
 import { useDataStore } from '../store/dataStore';
 import { isTaskInCrisis } from '../lib/executiveMetrics';
 
@@ -276,6 +278,43 @@ export const TaskBoard = ({
 
   const hasActiveFilter = priorityFilter !== 'All' || assigneeFilter !== 'All' || statusFilter !== 'All' || search !== '';
 
+  const resetFilters = useCallback(() => {
+    setPriorityFilter('All');
+    setAssigneeFilter('All');
+    setStatusFilter('All');
+    setSearch('');
+  }, []);
+
+  // "İlk Talimatı Oluştur" CTA'sı yalnızca gerçekten görev oluşturabilecek
+  // rollere gösterilir — firestore.rules'taki tasks create kuralı yalnızca
+  // Admin/Manager'a izin verir (Staff'a değil), bu yüzden burada Staff'a da
+  // gösterilseydi tıklandığında sunucu tarafında reddedilen, kullanıcıyı
+  // yanıltan bir buton yaratılırdı (bkz. görev tanımı P2-17).
+  const canCreateTask = currentUser?.role === 'Admin' || currentUser?.role === 'Manager';
+
+  // Boş durum yalnızca hiçbir filtre uygulanmamışken "gerçekten hiç görev yok"
+  // anlamına gelir — bir filtre sonucu boşsa aktivasyon CTA'sı (görev oluştur)
+  // yanlış olurdu, kullanıcının asıl ihtiyacı filtreyi temizlemektir.
+  const emptyStateNode = (
+    <EmptyState
+      icon={<Layers className="w-8 h-8" />}
+      message={hasActiveFilter ? 'Filtrelerinize uygun talimat bulunamadı' : 'Henüz talimat bulunmuyor'}
+      className="border-none"
+      action={
+        hasActiveFilter ? (
+          <Button variant="secondary" size="sm" onClick={resetFilters}>
+            Filtreyi Temizle
+          </Button>
+        ) : canCreateTask ? (
+          <Button variant="gold" size="sm" onClick={onAddTask}>
+            <Plus className="w-3.5 h-3.5 stroke-[2]" />
+            İlk Talimatı Oluştur
+          </Button>
+        ) : undefined
+      }
+    />
+  );
+
   const rowKey = useCallback((index: number, data: TaskRowData) => data.tasks[index]?.id ?? index, []);
   const mobileRowProps = useMemo<TaskRowData>(
     () => ({ tasks: filteredTasks, usersById, onViewTask }),
@@ -415,7 +454,7 @@ export const TaskBoard = ({
 
         {hasActiveFilter && (
           <button
-            onClick={() => { setPriorityFilter('All'); setAssigneeFilter('All'); setStatusFilter('All'); setSearch(''); }}
+            onClick={resetFilters}
             className="text-[9px] font-medium text-status-danger/70 hover:text-status-danger px-3 uppercase tracking-[0.12em] sm:tracking-[0.25em] transition-colors h-8 flex items-center justify-center gap-1 flex-1 sm:flex-none"
           >
             <X className="w-3 h-3" /> Sıfırla
@@ -437,9 +476,7 @@ export const TaskBoard = ({
               {[...Array(5)].map((_, i) => <TaskCardSkeleton key={i} />)}
             </div>
           ) : filteredTasks.length === 0 ? (
-            <div className="py-16 text-center text-[10px] text-text-tertiary uppercase tracking-[0.4em]">
-              Kayıt bulunamadı
-            </div>
+            emptyStateNode
           ) : (
             <List
               rowComponent={MobileTaskRow}
@@ -483,9 +520,7 @@ export const TaskBoard = ({
                 </div>
               ))
             ) : filteredTasks.length === 0 ? (
-              <div className="px-4 py-16 text-center text-[10px] text-text-tertiary uppercase tracking-[0.22em]">
-                Kayıtlı veri bulunamadı.
-              </div>
+              emptyStateNode
             ) : (
               <List
                 rowComponent={DesktopTaskRow}
