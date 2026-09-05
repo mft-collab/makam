@@ -101,7 +101,9 @@ describe('errorLoggingService.logError', () => {
   });
 
   it('yazım başarılıysa oluşturulan dokümanın ID\'sini döndürür (Destek Referansı için)', async () => {
-    vi.mocked(firebase.addDoc).mockResolvedValueOnce({ id: 'log-abc123' } as any);
+    vi.mocked(firebase.addDoc).mockResolvedValueOnce(
+      { id: 'log-abc123' } as unknown as Awaited<ReturnType<typeof firebase.addDoc>>
+    );
 
     await expect(logError(new Error('x'), 'manual')).resolves.toBe('log-abc123');
   });
