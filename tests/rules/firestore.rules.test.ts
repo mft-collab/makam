@@ -112,9 +112,28 @@ const taskDoc = (over: Record<string, unknown> = {}) => ({
 /** Her testten önce sıfırdan kurulan sabit dizge durumu. Testler doküman
  *  MUTASYONU yaptığından (durum geçişleri, silme) paylaşılan tek bir seed
  *  yeterli değil — beforeEach'te tamamen yeniden kurulur. */
+/** departments/{id} dokümanı — doküman ID'si departmanın KENDİ değeridir ve
+ *  `name` ile birebir aynı olmak zorundadır (bkz. firestore.rules
+ *  isValidDepartment). Bu koleksiyon P0-2 ile eklendi: tasks/users
+ *  departmentId'si artık burada var olan bir dokümana referans vermek
+ *  zorunda. */
+const departmentDoc = (id: string) => ({
+  name: id,
+  createdAt: NOW,
+  createdBy: 'admin-uid',
+});
+
 async function seed() {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
+
+    // Departman referans varlıkları — aşağıdaki users/tasks seed'lerinin
+    // departmentId'leri bunlara işaret eder. 'dept-z' bilinçli olarak hiçbir
+    // kullanıcıya/göreve atanmamıştır: "Admin herhangi bir departmanda görev
+    // oluşturabilir" testinin öznesi odur.
+    for (const id of ['dept-a', 'dept-b', 'dept-c', 'dept-z']) {
+      await setDoc(doc(db, 'departments', id), departmentDoc(id));
+    }
 
     await setDoc(doc(db, 'users', 'admin-uid'), userDoc('admin-uid', 'Admin', 'dept-a'));
     await setDoc(doc(db, 'users', 'mgr-a'), userDoc('mgr-a', 'Manager', 'dept-a'));
@@ -141,11 +160,14 @@ async function seed() {
     await setDoc(doc(db, 'tasks', 'task-b-for-c'), taskDoc({
       departmentId: 'dept-b', creatorId: 'mgr-b', assigneeId: 'staff-c',
     }));
-    // P0-1 kanıtı: departmentId alanı HİÇ YOK
+    // P0-1 REGRESYON zemini: bu iki doküman, kurallar SIKILAŞTIRILMADAN ÖNCE
+    // üretimde oluşmuş "eski" (backfill edilmemiş) görevleri temsil eder —
+    // artık bu biçimde YENİ görev oluşturulamıyor, ama var olanların da
+    // dünyaya açık OLMAMASI gerekir. Bu yüzden yalnızca rules'ı bypass eden
+    // seed ile yazılabilirler.
     const noDept: Record<string, unknown> = taskDoc({ creatorId: 'mgr-b', assigneeId: 'mgr-b' });
     delete noDept.departmentId;
     await setDoc(doc(db, 'tasks', 'task-no-dept'), noDept);
-    // P0-1 kanıtı: departmentId BOŞ string
     await setDoc(doc(db, 'tasks', 'task-empty-dept'), taskDoc({
       departmentId: '', creatorId: 'mgr-b', assigneeId: 'mgr-b',
     }));
@@ -261,7 +283,11 @@ describe('Admin (custom claim) yetkileri', () => {
     await assertSucceeds(getDoc(doc(admin(), 'tasks', 'task-b')));
   });
 
-  it('herhangi bir departmanda görev oluşturabilir', async () => {
+  it('kendi departmanı dışındaki bir departmanda da görev oluşturabilir', async () => {
+    // dept-z hiçbir kullanıcıya atanmamış bir departmandır — Admin'in
+    // departman kısıtına tabi olmadığını gösterir. (P0-2 sonrası departman
+    // yine de GERÇEK olmak zorunda: var olmayan bir departman reddedilir,
+    // bkz. "departments koleksiyonu" bloğu.)
     await assertSucceeds(setDoc(doc(admin(), 'tasks', 'yeni-admin-gorev'), taskDoc({
       departmentId: 'dept-z', creatorId: 'admin-uid',
     })));
@@ -495,34 +521,172 @@ describe('Staff yetkileri', () => {
 });
 
 // =============================================================================
-// 5. BİLİNEN BOŞLUK (P0-1) — departmentId'si olmayan/boş görevler
+// 5. P0-1 REGRESYONU — departmansız görev artık organizasyona AÇIK DEĞİL
 // =============================================================================
-describe('BİLİNEN BOŞLUK (P0-1): departmentId olmayan/boş görev herkese açıktır', () => {
-  // DİKKAT: Aşağıdaki iki test MEVCUT (kusurlu) davranışı KASITLI olarak
-  // doğrular — düzeltme bu fazın kapsamında değil, Faz 2'de yapılacak.
-  // firestore.rules `tasks` read kuralındaki `!('departmentId' in existing())`
-  // ve `existing().departmentId == ""` şartları, departmanı atanmamış her
-  // görevi TÜM oturum açmış kullanıcılara (rolünden ve departmanından
-  // bağımsız) okunur kılar. Faz 2'de bu davranış kapatıldığında bu testler
-  // KIRILACAK ve `assertFails`'e çevrilmeleri gerekecek — bu, boşluğun
-  // gerçekten kapandığının kanıtı olacak.
+describe('P0-1 REGRESYONU: departmentId olmayan/boş görev artık herkese açık DEĞİL', () => {
+  // Bu blok, Faz 1'de "bilinçli olarak mevcut açık davranışı doğruluyoruz"
+  // notuyla eklenmiş testlerin TERSİNE ÇEVRİLMİŞ hâlidir. O testler
+  // `assertSucceeds` ile P0-1'i KANITLIYORDU: firestore.rules `tasks` read
+  // kuralındaki `!('departmentId' in existing())` / `== null` / `== ""`
+  // fallback'leri, departmanı atanmamış her görevi TÜM oturum açmış
+  // kullanıcılara okunur kılıyordu. Fallback'ler kaldırıldı; aşağıdaki
+  // `assertFails`'ler boşluğun gerçekten kapandığının kanıtıdır.
+  //
+  // Aynı zamanda bir ÜST SINIR testi: bu görevlerin sorumlusu (mgr-b) onları
+  // hâlâ okuyabilmelidir — sıkılaştırma, meşru erişimi kesmemelidir.
 
-  it('departmentId alanı HİÇ OLMAYAN görev, alakasız departmandaki Staff tarafından okunabiliyor', async () => {
-    await assertSucceeds(getDoc(doc(staffC(), 'tasks', 'task-no-dept')));
+  it('departmentId alanı HİÇ OLMAYAN görevi, alakasız departmandaki Staff artık OKUYAMAZ', async () => {
+    await assertFails(getDoc(doc(staffC(), 'tasks', 'task-no-dept')));
   });
 
-  it('departmentId alanı BOŞ STRING olan görev, alakasız departmandaki Staff tarafından okunabiliyor', async () => {
-    await assertSucceeds(getDoc(doc(staffC(), 'tasks', 'task-empty-dept')));
+  it('departmentId alanı BOŞ STRING olan görevi, alakasız departmandaki Staff artık OKUYAMAZ', async () => {
+    await assertFails(getDoc(doc(staffC(), 'tasks', 'task-empty-dept')));
   });
 
-  it('aynı boşluk denetim izine de sızıyor: departmansız göreve ait audit_log okunabiliyor', async () => {
+  it('departmanı BOŞ olan görev, departmanı ATANMAMIŞ bir kullanıcıyla ("" == "") eşleşerek de açılmaz', async () => {
+    // getUserDepartment() departmanı olmayan kullanıcı için boş dize döner —
+    // kural `!= ''` kapısı olmadan bu iki boş değeri eşitleyip görevi
+    // açardı. staff-nodept'in departmanı hiç yok.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', 'staff-nodept'), userDoc('staff-nodept', 'Staff'));
+    });
+    const noDeptStaff = testEnv
+      .authenticatedContext('staff-nodept', { email: 'staff-nodept@makam.test', email_verified: true })
+      .firestore();
+    await assertFails(getDoc(doc(noDeptStaff, 'tasks', 'task-empty-dept')));
+  });
+
+  it('departmansız görevin SORUMLUSU onu hâlâ okuyabilir (sıkılaştırma meşru erişimi kesmez)', async () => {
+    await assertSucceeds(getDoc(doc(managerB(), 'tasks', 'task-no-dept')));
+  });
+
+  it('denetim izindeki aynı sızıntı da kapandı: departmansız göreve ait audit_log okunamaz', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'audit_logs', 'log-no-dept'), {
         taskId: 'task-no-dept', changedBy: 'mgr-b', oldValue: 'ASSIGNED',
         newValue: 'IN_PROGRESS', timestamp: NOW,
       });
     });
-    await assertSucceeds(getDoc(doc(staffC(), 'audit_logs', 'log-no-dept')));
+    await assertFails(getDoc(doc(staffC(), 'audit_logs', 'log-no-dept')));
+  });
+
+  it('departmansız göreve bağlı engel (blocker) de artık alakasız kullanıcıya açık değil', async () => {
+    // taskGrantsAccess() içindeki AYNI üç fallback kaldırıldı — aksi halde
+    // P0-1 sızıntısı tasks kapatılsa bile blockers üzerinden sürerdi.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'blockers', 'blocker-no-dept'), {
+        id: 'blocker-no-dept', taskId: 'task-no-dept', reason: 'Departmansız görev engeli',
+        severity: 'Low', isResolved: false, createdAt: NOW,
+      });
+    });
+    await assertFails(getDoc(doc(staffC(), 'blockers', 'blocker-no-dept')));
+  });
+
+  it('departmansız görev artık OLUŞTURULAMAZ (Admin dahil): departmentId zorunlu alandır', async () => {
+    const noDept: Record<string, unknown> = taskDoc({ creatorId: 'admin-uid' });
+    delete noDept.departmentId;
+    await assertFails(setDoc(doc(admin(), 'tasks', 'yeni-departmansiz'), noDept));
+  });
+
+  it('boş departmanlı görev de oluşturulamaz', async () => {
+    await assertFails(setDoc(doc(admin(), 'tasks', 'yeni-bos-departman'), taskDoc({
+      creatorId: 'admin-uid', departmentId: '',
+    })));
+  });
+
+  it('Müdür artık departmanı boş bırakarak organizasyon geneline açık görev oluşturamaz', async () => {
+    const noDept: Record<string, unknown> = taskDoc({ creatorId: 'mgr-a' });
+    delete noDept.departmentId;
+    await assertFails(setDoc(doc(managerA(), 'tasks', 'mgr-departmansiz'), noDept));
+  });
+});
+
+// =============================================================================
+// 5b. P0-2 — departments referans varlığı
+// =============================================================================
+describe('departments koleksiyonu (P0-2 referans varlığı)', () => {
+  const validDept = (id: string) => ({ name: id, createdAt: NOW, createdBy: 'admin-uid' });
+
+  it('oturum açmış herkes departman listesini okuyabilir (atama/filtre sözlüğü)', async () => {
+    await assertSucceeds(getDoc(doc(staffC(), 'departments', 'dept-a')));
+  });
+
+  it('oturum açmamış kullanıcı departman okuyamaz', async () => {
+    await assertFails(getDoc(doc(anon(), 'departments', 'dept-a')));
+  });
+
+  it('Admin yeni departman oluşturabilir', async () => {
+    await assertSucceeds(setDoc(doc(admin(), 'departments', 'Operasyon'), validDept('Operasyon')));
+  });
+
+  it('doküman ID\'sinde Türkçe karakter ve boşluk kabul edilir (isValidId KULLANILMAZ)', async () => {
+    // Mevcut üretim değerleri serbest metindir ve AYNEN ID olarak kullanılır —
+    // isValidId()'nin ASCII regex'i burada uygulansaydı gerçek departmanların
+    // çoğu taşınamazdı (bkz. firestore.rules isValidDepartmentId yorumu).
+    await assertSucceeds(setDoc(doc(admin(), 'departments', 'İnsan Kaynakları'), validDept('İnsan Kaynakları')));
+  });
+
+  it('Müdür departman oluşturamaz', async () => {
+    await assertFails(setDoc(doc(managerA(), 'departments', 'Yeni Birim'), validDept('Yeni Birim')));
+  });
+
+  it('Memur departman oluşturamaz', async () => {
+    await assertFails(setDoc(doc(staffA(), 'departments', 'Yeni Birim'), validDept('Yeni Birim')));
+  });
+
+  it('name, doküman ID\'sinden farklı olamaz (hayalet departman koruması)', async () => {
+    await assertFails(setDoc(doc(admin(), 'departments', 'Operasyon'), validDept('Operasyonn')));
+  });
+
+  it('şema dışı alan eklenemez (hasOnly alan kilidi)', async () => {
+    await assertFails(setDoc(doc(admin(), 'departments', 'Operasyon'), {
+      ...validDept('Operasyon'), yetkiSeviyesi: 'sinirsiz',
+    }));
+  });
+
+  it('zorunlu alan eksikse reddedilir', async () => {
+    await assertFails(setDoc(doc(admin(), 'departments', 'Operasyon'), { name: 'Operasyon' }));
+  });
+
+  it('Admin bile departman SİLEMEZ (referans veren tasks/users yetim kalır)', async () => {
+    await assertFails(deleteDoc(doc(admin(), 'departments', 'dept-a')));
+  });
+
+  it('createdAt/createdBy güncellemeyle değiştirilemez', async () => {
+    await assertFails(updateDoc(doc(admin(), 'departments', 'dept-a'), { createdAt: NOW + 1 }));
+    await assertFails(updateDoc(doc(admin(), 'departments', 'dept-b'), { createdBy: 'mgr-a' }));
+  });
+
+  it('var olmayan bir departmana referans veren görev OLUŞTURULAMAZ', async () => {
+    await assertFails(setDoc(doc(admin(), 'tasks', 'hayalet-dept-gorev'), taskDoc({
+      creatorId: 'admin-uid', departmentId: 'Bu-Birim-Yok',
+    })));
+  });
+
+  it('görev, var olmayan bir departmana TAŞINAMAZ', async () => {
+    await assertFails(updateDoc(doc(admin(), 'tasks', 'task-a'), {
+      departmentId: 'Bu-Birim-Yok', updatedAt: NOW + 1,
+    }));
+  });
+
+  it('Admin, görevi var olan başka bir departmana taşıyabilir', async () => {
+    await assertSucceeds(updateDoc(doc(admin(), 'tasks', 'task-a'), {
+      departmentId: 'dept-z', updatedAt: NOW + 1,
+    }));
+  });
+
+  it('Admin, kullanıcıyı var olmayan bir departmana atayamaz', async () => {
+    await assertFails(updateDoc(doc(admin(), 'users', 'staff-a'), { departmentId: 'Bu-Birim-Yok' }));
+  });
+
+  it('Admin, kullanıcıyı var olan bir departmana atayabilir', async () => {
+    await assertSucceeds(updateDoc(doc(admin(), 'users', 'staff-a'), { departmentId: 'dept-z' }));
+  });
+
+  it('Admin kullanıcısı departmansız KALABİLİR (org geneli çalışır)', async () => {
+    await assertSucceeds(setDoc(doc(admin(), 'users', 'yeni-admin'), {
+      uid: 'yeni-admin', fullName: 'Yeni Yönetici', email: 'yeni-admin@makam.test', role: 'Admin',
+    }));
   });
 });
 

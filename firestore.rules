@@ -49,6 +49,16 @@ service cloud.firestore {
       return 'departmentId' in u ? u.departmentId : '';
     }
 
+    // departments/{departmentId} — departman bir REFERANS VARLIKtır, serbest
+    // metin değil (bkz. kod denetimi P0-2). Doküman ID'si departmanın KENDİ
+    // string değeridir ("Operasyon") — böylece users.departmentId /
+    // tasks.departmentId alanlarındaki MEVCUT değerlerin hiçbiri yeniden
+    // yazılmak zorunda kalmaz, yalnızca o değere karşılık gelen bir
+    // departments dokümanının VAR OLMASI gerekir.
+    function departmentExists(dept) {
+      return exists(/databases/$(database)/documents/departments/$(dept));
+    }
+
     function isValidId(id) {
       // '+' KASITLI olarak karakter sınıfına dahildir: assigneeId/creatorId/
       // coordinatorId gibi referans alanları bazen uid yerine gerçek bir
@@ -125,6 +135,50 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
 
+    // Departman doküman ID'si için isValidId() BİLİNÇLİ olarak kullanılmaz:
+    // onun regex'i ('^[a-zA-Z0-9_.@+-]+$') ASCII'ye kısıtlıdır ve boşluk kabul
+    // etmez, oysa burada ID'nin kendisi kullanıcıya görünen departman adıdır ve
+    // mevcut üretim değerleri Türkçe karakter/boşluk içerir ("İnsan Kaynakları").
+    // Var olan değerleri AYNEN ID yapmak bu fazın temel taşıyıcı kararı olduğundan
+    // (bkz. departmentExists yorumu) burada yalnızca uzunluk sınırı uygulanır.
+    function isValidDepartmentId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 100;
+    }
+
+    function isValidDepartment(data, departmentId) {
+      let allowedFields = ['name', 'createdAt', 'createdBy'];
+      return data.keys().hasAll(allowedFields) &&
+             data.keys().hasOnly(allowedFields) &&
+             data.name is string &&
+             // `name`, doküman ID'siyle BİREBİR aynı olmak zorundadır. Redundant
+             // görünür ama bilinçlidir: tasks/users dokümanları departmanı ID
+             // (yani bu string) ile taşıdığından, `name`'in ID'den sapabilmesi
+             // tam da bu fazın kapattığı "hayalet departman" sınıfını UI
+             // tarafında geri açardı (listede bir ad, kayıtlarda başka bir
+             // değer). Aynı kısıt, yeniden adlandırmayı da fiilen yasaklar —
+             // bir departmanı yeniden adlandırmak ona referans veren TÜM
+             // tasks/users dokümanlarının yeniden yazılmasını gerektirir ve bu
+             // fazın kapsamı dışındadır (YAGNI).
+             data.name == departmentId &&
+             data.createdAt is number && data.createdAt > 0 &&
+             data.createdBy is string && data.createdBy.size() <= 128;
+    }
+
+    // Bir kullanıcı dokümanının departman referansı geçerli mi? Ayrı bir
+    // yardımcıdır çünkü İKİ yerden çağrılır: isValidUser (create yolu) ve
+    // users update kuralının ADMIN dalı. Admin dalı isValidUser'ı bilinçli
+    // olarak çağırmaz (Admin'e tam yetki verir) — ama tam da bu yüzden P0-2'nin
+    // GERÇEK yolu (Admin'in TeamList'ten departman ataması bir UPDATE'tir)
+    // eskiden hiçbir şema doğrulamasından geçmiyordu (bkz. kod denetimi:
+    // yalnızca isValidUser'a kontrol eklemek bu boşluğu kapatmıyordu).
+    function userDepartmentIsValid(data) {
+      // Alanın HİÇ OLMAMASI / null / boş dize KASITLI olarak geçerlidir:
+      // Admin organizasyon geneli çalışır ve tipik olarak hiçbir departmana
+      // bağlı değildir.
+      return !('departmentId' in data) || data.departmentId == null || data.departmentId == "" ||
+             (isValidDepartmentId(data.departmentId) && departmentExists(data.departmentId));
+    }
+
     function isValidUser(data) {
       let allowedFields = ['uid', 'fullName', 'email', 'role', 'departmentId', 'photoURL', 'fcmTokens'];
       return data.keys().hasAll(['uid', 'fullName', 'email', 'role']) &&
@@ -133,12 +187,23 @@ service cloud.firestore {
              data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 100 &&
              data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
              data.role in ['Admin', 'Manager', 'Staff'] &&
-             (!('departmentId' in data) || data.departmentId == null || (data.departmentId is string && data.departmentId.size() <= 100)) &&
+             // Departman artık serbest metin DEĞİL: dolu bir departmentId,
+             // departments koleksiyonunda gerçekten var olan bir dokümana
+             // işaret etmek zorundadır (bkz. kod denetimi P0-2 — yazım hatası
+             // bir "hayalet departman" üretiyor ve o kişiyi kendi biriminden
+             // sessizce koparıyordu).
+             userDepartmentIsValid(data) &&
              (!('fcmTokens' in data) || (data.fcmTokens is list && data.fcmTokens.size() <= 10));
     }
 
     function isValidTaskCreate(data) {
-      let requiredFields = ['title', 'description', 'creatorId', 'assigneeId', 'status', 'priority', 'deadline'];
+      // departmentId ARTIK ZORUNLU (bkz. kod denetimi P0-1): departmansız bir
+      // görev, aşağıdaki tasks read kuralının eski "departmanı yoksa serbest"
+      // fallback'leri yüzünden organizasyondaki HERKESE açılıyordu. Alanın
+      // varlığının zorunlu kılınması bu sınıfın kaynağını kurutur; değerin
+      // gerçek bir departmana işaret ettiği ayrıca isValidTaskBusinessRules'taki
+      // hasValidDepartment ile (exists) doğrulanır.
+      let requiredFields = ['title', 'description', 'creatorId', 'assigneeId', 'status', 'priority', 'deadline', 'departmentId'];
       let allowedFields = ['id', 'parentId', 'title', 'description', 'creatorId', 'assigneeId', 'coordinatorId', 
                            'status', 'priority', 'deadline', 'createdAt', 'updatedAt', 'evidence', 'evidenceType', 
                            'pausedAt', 'totalPausedTime', 'comments', 'lockVersion', 'departmentId',
@@ -153,6 +218,7 @@ service cloud.firestore {
              data.deadline is number && data.deadline > 0 &&
              isValidId(data.creatorId) &&
              isValidId(data.assigneeId) &&
+             isValidDepartmentId(data.departmentId) &&
              (!('parentId' in data) || data.parentId is string) &&
              (!('coordinatorId' in data) || data.coordinatorId == null || isValidId(data.coordinatorId)) &&
              (!('evidence' in data) || (data.evidence is string && data.evidence.size() <= 1000)) &&
@@ -211,6 +277,12 @@ service cloud.firestore {
              (!changed.hasAny(['estimatedHours']) || !('estimatedHours' in data) || (data.estimatedHours is number && data.estimatedHours >= 0)) &&
              (!changed.hasAny(['tags']) || !('tags' in data) || (data.tags is list && data.tags.size() <= 10)) &&
              (!changed.hasAny(['checklist']) || !('checklist' in data) || (data.checklist is list && data.checklist.size() <= 100)) &&
+             // departmentId'nin BİÇİMİ burada, gerçek bir departmana işaret
+             // ettiği ise isValidTaskBusinessRules'taki hasValidDepartment'ta
+             // (exists) doğrulanır — pahalı doküman erişimi `changed` kapısının
+             // arkasında kalsın diye ikisi bilinçli olarak ayrı yerlerdedir.
+             // Eskiden bu alan update tarafında HİÇ doğrulanmıyordu.
+             (!changed.hasAny(['departmentId']) || !('departmentId' in data) || isValidDepartmentId(data.departmentId)) &&
              // changedBy, audit_logs kuralındaki (isValidAuditLog) desenle aynı: istemci
              // başka bir kullanıcı adına sahte "değiştiren" kaydı yazamaz.
              //
@@ -334,10 +406,13 @@ service cloud.firestore {
           task.creatorId == request.auth.uid ||
           task.assigneeId == request.auth.uid ||
           ('email' in request.auth.token && task.assigneeId == request.auth.token.email) ||
-          task.departmentId == getUserDepartment() ||
-          !('departmentId' in task) ||
-          task.departmentId == null ||
-          task.departmentId == ""
+          // tasks read kuralıyla AYNI departman testi — oradaki gerekçenin
+          // tamamı (kaldırılan "departmanı yoksa serbest" fallback'leri ve
+          // boş-departman eşleşmesinin neden ayrıca elendiği) için oraya bakın.
+          // Bu yardımcı blockers read/create ve audit_logs create tarafından
+          // kullanıldığından, buradaki fallback'ler kaldırılmasaydı P0-1 sızıntısı
+          // tasks kapatılsa bile engeller/denetim izi üzerinden sürerdi.
+          (task.get('departmentId', '') != '' && task.get('departmentId', '') == getUserDepartment())
         );
     }
 
@@ -383,7 +458,18 @@ service cloud.firestore {
                                       (exists(/databases/$(database)/documents/users/$(data.assigneeId)) &&
                                        get(/databases/$(database)/documents/users/$(data.assigneeId)).data.role == 'Manager');
 
-      return hasNoAdminCoordinator && hasValidSubtaskAssignee && hasValidDelegationTarget;
+      // Departman REFERANS bütünlüğü (bkz. kod denetimi P0-2): görevin
+      // departmanı, departments koleksiyonunda gerçekten var olan bir dokümana
+      // işaret etmek zorundadır — serbest metin bir yazım hatası artık sessizce
+      // yeni bir "hayalet departman" üretemez. `changed` kapısı sayesinde bu
+      // exists() maliyeti YALNIZCA departman gerçekten yazıldığında ödenir;
+      // create tarafında çağıran incoming().keys() geçirdiğinden orada her
+      // zaman doğrulanır (departmentId create'te zaten zorunlu alandır).
+      let hasValidDepartment = !changed.hasAny(['departmentId']) ||
+                               !('departmentId' in data) ||
+                               departmentExists(data.departmentId);
+
+      return hasNoAdminCoordinator && hasValidSubtaskAssignee && hasValidDelegationTarget && hasValidDepartment;
     }
 
     // ===============================================================
@@ -451,7 +537,11 @@ service cloud.firestore {
       return isValidTaskUpdate(inc, changed) && (
         admin ||
         // isManager() ile AYNI sözleşme (yalnızca Firestore dokümanına bakar).
-        (uRole == 'Manager' && cur.departmentId == uDept && (!('departmentId' in inc) || inc.departmentId == uDept)) ||
+        // `uDept != ''` KASITLI: departmanı hiç atanmamış bir Müdür aksi halde
+        // departmanı boş/eksik olan TÜM görevleri güncelleyebilirdi ('' == '').
+        // `get(...)` biçimi, alanı hiç olmayan eski (backfill öncesi) görev
+        // dokümanlarında ifadenin hata verip TÜM kuralı düşürmesini önler.
+        (uRole == 'Manager' && uDept != '' && cur.get('departmentId', '') == uDept && inc.get('departmentId', uDept) == uDept) ||
         (
           (cur.assigneeId == request.auth.uid || ('email' in request.auth.token && cur.assigneeId == request.auth.token.email)) &&
           changed.hasOnly(['status', 'evidence', 'evidenceType', 'comments', 'updatedAt', 'pausedAt', 'totalPausedTime', 'lockVersion', 'completedAt', 'checklist', 'changedBy'])
@@ -519,25 +609,74 @@ service cloud.firestore {
         )
       );
       allow update: if isSignedIn() && isValidId(userId) && (
-        isAdmin() ||
+        // Admin'in tam yetkisi korunur; TEK istisna departman referansıdır
+        // (bkz. userDepartmentIsValid). `changed` kapısı bilinçlidir: departman
+        // bu istekte değişmiyorsa exists() maliyeti ödenmez ve backfill'den
+        // önce yazılmış, departmanı henüz kayıtlı olmayan bir kullanıcının
+        // ismi/rolü yine de düzeltilebilir kalır.
+        (isAdmin() && (
+          !incoming().diff(existing()).affectedKeys().hasAny(['departmentId']) ||
+          userDepartmentIsValid(incoming())
+        )) ||
         (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'photoURL', 'fcmTokens', 'updatedAt']) && isValidUser(incoming()))
       );
       allow delete: if isAdmin();
     }
 
+    // Departman referans varlığı (bkz. kod denetimi P0-2). Doküman ID'si
+    // departmanın kendi string değeridir; tasks/users bu değeri alan olarak
+    // taşımaya devam eder, bu koleksiyon yalnızca "bu değer GEÇERLİ bir
+    // departman mı" sorusunu yanıtlar (departmentExists).
+    match /departments/{departmentId} {
+      // Herkes okuyabilir: departman listesi bir yetki sınırı değil, yalnızca
+      // atama/filtre ekranlarını besleyen sözlüktür (users koleksiyonunun
+      // "personel dizini" olarak herkese açık olmasıyla aynı gerekçe).
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isValidDepartmentId(departmentId) && isValidDepartment(incoming(), departmentId);
+      // Update fiilen yalnızca idempotent bir yeniden-yazımdır (name == ID
+      // sabit, createdAt/createdBy değiştirilemez) — backfill'in ve istemcinin
+      // aynı dokümanı zararsızca yeniden set edebilmesi için açık bırakıldı.
+      allow update: if isAdmin() && isValidDepartment(incoming(), departmentId) &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().createdBy == existing().createdBy;
+      // Silme KAPALI: bir departman silinirse ona referans veren tasks/users
+      // dokümanları yetim kalır ve o görevler (departman eşleşmesi artık
+      // sağlanamayacağından) sorumlusu dışında herkes için görünmez olur.
+      // Güvenli silme, referansların önce taşınmasını gerektirir — bu fazın
+      // kapsamı dışında (YAGNI).
+      allow delete: if false;
+    }
+
     match /tasks/{taskId} {
+      // P0-1 DÜZELTMESİ (bkz. kod denetimi): bu kuralda eskiden ÜÇ ayrı
+      // "departmanı yoksa serbest" fallback'i vardı —
+      // `!('departmentId' in existing())`, `== null` ve `== ""`. Görev
+      // oluştururken departman GÖREVİ OLUŞTURANDAN türetildiğinden ve Admin'in
+      // departmanı tipik olarak boş olduğundan, Admin'in oluşturduğu HER görev
+      // departmansız kalıyor ve bu üç koşul yüzünden organizasyondaki TÜM
+      // oturum açmış kullanıcılara okunur hale geliyordu. Fallback'ler
+      // kaldırıldı; departmentId artık create'te zorunlu (isValidTaskCreate).
+      //
+      // İki incelik:
+      //  * Sıra bilinçli: sorumluluk testleri departman testinden ÖNCE gelir,
+      //    böylece sık karşılaşılan "kendi görevini okuyan Memur" yolu
+      //    getUserDepartment()'in users/{uid} okumasını hiç tetiklemez.
+      //  * `get('departmentId','')` + `!= ''`: alanı hiç olmayan eski
+      //    (backfill öncesi) dokümanlarda doğrudan alan erişimi ifadeyi
+      //    hataya düşürüp sorumlunun kendi görevini bile okuyamamasına yol
+      //    açardı; ayrıca boş departmanlı bir görevin, departmanı atanmamış
+      //    bir kullanıcıyla ('' == '') eşleşmesi de böylece elenir.
       allow read: if isSignedIn() && (
         isAdmin() ||
-        !('departmentId' in existing()) ||
-        existing().departmentId == null ||
-        existing().departmentId == "" ||
-        existing().departmentId == getUserDepartment() ||
         existing().assigneeId == request.auth.uid ||
-        ('email' in request.auth.token && existing().assigneeId == request.auth.token.email)
+        ('email' in request.auth.token && existing().assigneeId == request.auth.token.email) ||
+        (existing().get('departmentId', '') != '' && existing().get('departmentId', '') == getUserDepartment())
       );
+      // Müdür artık departmanı BOŞ BIRAKARAK organizasyon geneline açık bir
+      // görev oluşturamaz — departmentId zorunlu ve kendi departmanına eşit olmalı.
       allow create: if isSignedIn() && isValidId(taskId) && isValidTaskCreate(incoming()) && (
-        isAdmin() || 
-        (isManager() && (!('departmentId' in incoming()) || incoming().departmentId == null || incoming().departmentId == "" || incoming().departmentId == getUserDepartment()))
+        isAdmin() ||
+        (isManager() && incoming().departmentId == getUserDepartment())
       ) && isValidTaskBusinessRules(incoming(), incoming().keys());
       // Kuralın tamamı canUpdateTask()'e taşındı — gerekçe için oradaki
       // "KÖK NEDEN" yorumuna bakın (ifade bütçesi / tekrarlı doküman erişimi).
@@ -585,10 +724,13 @@ service cloud.firestore {
           (
             get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.creatorId == request.auth.uid ||
             get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.assigneeId == request.auth.uid ||
-            get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.departmentId == getUserDepartment() ||
-            !('departmentId' in get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data) ||
-            get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.departmentId == null ||
-            get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.departmentId == ""
+            // tasks read kuralındaki P0-1 düzeltmesinin AYNISI: departmansız
+            // göreve ait denetim kaydı eskiden herkese açıktı ve görevin
+            // başlık/açıklama/kanıt değişikliklerini sızdırıyordu.
+            (
+              get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.get('departmentId', '') != '' &&
+              get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.get('departmentId', '') == getUserDepartment()
+            )
           )
         )
       );
