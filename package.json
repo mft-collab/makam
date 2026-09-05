@@ -17,6 +17,7 @@
     "size": "size-limit",
     "lighthouse": "lhci autorun",
     "seed:e2e": "tsx scripts/seedE2E.ts",
+    "test:rules": "firebase emulators:exec --only firestore \"vitest run --config vitest.rules.config.ts\"",
     "test:e2e:emulator": "firebase emulators:exec --only auth,firestore \"npm run seed:e2e && npx playwright test --config=playwright.emulator.config.ts\""
   },
   "dependencies": {
@@ -44,6 +45,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
     "@firebase/eslint-plugin-security-rules": "^0.0.2",
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.61.0",
     "@size-limit/file": "^12.1.0",
