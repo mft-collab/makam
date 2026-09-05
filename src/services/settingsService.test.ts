@@ -10,6 +10,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { settingsService } from './settingsService';
 import * as firebase from '../firebase';
+import { SESSION_TIMEOUT_STORAGE_KEY } from '../hooks/useSessionTimeout';
+import {
+  DEFAULT_SESSION_TIMEOUT_MS, SESSION_TIMEOUT_MIN_MS, SESSION_TIMEOUT_MAX_MS,
+} from '../constants';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -305,6 +309,48 @@ describe('restoreBackup — denetim izi', () => {
       changedBy: 'admin-1',
       oldValue: 'Yedek dosyası: MAKAM-Backup.json',
       newValue: '1 kullanıcı, 2 talimat, 0 engel geri yüklendi',
+    });
+  });
+});
+
+// ── saveSessionTimeout ───────────────────────────────────────────────────────
+describe('saveSessionTimeout', () => {
+  it('system/settings dokümanına MERGE ile yazar (SLA/stats alanlarını ezmez)', async () => {
+    await settingsService.saveSessionTimeout(45 * 60_000, 'admin-1');
+    const [ref, payload, options] = vi.mocked(firebase.setDoc).mock.calls[0] as any;
+    expect(pathOf(ref)).toBe('system/settings');
+    expect(payload).toMatchObject({ sessionTimeoutMs: 45 * 60_000, updatedBy: 'admin-1' });
+    expect(options).toEqual({ merge: true });
+  });
+
+  it('alt sınırın altındaki bir değer 5 dakikaya çekilir', async () => {
+    const saved = await settingsService.saveSessionTimeout(30_000, 'admin-1');
+    expect(saved).toBe(SESSION_TIMEOUT_MIN_MS);
+  });
+
+  it('üst sınırın üstündeki bir değer 8 saate çekilir', async () => {
+    const saved = await settingsService.saveSessionTimeout(24 * 60 * 60_000, 'admin-1');
+    expect(saved).toBe(SESSION_TIMEOUT_MAX_MS);
+  });
+
+  it('sayı olmayan/geçersiz bir değer varsayılana düşer', async () => {
+    const saved = await settingsService.saveSessionTimeout(Number.NaN, 'admin-1');
+    expect(saved).toBe(DEFAULT_SESSION_TIMEOUT_MS);
+  });
+
+  it('normalize edilmiş değeri localStorage\'a yazar (çevrimdışı ilk açılış için)', async () => {
+    await settingsService.saveSessionTimeout(45 * 60_000, 'admin-1');
+    expect(localStorage.getItem(SESSION_TIMEOUT_STORAGE_KEY)).toBe(String(45 * 60_000));
+  });
+
+  it('değişikliği dakika cinsinden audit_logs\'a düşürür', async () => {
+    await settingsService.saveSessionTimeout(45 * 60_000, 'admin-1');
+    const [, payload] = vi.mocked(firebase.addDoc).mock.calls[0] as any;
+    expect(payload).toMatchObject({
+      taskId: 'system_settings',
+      changedBy: 'admin-1',
+      oldValue: 'Oturum Zaman Aşımı Değiştirildi',
+      newValue: '45 dakika',
     });
   });
 });

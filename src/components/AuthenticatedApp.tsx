@@ -33,6 +33,7 @@ import { NotificationPanel } from './NotificationPanel';
 import { NotificationPrompt } from './NotificationPrompt';
 import { MobileDock } from './MobileDock';
 import { Modal } from './ui/Modal';
+import { Button } from './ui/Button';
 import { TaskFormModal } from './TaskFormModal';
 import { CertificateModal } from './CertificateModal';
 import { WarningModal } from './WarningModal';
@@ -58,6 +59,7 @@ import { useNotifications } from '../hooks/useNotifications';
 import { applyOfflineMutations, type OfflineMutation } from '../lib/offlineQueue';
 import { useSLASync } from '../hooks/useSLASync';
 import { useIdleTimer } from '../hooks/useIdleTimer';
+import { useSessionTimeout } from '../hooks/useSessionTimeout';
 import { useSelfHealing } from '../hooks/useSelfHealing';
 import { useIsAdmin } from '../hooks/useIsAdmin';
 import { TAB_ROLES, type AppTabId } from '../constants';
@@ -226,7 +228,11 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
 
   // ─── Self-Healing + Idle Timer ────────────────────────────────────────────
   useSelfHealing({ user, tasks, blockers });
-  useIdleTimer({ onIdle: onLogout, enabled: true });
+  // Oturum süresi Admin tarafından yapılandırılabilir (system/settings) —
+  // hook, ayar okunamazsa/geçersizse güvenli varsayılana (30 dk) düşer.
+  const sessionTimeoutMs = useSessionTimeout(user, onError);
+  const { isWarning: isSessionExpiring, remainingMs: sessionRemainingMs, continueSession } =
+    useIdleTimer({ onIdle: onLogout, enabled: true, timeoutMs: sessionTimeoutMs });
 
   // ─── Tüm CRUD handler'lar ─────────────────────────────────────────────────
   const {
@@ -320,13 +326,40 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
                 />
               )}
               {activeTab === 'settings' && (
-                <Settings tasks={tasks} users={users} blockers={blockers} triggerToast={triggerToast} currentUser={user} isLoading={isDataLoading} />
+                <Settings tasks={tasks} users={users} blockers={blockers} triggerToast={triggerToast} currentUser={user} isLoading={isDataLoading} sessionTimeoutMs={sessionTimeoutMs} />
               )}
             </Suspense>
             </ErrorBoundary>
           </motion.div>
         </AnimatePresence>
       </main>
+
+      {/* Oturum Zaman Aşımı Uyarısı — kapanmadan ~60sn önce.
+          onClose olarak continueSession verilir: Escape/arka plan tıklaması da
+          AÇIK bir kullanıcı eylemidir, oturumu uzatmalıdır. Aksi halde modal
+          kapanır ama sayaç işlemeye devam eder ve kullanıcı hiçbir uyarı
+          görmeden saniyeler içinde dışarı atılırdı. */}
+      <Modal
+        isOpen={isSessionExpiring}
+        onClose={continueSession}
+        title="Oturum Sonlanmak Üzere"
+        size="sm"
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-[13px] text-text-muted font-light leading-relaxed">
+            Uzun süredir işlem yapılmadığı için oturumunuz{' '}
+            <strong className="text-status-danger font-medium" aria-live="polite">
+              {Math.ceil(sessionRemainingMs / 1000)} saniye
+            </strong>{' '}
+            içinde güvenlik gereği kapatılacaktır. Çalışmaya devam etmek için aşağıdaki
+            butonu kullanın.
+          </p>
+          <div className="flex justify-end gap-2.5 pt-4 border-t border-executive-blue/[0.04]">
+            <Button variant="secondary" onClick={() => { void onLogout(); }}>Şimdi Çıkış Yap</Button>
+            <Button variant="primary" onClick={continueSession}>Devam Et</Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Görev Form Modalı (Yeni / Düzenle) */}
       <Modal

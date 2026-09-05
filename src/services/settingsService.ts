@@ -3,6 +3,8 @@ import type { DocumentReference } from 'firebase/firestore';
 import { db, doc, setDoc, addDoc, collection, getDoc, writeBatch, increment } from '../firebase';
 import { runWithRetry } from '../lib/retry';
 import { UserRoleSchema, TaskStatusSchema, TaskPrioritySchema } from '../types';
+import { normalizeSessionTimeoutMs } from '../constants';
+import { SESSION_TIMEOUT_STORAGE_KEY } from '../hooks/useSessionTimeout';
 import type { SLAConfigEntry } from '../lib/sla';
 
 // Yedek dosyasından gelen ham kayıtlar (kullanıcı/görev/engel) — dış bir JSON
@@ -102,6 +104,33 @@ export const settingsService = {
       newValue: summaryLabel,
       timestamp: Date.now()
     }));
+  },
+
+  /** Oturum zaman aşımını `system/settings` dokümanına yazar ve audit_logs
+   *  kaydı oluşturur — saveSlaConfig ile BİREBİR aynı desen (system/{docId}
+   *  yazımı + denetim izi). Değer, kaydedilmeden önce güvenli aralığa
+   *  oturtulur: form doğrulaması atlansa bile "pratikte kapanmayan oturum"
+   *  gibi bir değer dizgeye giremez. */
+  async saveSessionTimeout(timeoutMs: number, userId: string) {
+    const normalized = normalizeSessionTimeoutMs(timeoutMs);
+
+    await runWithRetry(() => setDoc(
+      doc(db, 'system', 'settings'),
+      { sessionTimeoutMs: normalized, updatedAt: Date.now(), updatedBy: userId },
+      { merge: true }
+    ));
+
+    localStorage.setItem(SESSION_TIMEOUT_STORAGE_KEY, String(normalized));
+
+    await runWithRetry(() => addDoc(collection(db, 'audit_logs'), {
+      taskId: 'system_settings',
+      changedBy: userId,
+      oldValue: 'Oturum Zaman Aşımı Değiştirildi',
+      newValue: `${Math.round(normalized / 60000)} dakika`,
+      timestamp: Date.now()
+    }));
+
+    return normalized;
   },
 
   /** Bir yedek JSON metnini doğrular ve dizgeye geri yükler; ilerleme
