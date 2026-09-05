@@ -70,7 +70,7 @@ async function seed() {
   });
 
   const token = await auth.createCustomToken(ADMIN_UID);
-  writeFileSync('.e2e-token.json', JSON.stringify({ token, taskTitle: TASK_TITLE }, null, 2));
+  writeFileSync('.e2e-token.json', JSON.stringify({ token, taskTitle: TASK_TITLE, uid: ADMIN_UID }, null, 2));
 
   console.log(`[seedE2E] Admin (${ADMIN_EMAIL}) ve "${TASK_TITLE}" görevi oluşturuldu. Token .e2e-token.json içine yazıldı.`);
 }
