@@ -17,6 +17,7 @@ import { StatusBanner } from './ui/StatusBanner';
 import { Skeleton } from './ui/Skeleton';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
+import { Input } from './ui/Input';
 import { logger } from '../lib/logger';
 
 interface SettingsProps {
@@ -29,6 +30,11 @@ interface SettingsProps {
 }
 
 const AUDIT_LOG_EXPORT_PAGE_SIZE = 500;
+
+/** Geri yükleme onayında harfi harfine yazılması gereken ifade. Türkçe büyük
+ *  harf duyarlıdır ('i' → 'İ'), bu yüzden karşılaştırma normalize edilmeden
+ *  BİREBİR yapılır — "yaklaşık doğru" bir metin onay sayılmaz. */
+const RESTORE_CONFIRM_PHRASE = 'GERİ YÜKLE';
 
 const SettingsSkeleton = () => (
   <div className="flex flex-col gap-5 py-4 max-w-[1440px] mx-auto" aria-label="Ayarlar yükleniyor..." role="status">
@@ -66,6 +72,12 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
   // bir onay modalı gösterilir; dosya içeriği yalnızca kullanıcı onaylarsa
   // işlenir (bkz. kod denetimi).
   const [pendingRestore, setPendingRestore] = useState<{ content: string; fileName: string } | null>(null);
+  // Yazarak doğrulama: onay butonu, kullanıcı RESTORE_CONFIRM_PHRASE'i harfi
+  // harfine yazana kadar pasif kalır. Tek bir "Onayla" butonu, uygulamanın en
+  // yıkıcı ve GERİ DÖNÜŞÜ OLMAYAN işlemi (tüm personel/talimat/engel verisinin
+  // üzerine yazma) için yetersiz bir sürtünme sağlıyordu — refleksle tıklanan
+  // bir onay tüm dizgeyi eski bir yedeğe döndürebilirdi (bkz. kod denetimi).
+  const [restoreConfirmText, setRestoreConfirmText] = useState('');
   const restoreFileInputRef = React.useRef<HTMLInputElement>(null);
   const { isInstallable, isInstalled, install } = usePWAInstall();
 
@@ -311,13 +323,20 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
 
   const cancelRestore = () => {
     setPendingRestore(null);
+    setRestoreConfirmText('');
     if (restoreFileInputRef.current) restoreFileInputRef.current.value = '';
   };
 
+  const isRestoreConfirmed = restoreConfirmText === RESTORE_CONFIRM_PHRASE;
+
   const confirmRestore = async () => {
-    if (!currentUser || !pendingRestore) return;
+    // Buton zaten disabled ama koşul burada da tekrarlanır: klavye/otomasyon
+    // yoluyla tetiklenen bir çağrı, yalnızca görsel bir disabled durumuna
+    // güvenmemeli (Settings.tsx'teki isAdmin çift kontrolüyle aynı gerekçe).
+    if (!currentUser || !pendingRestore || !isRestoreConfirmed) return;
     const { content, fileName } = pendingRestore;
     setPendingRestore(null);
+    setRestoreConfirmText('');
     setImportStatus({ type: 'loading', message: 'Dizge Geri Yükleniyor...' });
     try {
       await settingsService.restoreBackup(content, currentUser.uid, fileName, (percent) => {
@@ -682,11 +701,36 @@ export const Settings = ({ tasks, users, blockers, triggerToast, currentUser, is
       <Modal isOpen={!!pendingRestore} onClose={cancelRestore} title="Yedekten Geri Yükle">
         <div className="flex flex-col gap-4">
           <p className="text-[13px] text-text-muted font-light leading-relaxed">
-            <strong className="text-status-danger font-medium">{pendingRestore?.fileName}</strong> dosyasından dizgeyi geri yüklemek üzeresiniz. Bu işlem mevcut TÜM personel, talimat ve engel verilerinin üzerine yazacaktır ve <strong className="text-status-danger font-medium">geri alınamaz</strong>. Emin misiniz?
+            <strong className="text-status-danger font-medium">{pendingRestore?.fileName}</strong> dosyasından dizgeyi geri yüklemek üzeresiniz. Bu işlem mevcut TÜM personel, talimat ve engel verilerinin üzerine yazacaktır ve <strong className="text-status-danger font-medium">geri alınamaz</strong>.
           </p>
+
+          <div className="flex flex-col gap-2">
+            <label htmlFor="restore-confirm-input" className="text-[12px] text-text-heading font-normal leading-relaxed">
+              Onaylamak için aşağıdaki kutuya <strong className="text-status-danger font-semibold tracking-wide">{RESTORE_CONFIRM_PHRASE}</strong> yazın.
+            </label>
+            <Input
+              id="restore-confirm-input"
+              value={restoreConfirmText}
+              onChange={(e) => setRestoreConfirmText(e.target.value)}
+              placeholder={RESTORE_CONFIRM_PHRASE}
+              autoComplete="off"
+              spellCheck={false}
+              aria-describedby="restore-confirm-help"
+              // Enter ile kazara gönderimi engelle — onay yalnızca butonla verilir.
+              onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+            />
+            <span id="restore-confirm-help" className="text-[10px] text-text-tertiary px-1 leading-relaxed">
+              {isRestoreConfirmed
+                ? 'Doğrulama tamamlandı — geri yükleme başlatılabilir.'
+                : 'Doğrulama metni birebir eşleşmeden geri yükleme başlatılamaz.'}
+            </span>
+          </div>
+
           <div className="flex justify-end gap-2.5 pt-4 border-t border-executive-blue/[0.04]">
             <Button variant="secondary" onClick={cancelRestore}>İptal</Button>
-            <Button variant="danger" onClick={confirmRestore}>Geri Yüklemeyi Onayla</Button>
+            <Button variant="danger" onClick={confirmRestore} disabled={!isRestoreConfirmed}>
+              Geri Yüklemeyi Onayla
+            </Button>
           </div>
         </div>
       </Modal>
