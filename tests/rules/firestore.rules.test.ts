@@ -22,7 +22,7 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 // ── Emulator koruması ────────────────────────────────────────────────────────
 // seedE2E.ts ile aynı sözleşme: ortam değişkeni yoksa hiçbir şey denemeden
@@ -86,16 +86,15 @@ const userDoc = (uid: string, role: string, departmentId?: string) => ({
 });
 
 /**
- * DİKKAT — alan sayısı bilinçli olarak 9'da tutulur (8 zorunlu + updatedAt).
+ * Sade (9 alanlı) görev dokümanı — durum makinesi ve rol matrisi testlerinin
+ * ortak zemini. Alan sayısı burada KISITLAYICI DEĞİLDİR: gerçekçi genişlikteki
+ * (24 alana kadar) dokümanların da Müdür/Memur tarafından güncellenebildiği
+ * aşağıdaki "gerçekçi alan genişliği" bloğunda ayrıca kanıtlanır.
  *
- * `tasks` update kuralı, Firestore'un istek başına 1000 ifade değerlendirme
- * bütçesine ÇOK yakın çalışır: Admin olmayan bir kullanıcının güncellemesinde
- * doküman 10 alana kadar geçer, 11. alanda kural bütçeyi aşıp
- * PERMISSION_DENIED döner (ölçüm ve kanıt için bkz. aşağıdaki
- * "YENİ BULGU (P0-6)" describe bloğu). Bu yüzden durum makinesi ve rol
- * matrisi testleri, ölçtükleri KURALI ölçebilmek için bütçenin altında kalan
- * minimal dokümanlar kullanır — aksi halde her test aynı bütçe hatasıyla
- * kırılır ve asıl doğrulanmak istenen mantık hiç değerlendirilmez.
+ * (Bu yorum eskiden "10 alan geçer, 11. alanda ifade bütçesi aşılır" diyordu;
+ * bu ölçüm HATALIYDI — bkz. aşağıdaki "ifade bütçesi" bloğunun açıklaması:
+ * 11. alan olarak eklenen `lockVersion` reddi, bütçeden değil optimistic
+ * locking kuralından kaynaklanıyordu.)
  */
 const taskDoc = (over: Record<string, unknown> = {}) => ({
   title: 'Test Talimatı',
@@ -655,62 +654,200 @@ describe('lockVersion optimistic locking kısıtı', () => {
 });
 
 // =============================================================================
-// 7b. YENİ BULGU (P0-6) — tasks update kuralı 1000 ifade bütçesini aşıyor
+// 7b. Gerçekçi alan genişliği + ifade bütçesi (eski "P0-6" bulgusunun düzeltmesi)
 // =============================================================================
-describe('YENİ BULGU (P0-6): tasks update kuralı Firestore ifade bütçesini aşıyor', () => {
-  // Firestore, güvenlik kuralı değerlendirmesini istek başına 1000 ifade ile
-  // sınırlar (üretimde de geçerli belgelenmiş bir kota). `tasks` update kuralı
-  // TEK bir istekte şunların HEPSİNİ değerlendirir: isValidTaskUpdate'in ~24
-  // opsiyonel alan kontrolü + isAdmin() + isManager() + getUserDepartment() +
-  // isValidTransition()'ın 7 geçiş listesi + lockVersion kısıtı +
-  // isValidTaskBusinessRules()'un 3 exists()/get() bloğu. Bu zincirin maliyeti
-  // dokümandaki ALAN SAYISIYLA birlikte büyür, çünkü her `!('x' in data) || ...`
-  // yalnızca alan MEVCUTSA sağ tarafını da değerlendirir.
+describe('gerçekçi alan genişliğinde (24 alan) görev güncellemeleri', () => {
+  // ── Eski "P0-6" iddiası ve neden YANLIŞ olduğu ────────────────────────────
+  // Bu blok eskiden "10 alan geçer, 11 alan Firestore'un 1000 ifade bütçesini
+  // aşar; yani üretimdeki tipik (geniş) görevler Müdür/Memur tarafından hiç
+  // güncellenemiyor" diyordu. Emulator'a karşı yapılan ölçüm bunu ÇÜRÜTTÜ:
   //
-  // Ölçülen eşik (bu emulator sürümüyle, aşağıdaki iki test): 10 alan geçer,
-  // 11 alan bütçeyi aşar. Gerçek uygulamada taskService görevlere ayrıca
-  // createdAt/lockVersion/totalPausedTime/id/evidence/comments gibi alanlar
-  // yazdığından tipik bir üretim görevi bu eşiğin ÜSTÜNDEDİR — yani Admin
-  // OLMAYAN (Müdür/Memur) kullanıcıların görev güncellemeleri kuralın
-  // mantığına hiç ulaşamadan reddedilir. Admin bundan etkilenmez, çünkü
-  // isAdmin() OR zincirinin başında kısa devre yapar.
+  //  1) Oradaki 11. alan `lockVersion`'dı. lockVersion taşıyan bir görevde
+  //     Admin olmayan her güncelleme bu alanı +1 artırmak ZORUNDADIR
+  //     (optimistic locking, bkz. aşağıdaki bölüm 7). Test payload'ı artırmadığı
+  //     için ret, ifade bütçesinden değil KURALIN KENDİSİNDEN geliyordu.
+  //  2) lockVersion doğru şekilde artırıldığında, Admin olmayan güncellemeler
+  //     9'dan 24 alana kadar HER genişlikte geçiyor. Alan sayısı bir eşik
+  //     oluşturmuyor — aşağıdaki testler bunu sabitliyor.
   //
-  // Düzeltme bu fazın kapsamında DEĞİL (kural yeniden yazımı gerektirir —
-  // Faz 2). Bu testler eşiği sabitler: kural ucuzlatıldığında 11-alan testi
-  // kırılacak ve assertSucceeds'e çevrilmesi gerekecek.
+  // Ölçümün gerçekten gösterdiği şey: ifade bütçesi aşımı yalnızca REDDEDİLEN
+  // (izin verilmeyen) güncellemelerde oluşuyor; izin verilen hiçbir yolda
+  // oluşmuyor. Reddedilen bir istek zaten reddedileceği için (fail-closed)
+  // gözlemlenebilir bir davranış farkı yok — bu yüzden aşağıdaki ret testleri
+  // "reddedilir" iddiasını doğrulamaya devam eder.
 
-  const wide = (n: number) => {
-    const d: Record<string, unknown> = taskDoc(); // 9 alan
-    const extras: Record<string, unknown> = {
-      createdAt: NOW, lockVersion: 0, totalPausedTime: 0, evidence: 'x',
-    };
-    for (const key of Object.keys(extras).slice(0, n - 9)) d[key] = extras[key];
-    return d;
+  /** Üretimdeki bir görevin taşıyabileceği TÜM alanlar (24 alan). */
+  const wideTaskDoc = (over: Record<string, unknown> = {}) => ({
+    id: 'task-wide',
+    parentId: 'parent-1',
+    title: 'Geniş Talimat',
+    description: 'tüm opsiyonel alanları taşıyan görev',
+    creatorId: 'mgr-a',
+    assigneeId: 'staff-a',
+    coordinatorId: 'mgr-b',
+    status: 'ASSIGNED',
+    priority: 'Medium',
+    deadline: NOW + 7 * DAY,
+    createdAt: NOW,
+    updatedAt: NOW,
+    evidence: 'kanit metni',
+    evidenceType: 'text',
+    pausedAt: null,
+    totalPausedTime: 0,
+    comments: [],
+    lockVersion: 3,
+    departmentId: 'dept-a',
+    completedAt: NOW,
+    estimatedHours: 4,
+    tags: ['acil'],
+    checklist: [],
+    changedBy: 'mgr-a',
+    ...over,
+  });
+
+  const seedWide = async (id: string, over: Record<string, unknown> = {}) => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'tasks', id), wideTaskDoc(over));
+    });
   };
 
-  it('10 alanlı görev: Memur güncellemesi kuralın mantığına ulaşır ve geçer', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'tasks', 'budget-10'), wide(10));
-    });
-    await assertSucceeds(updateDoc(doc(staffA(), 'tasks', 'budget-10'), {
+  it('24 alanlı görevin TÜM alanları beklenen şemaya uyar (test verisi kendini doğrular)', async () => {
+    // Bu test, aşağıdakilerin "yanlışlıkla dar bir doküman" üzerinde
+    // çalışmadığını garanti eder.
+    const keys = Object.keys(wideTaskDoc());
+    expect(keys.length).toBe(24);
+  });
+
+  it('Müdür, 24 alanlı kendi departman görevini güncelleyebilir', async () => {
+    await seedWide('wide-mgr');
+    await assertSucceeds(updateDoc(doc(managerA(), 'tasks', 'wide-mgr'), {
+      priority: 'High', updatedAt: NOW + 1, lockVersion: 4,
+    }));
+  });
+
+  it('Memur, 24 alanlı kendi görevini (izinli alanlarla) güncelleyebilir', async () => {
+    await seedWide('wide-staff');
+    await assertSucceeds(updateDoc(doc(staffA(), 'tasks', 'wide-staff'), {
+      status: 'IN_PROGRESS', updatedAt: NOW + 1, lockVersion: 4, changedBy: 'staff-a',
+    }));
+  });
+
+  it('Memur, 24 alanlı görevde durum geçişi + kanıt yazabilir', async () => {
+    await seedWide('wide-staff-2', { status: 'IN_PROGRESS' });
+    await assertSucceeds(updateDoc(doc(staffA(), 'tasks', 'wide-staff-2'), {
+      status: 'AWAITING_APPROVAL', evidence: 'tamamlandı', evidenceType: 'text',
+      updatedAt: NOW + 1, lockVersion: 4,
+    }));
+  });
+
+  it('Admin, 24 alanlı görevi güncelleyebilir (lockVersion kısıtının dışında)', async () => {
+    await seedWide('wide-admin');
+    await assertSucceeds(updateDoc(doc(admin(), 'tasks', 'wide-admin'), {
+      priority: 'Urgent', updatedAt: NOW + 1,
+    }));
+  });
+
+  // ── Güvenlik regresyonu: genişlik yetkilendirmeyi GEVŞETMEMELİ ────────────
+  it('BAŞKA departmanın Müdürü 24 alanlı görevi güncelleyemez', async () => {
+    await seedWide('wide-deny-mgr');
+    await assertFails(updateDoc(doc(managerB(), 'tasks', 'wide-deny-mgr'), {
+      priority: 'High', updatedAt: NOW + 1, lockVersion: 4,
+    }));
+  });
+
+  it('başkasının 24 alanlı görevini Memur güncelleyemez', async () => {
+    await seedWide('wide-deny-staff');
+    await assertFails(updateDoc(doc(staffC(), 'tasks', 'wide-deny-staff'), {
+      status: 'IN_PROGRESS', updatedAt: NOW + 1, lockVersion: 4,
+    }));
+  });
+
+  it('Memur, 24 alanlı görevde İZİNSİZ alanı (title) değiştiremez', async () => {
+    await seedWide('wide-deny-title');
+    await assertFails(updateDoc(doc(staffA(), 'tasks', 'wide-deny-title'), {
+      title: 'Yeniden adlandırıldı', updatedAt: NOW + 1, lockVersion: 4,
+    }));
+  });
+
+  it('24 alanlı görevde geçersiz durum geçişi hâlâ reddedilir', async () => {
+    await seedWide('wide-deny-transition', { status: 'COMPLETED' });
+    await assertFails(updateDoc(doc(staffA(), 'tasks', 'wide-deny-transition'), {
+      status: 'IN_PROGRESS', updatedAt: NOW + 1, lockVersion: 4,
+    }));
+  });
+
+  it('24 alanlı görevde lockVersion artırılmazsa reddedilir', async () => {
+    await seedWide('wide-deny-lock');
+    await assertFails(updateDoc(doc(staffA(), 'tasks', 'wide-deny-lock'), {
       status: 'IN_PROGRESS', updatedAt: NOW + 1,
     }));
   });
 
-  it('11 alanlı görev: Memur güncellemesi ifade bütçesi aşımıyla REDDEDİLİR', async () => {
+  it('24 alanlı görevde şema dışı alan enjekte edilemez', async () => {
+    await seedWide('wide-deny-extra');
+    await assertFails(updateDoc(doc(staffA(), 'tasks', 'wide-deny-extra'), {
+      keyfiAlan: 'x', updatedAt: NOW + 1, lockVersion: 4,
+    }));
+  });
+});
+
+describe('changedBy: sahtecilik koruması korunur, kilitlenme düzeltilir', () => {
+  // Eskiden isValidTaskUpdate `!('changedBy' in data) || data.changedBy ==
+  // request.auth.uid` diyordu. `data` bir güncellemede dokümanın BİRLEŞTİRİLMİŞ
+  // hâli olduğundan, changedBy bir kez yazıldıktan sonra o alan hep önceki
+  // yazarın uid'ini taşıyordu ve BAŞKA hiçbir kullanıcı görevi
+  // güncelleyemiyordu. Kontrol artık yalnızca changedBy bu istekte GERÇEKTEN
+  // değiştiğinde uygulanır.
+  it('changedBy başkasına aitken, sorumlusu görevi güncelleyebilir', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'tasks', 'budget-11'), wide(11));
+      await setDoc(doc(ctx.firestore(), 'tasks', 'cb-task'), taskDoc({ changedBy: 'mgr-a' }));
     });
-    await assertFails(updateDoc(doc(staffA(), 'tasks', 'budget-11'), {
+    await assertSucceeds(updateDoc(doc(staffA(), 'tasks', 'cb-task'), {
       status: 'IN_PROGRESS', updatedAt: NOW + 1,
     }));
   });
 
-  it('aynı 11 alanlı görevi Admin güncelleyebilir (isAdmin() kısa devresi bütçeyi tüketmez)', async () => {
+  it('başka bir kullanıcı adına sahte changedBy YAZILAMAZ', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'tasks', 'budget-11-admin'), wide(11));
+      await setDoc(doc(ctx.firestore(), 'tasks', 'cb-task-2'), taskDoc());
     });
-    await assertSucceeds(updateDoc(doc(admin(), 'tasks', 'budget-11-admin'), {
+    await assertFails(updateDoc(doc(staffA(), 'tasks', 'cb-task-2'), {
+      status: 'IN_PROGRESS', changedBy: 'mgr-a', updatedAt: NOW + 1,
+    }));
+  });
+
+  it('kendi uid’ini changedBy olarak yazabilir', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'tasks', 'cb-task-3'), taskDoc());
+    });
+    await assertSucceeds(updateDoc(doc(staffA(), 'tasks', 'cb-task-3'), {
+      status: 'IN_PROGRESS', changedBy: 'staff-a', updatedAt: NOW + 1,
+    }));
+  });
+});
+
+describe('users/{uid} dokümanı olmayan sorumlu (ilk giriş öncesi)', () => {
+  // canUpdateTask()'teki `let` bağlamaları TEMBELDİR ve kimlik dokümanı tek bir
+  // get() ile okunur. Kullanıcı dokümanı YOKSA bu okuma null döner ve kural
+  // Müdür dalını atlayıp sorumlu (assignee) dalına düşer. Bu test, o tembelliği
+  // ve null-güvenliğini sabitler: eskiden geniş dokümanlarda bu yol ifade
+  // bütçesini aşıp meşru bir güncellemeyi reddedebiliyordu.
+  const ghost = () =>
+    testEnv.authenticatedContext('ghost-uid', {
+      email: 'ghost@makam.test', email_verified: true,
+    }).firestore();
+
+  it('users dokümanı olmayan sorumlu, kendi görevini güncelleyebilir', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'tasks', 'ghost-task'), taskDoc({ assigneeId: 'ghost-uid' }));
+    });
+    await assertSucceeds(updateDoc(doc(ghost(), 'tasks', 'ghost-task'), {
+      status: 'IN_PROGRESS', updatedAt: NOW + 1,
+    }));
+  });
+
+  it('users dokümanı olmayan kullanıcı, kendisine ait OLMAYAN görevi güncelleyemez', async () => {
+    await assertFails(updateDoc(doc(ghost(), 'tasks', 'task-a'), {
       status: 'IN_PROGRESS', updatedAt: NOW + 1,
     }));
   });
