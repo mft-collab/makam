@@ -316,8 +316,14 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
       />
     ),
     audit: (
+      // Denetim izi BİLEREK birim odak filtresini (globalFocusDept) yoksayar —
+      // bu sekme yalnızca Admin'e açık (TAB_ROLES.audit) ve denetim kaydı
+      // tanım gereği organizasyon geneli olmalı; filtrelenmiş tasks/users
+      // geçirmek, odağın dışındaki bir birimin geçmişini "Bilinmeyen Talimat"
+      // olarak göstererek kanıt izini eksik/yanıltıcı kılıyordu (bkz. kod
+      // denetimi P1-14).
       <AuditLogList
-        tasks={filteredTasksByFocus} users={filteredUsersByFocus}
+        tasks={tasks} users={users}
       />
     ),
     settings: (
