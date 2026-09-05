@@ -284,6 +284,8 @@ export function AuthenticatedApp({ user, onLogout, onError, isOffline, offlineQu
         onAddTask={() => { setParentTaskId(undefined); setIsCreateModalOpen(true); }}
         onViewTask={(t) => openTask(t.id)}
         isLoading={isDataLoading}
+        updateTaskStatus={updateTaskStatus}
+        updateTask={updateTask}
       />
     ),
     blockers: (

@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TaskBoard } from './TaskBoard';
+import { useUIStore } from '../store/uiStore';
 import type { Task, User } from '../types';
 
 const admin: User = { uid: 'admin-1', fullName: 'Müftü Bey', email: 'admin@makam.com', role: 'Admin' };
@@ -18,6 +19,8 @@ const makeTask = (overrides: Partial<Task> = {}): Task => ({
 const renderBoard = (overrides: Partial<React.ComponentProps<typeof TaskBoard>> = {}) => {
   const onAddTask = vi.fn();
   const onViewTask = vi.fn();
+  const updateTaskStatus = vi.fn().mockResolvedValue(undefined);
+  const updateTask = vi.fn().mockResolvedValue(undefined);
   render(
     <TaskBoard
       tasks={[]}
@@ -25,10 +28,12 @@ const renderBoard = (overrides: Partial<React.ComponentProps<typeof TaskBoard>> 
       currentUser={admin}
       onAddTask={onAddTask}
       onViewTask={onViewTask}
+      updateTaskStatus={updateTaskStatus}
+      updateTask={updateTask}
       {...overrides}
     />
   );
-  return { onAddTask, onViewTask };
+  return { onAddTask, onViewTask, updateTaskStatus, updateTask };
 };
 
 // NOT: TaskBoard aynı anda hem mobil (sm:hidden) hem masaüstü (hidden sm:block)
@@ -74,5 +79,113 @@ describe('TaskBoard — boş durum aktivasyon CTA\'sı (P2-17)', () => {
     renderBoard({ tasks: [makeTask()], currentUser: admin });
     expect(screen.queryByRole('button', { name: 'İlk Talimatı Oluştur' })).not.toBeInTheDocument();
     expect(screen.queryByText('Henüz talimat bulunmuyor')).not.toBeInTheDocument();
+  });
+});
+
+// P2-18: 200+ görevlik bir listede tek tek işlem yapma zorunluluğunu gideren
+// çoklu seçim + toplu işlem (durum değişikliği / yeniden atama) akışı.
+describe('TaskBoard — toplu seçim ve toplu işlem (P2-18)', () => {
+  beforeEach(() => {
+    // Toast'lar gerçek (mock'lanmamış) uiStore'da tutulur — bir önceki testten
+    // kalan kayıtlar bu describe bloğundaki "kısmi başarı" doğrulamasını
+    // yanlış pozitif/negatif yapmasın diye her testten önce sıfırlanır.
+    useUIStore.setState({ toasts: [] });
+  });
+
+  const assignedA = makeTask({ id: 'task-1', title: 'Birinci Talimat', status: 'ASSIGNED' });
+  const assignedB = makeTask({ id: 'task-2', title: 'İkinci Talimat', status: 'ASSIGNED' });
+  const inProgressC = makeTask({ id: 'task-3', title: 'Üçüncü Talimat', status: 'IN_PROGRESS' });
+
+  // TaskBoard aynı satırı AYNI ANDA hem MobileTaskRow hem DesktopTaskRow olarak
+  // render eder (jsdom medya sorgusu uygulamıyor — bkz. dosya başındaki NOT).
+  // İkisi de AYNI paylaşılan selectedIds/toggleSelect state'ini kullanır, bu
+  // yüzden bir görev için getAllByRole çağrısı İKİ checkbox döndürür; ikisini
+  // de tıklamak aynı toggle'ı iki kez çağırıp birbirini İPTAL ederdi. Yalnızca
+  // İLKİNİ (index 0) tıklamak, görevi bir kez seçmek için yeterlidir.
+  const selectTask = async (user: ReturnType<typeof userEvent.setup>, title: string) => {
+    const checkbox = screen.getAllByRole('checkbox', { name: `${title} seçilmedi` })[0]!;
+    await user.click(checkbox);
+  };
+
+  it('bir satırın checkbox\'ına tıklamak görevi seçer ve onViewTask\'ı TETİKLEMEZ (satırın geri kalanına tıklamaktan farklı olarak)', async () => {
+    const user = userEvent.setup();
+    const { onViewTask } = renderBoard({ tasks: [assignedA], currentUser: admin });
+
+    const checkbox = screen.getAllByRole('checkbox', { name: 'Birinci Talimat seçilmedi' })[0]!;
+    await user.click(checkbox);
+
+    expect(onViewTask).not.toHaveBeenCalled();
+    expect(screen.getByText('1 Talimat Seçildi')).toBeInTheDocument();
+  });
+
+  it('"Tümünü Seç" yalnızca o an FİLTRELENMİŞ görünür listeyi seçer, filtre dışındaki görevleri DEĞİL', async () => {
+    const user = userEvent.setup();
+    renderBoard({ tasks: [assignedA, assignedB, inProgressC], currentUser: admin });
+
+    // ASSIGNED durumuna filtrele — inProgressC (IN_PROGRESS) görünümden çıkar.
+    await user.selectOptions(screen.getByLabelText('Durum filtresi'), 'ASSIGNED');
+    await user.click(screen.getByRole('button', { name: 'Tümünü Seç' }));
+
+    // Yalnızca filtrelenmiş 2 görev (assignedA, assignedB) seçili olmalı —
+    // filtre dışındaki inProgressC seçilmemiş olmalı.
+    expect(screen.getByText('2 Talimat Seçildi')).toBeInTheDocument();
+  });
+
+  it('seçili tüm görevler AYNI durumdaysa toplu durum değişikliği dropdown\'ı etkindir', async () => {
+    const user = userEvent.setup();
+    renderBoard({ tasks: [assignedA, assignedB], currentUser: admin });
+
+    await selectTask(user, assignedA.title);
+    await selectTask(user, assignedB.title);
+
+    expect(screen.getByLabelText('Toplu durum hedefi')).toBeEnabled();
+    expect(screen.queryByText(/farklı durumlarda/)).not.toBeInTheDocument();
+  });
+
+  it('seçili görevler KARIŞIK durumdaysa toplu durum değişikliği devre dışı bırakılır ve nedeni belirtilir', async () => {
+    const user = userEvent.setup();
+    renderBoard({ tasks: [assignedA, inProgressC], currentUser: admin });
+
+    await selectTask(user, assignedA.title);
+    await selectTask(user, inProgressC.title);
+
+    expect(screen.queryByLabelText('Toplu durum hedefi')).not.toBeInTheDocument();
+    expect(screen.getByText(/farklı durumlarda/)).toBeInTheDocument();
+  });
+
+  it('toplu durum değişikliği uygulanınca updateTaskStatus seçili HER görev için silent:true ile çağrılır', async () => {
+    const user = userEvent.setup();
+    const { updateTaskStatus } = renderBoard({ tasks: [assignedA, assignedB], currentUser: admin });
+
+    await selectTask(user, assignedA.title);
+    await selectTask(user, assignedB.title);
+    await user.selectOptions(screen.getByLabelText('Toplu durum hedefi'), 'IN_PROGRESS');
+    await user.click(screen.getByRole('button', { name: 'Uygula' }));
+
+    await waitFor(() => expect(updateTaskStatus).toHaveBeenCalledTimes(2));
+    expect(updateTaskStatus).toHaveBeenCalledWith('task-1', 'IN_PROGRESS', undefined, undefined, { silent: true });
+    expect(updateTaskStatus).toHaveBeenCalledWith('task-2', 'IN_PROGRESS', undefined, undefined, { silent: true });
+  });
+
+  it('kısmi başarısızlıkta (ör. VERSION_MISMATCH) uygun özet toast\'ı gösterilir ve başarısız görev seçili kalır', async () => {
+    const user = userEvent.setup();
+    const updateTaskStatus = vi.fn().mockImplementation((taskId: string) =>
+      taskId === 'task-2'
+        ? Promise.reject(new Error('VERSION_MISMATCH: Beklenen Versiyon 0, Sunucu Versiyonu 1'))
+        : Promise.resolve(undefined)
+    );
+    renderBoard({ tasks: [assignedA, assignedB], currentUser: admin, updateTaskStatus });
+
+    await selectTask(user, assignedA.title);
+    await selectTask(user, assignedB.title);
+    await user.selectOptions(screen.getByLabelText('Toplu durum hedefi'), 'IN_PROGRESS');
+    await user.click(screen.getByRole('button', { name: 'Uygula' }));
+
+    await waitFor(() => {
+      const toasts = useUIStore.getState().toasts;
+      expect(toasts.some(t => t.body.includes('1/2') && t.body.includes('VERSION_MISMATCH'))).toBe(true);
+    });
+    // task-2 başarısız olduğu için seçili bırakılır — kullanıcı tekrar deneyebilsin.
+    expect(screen.getByText('1 Talimat Seçildi')).toBeInTheDocument();
   });
 });

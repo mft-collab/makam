@@ -75,11 +75,23 @@ export function useAppHandlers({
   }, [addToast]);
 
   // ─── updateTaskStatus ────────────────────────────────────────────────────
+  // `options.silent`: TaskBoard'un toplu durum değişikliği akışı (P2-18) bu
+  // fonksiyonu bir Promise.allSettled DÖNGÜSÜNDE, N görev için art arda
+  // çağırır — varsayılan davranış (her çağrıda ayrı bir başarı toast'ı VE
+  // hata durumunda onError'ın kendi toast'ı) 15 görevlik bir toplu işlemde
+  // 15 ayrı bildirime yol açardı. silent:true bu iki yan etkiyi bastırır VE
+  // (varsayılandan farklı olarak) hatayı YUTMAZ, olduğu gibi fırlatır ki
+  // çağıran Promise.allSettled ile gerçek başarı/başarısızlık sayısını
+  // (ör. kaçının VERSION_MISMATCH olduğunu) doğru raporlayabilsin — aksi
+  // halde bu fonksiyon hiçbir zaman reddetmediğinden toplu özet her zaman
+  // "hepsi başarılı" görünürdü. Var olan tüm çağıranlar (TaskDetailsFooter
+  // vb.) options geçmediği için mevcut davranış BİREBİR korunur.
   const updateTaskStatus = useCallback(async (
     taskId: string,
     newStatus: TaskStatus,
     evidence?: string,
-    evidenceType?: Task['evidenceType']
+    evidenceType?: Task['evidenceType'],
+    options?: { silent?: boolean }
   ) => {
     if (!user) return;
     const oldTask = tasks.find(t => t.id === taskId);
@@ -111,7 +123,9 @@ export function useAppHandlers({
           { newStatus, userId: user.uid, evidence, evidenceType, expectedVersion: oldTask?.lockVersion }
         );
       }
-      toast('🔄 Çevrimdışı Güncelleme', `Durum lokal kuyrukta güncellendi: ${newStatus}`, 'warning', taskId);
+      if (!options?.silent) {
+        toast('🔄 Çevrimdışı Güncelleme', `Durum lokal kuyrukta güncellendi: ${newStatus}`, 'warning', taskId);
+      }
       return;
     }
 
@@ -128,13 +142,16 @@ export function useAppHandlers({
       } else {
         await taskService.updateTaskStatus(taskId, newStatus, oldTask?.status, user.uid, evidence, evidenceType, oldTask?.lockVersion);
       }
-      addToast({
-        title: `${STATUS_EMOJI[newStatus] ?? '📋'} Talimat Durumu Güncellendi`,
-        body: `"${oldTask?.title?.slice(0, 40) ?? 'Talimat'}" → ${STATUS_LABELS[newStatus] ?? newStatus}`,
-        type: newStatus === 'COMPLETED' ? 'success' : (newStatus === 'BLOCKED' || newStatus === 'CRISIS') ? 'danger' : 'info',
-        taskId,
-      });
+      if (!options?.silent) {
+        addToast({
+          title: `${STATUS_EMOJI[newStatus] ?? '📋'} Talimat Durumu Güncellendi`,
+          body: `"${oldTask?.title?.slice(0, 40) ?? 'Talimat'}" → ${STATUS_LABELS[newStatus] ?? newStatus}`,
+          type: newStatus === 'COMPLETED' ? 'success' : (newStatus === 'BLOCKED' || newStatus === 'CRISIS') ? 'danger' : 'info',
+          taskId,
+        });
+      }
     } catch (err) {
+      if (options?.silent) throw err;
       onError(err, 'update', `tasks/${taskId}`);
     }
   }, [user, tasks, blockers, toast, addToast, onError]);
@@ -171,7 +188,14 @@ export function useAppHandlers({
   }, [user, setIsCreateModalOpen, toast, onError]);
 
   // ─── updateTask ──────────────────────────────────────────────────────────
-  const updateTask = useCallback(async (taskId: string, data: Partial<Task>) => {
+  // `options.silent`: updateTaskStatus'taki AYNI gerekçe (bkz. yukarısı) —
+  // TaskBoard'un toplu atama akışı bu fonksiyonu bir döngüde N kez çağırır;
+  // silent:true toast/onError yan etkilerini bastırıp hatayı fırlatır ki
+  // Promise.allSettled gerçek başarı/başarısızlık sayısını görebilsin.
+  // setIsEditModalOpen(false) de silent modda ATLANIR — bu çağrı Düzenle
+  // modalından gelmiyor, kapatacak bir modal yok (ve modal başka bir
+  // sebeple açıksa yanlışlıkla kapatılmamalı).
+  const updateTask = useCallback(async (taskId: string, data: Partial<Task>, options?: { silent?: boolean }) => {
     if (!user) return;
     const oldTask = tasks.find(t => t.id === taskId);
 
@@ -183,16 +207,19 @@ export function useAppHandlers({
         'tasks', 'update', { ...data, updatedAt: Date.now() }, taskId, oldTask?.lockVersion,
         undefined, undefined, user.uid, oldTask
       );
-      setIsEditModalOpen(false);
-      toast('🔄 Çevrimdışı Güncelleme', 'Talimat düzenlemesi lokal sıraya alındı.', 'warning', taskId);
+      if (!options?.silent) {
+        setIsEditModalOpen(false);
+        toast('🔄 Çevrimdışı Güncelleme', 'Talimat düzenlemesi lokal sıraya alındı.', 'warning', taskId);
+      }
       return;
     }
 
     try {
       if (!oldTask) throw new Error('Güncellenecek talimat bulunamadı.');
       await taskService.updateTask(taskId, data, oldTask, user.uid);
-      setIsEditModalOpen(false);
+      if (!options?.silent) setIsEditModalOpen(false);
     } catch (err) {
+      if (options?.silent) throw err;
       onError(err, 'update', `tasks/${taskId}`);
     }
   }, [user, tasks, setIsEditModalOpen, toast, onError]);
